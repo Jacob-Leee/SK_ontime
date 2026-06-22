@@ -269,61 +269,61 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
     <nav>
       <div class="nav-item active" onclick="showPage('all')" id="nav-all">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        All Orders
+        <span id="navlabel-all">All Orders</span>
       </div>
       <div class="nav-divider"></div>
       <div class="nav-item" onclick="showPage('orders')" id="nav-orders">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        Orders
+        <span id="navlabel-orders">Orders</span>
         <span class="nav-badge" id="orders-badge" style="background:var(--gold-light)">0</span>
       </div>
       <div class="nav-item" onclick="showPage('completed')" id="nav-completed">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        Completed
+        <span id="navlabel-completed">Completed</span>
         <span class="nav-badge" id="completed-badge" style="background:#FACC15;color:#422006">0</span>
       </div>
       <div class="nav-item" onclick="showPage('claims')" id="nav-claims">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        Claim
+        <span id="navlabel-claims">Claim</span>
         <span class="nav-badge" id="claims-badge" style="background:#F97316">0</span>
       </div>
       <div class="nav-item" onclick="showPage('closed')" id="nav-closed">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        Closed
+        <span id="navlabel-closed">Closed</span>
         <span class="nav-badge-plain" id="closed-badge">0</span>
       </div>
       <div class="nav-item" onclick="showPage('issues')" id="nav-issues">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Issues
+        <span id="navlabel-issues">Issues</span>
         <span class="nav-badge" id="issues-badge" style="background:var(--red)">0</span>
       </div>
       <div class="nav-item" onclick="showPage('cancelled')" id="nav-cancelled">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-        Cancelled
+        <span id="navlabel-cancelled">Cancelled</span>
         <span class="nav-badge-plain" id="cancelled-badge">0</span>
       </div>
       <div class="nav-divider"></div>
       <div class="nav-item" onclick="showPage('calendar')" id="nav-calendar">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="16" cy="15" r="1" fill="currentColor"/></svg>
-        Calendar
+        <span id="navlabel-calendar">Calendar</span>
         <span class="nav-badge" id="cal-badge" style="background:var(--accent2);display:none">0</span>
       </div>
       <div class="nav-item" onclick="showPage('subbies')" id="nav-subbies">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Subbies
+        <span id="navlabel-subbies">Subbies</span>
         <span class="nav-badge" id="subbies-badge" style="background:var(--yellow);display:none">0</span>
       </div>
       <div class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        Dashboard
+        <span id="navlabel-dashboard">Dashboard</span>
       </div>
       <div class="nav-item" onclick="openSupModal()" id="nav-sup">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        Supervisors
+        <span id="navlabel-sup">Supervisors</span>
       </div>
       <div class="nav-item" onclick="showPage('sor')" id="nav-sor">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        SOR Codes
+        <span id="navlabel-sor">SOR Codes</span>
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -345,7 +345,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <h1 id="page-title">Orders</h1>
       <div style="display:flex;gap:10px;align-items:center">
         <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="btn btn-secondary" style="text-decoration:none;font-size:12.5px;border-color:rgba(79,126,248,0.4);color:var(--gold-dark)">
-          &#127974; DCJ Portal
+          &#127974; <span id="navlabel-dcj">DCJ Portal</span>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </a>
         <div class="header-actions" id="header-actions"></div>
@@ -354,6 +354,9 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
             <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
             Cloud Sync &middot; <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
           </div>
+          <button onclick="openSettingsModal()" title="App Settings — rename menu/button labels" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:pointer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
           <div style="position:relative">
             <button onclick="toggleDataMenu(event)" title="Import / Export" style="display:flex;align-items:center;gap:6px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;cursor:pointer;font-family:inherit">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
@@ -1286,6 +1289,46 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   </div>
 </div>
 
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal" style="width:560px">
+    <div class="modal-header">
+      <h2>&#9881; App Settings</h2>
+      <button class="modal-close" onclick="closeModal('settings-modal')">&#215;</button>
+    </div>
+    <div class="modal-body" style="max-height:65vh;overflow-y:auto">
+      <p style="font-size:12.5px;color:var(--text3);margin-bottom:14px;line-height:1.5">
+        Rename sidebar menu items and header buttons. Saved on this device only.
+      </p>
+      <div class="section-title">Sidebar menu names</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">All Orders</label><input class="form-control" id="set-navAll"></div>
+        <div class="form-group"><label class="form-label">Orders</label><input class="form-control" id="set-navOrders"></div>
+        <div class="form-group"><label class="form-label">Completed</label><input class="form-control" id="set-navCompleted"></div>
+        <div class="form-group"><label class="form-label">Claim</label><input class="form-control" id="set-navClaims"></div>
+        <div class="form-group"><label class="form-label">Closed</label><input class="form-control" id="set-navClosed"></div>
+        <div class="form-group"><label class="form-label">Issues</label><input class="form-control" id="set-navIssues"></div>
+        <div class="form-group"><label class="form-label">Cancelled</label><input class="form-control" id="set-navCancelled"></div>
+        <div class="form-group"><label class="form-label">Calendar</label><input class="form-control" id="set-navCalendar"></div>
+        <div class="form-group"><label class="form-label">Subbies</label><input class="form-control" id="set-navSubbies"></div>
+        <div class="form-group"><label class="form-label">Dashboard</label><input class="form-control" id="set-navDashboard"></div>
+        <div class="form-group"><label class="form-label">Supervisors</label><input class="form-control" id="set-navSup"></div>
+        <div class="form-group"><label class="form-label">SOR Codes</label><input class="form-control" id="set-navSor"></div>
+      </div>
+      <div class="section-title">Header button names</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">DCJ Portal link</label><input class="form-control" id="set-navDcj"></div>
+        <div class="form-group"><label class="form-label">Export CSV button</label><input class="form-control" id="set-btnExportCsv"></div>
+        <div class="form-group"><label class="form-label">Import Email button</label><input class="form-control" id="set-btnImportEmail"></div>
+        <div class="form-group"><label class="form-label">New Order button</label><input class="form-control" id="set-btnNewOrder"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="resetUiLabels()">Reset to defaults</button>
+      <button class="btn btn-primary" onclick="saveUiLabels()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -1300,7 +1343,18 @@ const SEED_VERSION = '15';
 function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 
+const DEFAULT_UI_LABELS = {
+  navAll: 'All Orders', navOrders: 'Orders', navCompleted: 'Completed', navClaims: 'Claim',
+  navClosed: 'Closed', navIssues: 'Issues', navCancelled: 'Cancelled', navCalendar: 'Calendar',
+  navSubbies: 'Subbies', navDashboard: 'Dashboard', navSup: 'Supervisors', navSor: 'SOR Codes',
+  navDcj: 'DCJ Portal', btnExportCsv: 'Export CSV', btnImportEmail: 'Import Email', btnNewOrder: '+ New Order',
+};
+
 const DB = {
+  // Per-device only for now (not pushed through Cloud Sync) — each device/browser
+  // can have its own label preferences. Object.assign so any NEW label keys added
+  // later always get a default even if an old saved object doesn't have them yet.
+  uiLabels: Object.assign({}, DEFAULT_UI_LABELS, JSON.parse(lsGet('hom_ui_labels') || 'null') || {}),
   orders: JSON.parse(lsGet('hom_orders') || 'null') || [],
   claims: JSON.parse(lsGet('hom_claims') || 'null') || [],
   sorCodes: JSON.parse(lsGet('hom_sor') || 'null') || getDefaultSOR(),
@@ -1582,6 +1636,67 @@ function renderCloudStatus(msg) {
   if (dot2) dot2.style.background = color;
 }
 
+// ============================================================
+// UI SETTINGS — rename sidebar/header labels without touching code
+// ============================================================
+const SETTINGS_FIELDS = Object.keys(DEFAULT_UI_LABELS);
+const SETTINGS_LABEL_TO_ELEMENT_ID = {
+  navAll: 'navlabel-all', navOrders: 'navlabel-orders', navCompleted: 'navlabel-completed',
+  navClaims: 'navlabel-claims', navClosed: 'navlabel-closed', navIssues: 'navlabel-issues',
+  navCancelled: 'navlabel-cancelled', navCalendar: 'navlabel-calendar', navSubbies: 'navlabel-subbies',
+  navDashboard: 'navlabel-dashboard', navSup: 'navlabel-sup', navSor: 'navlabel-sor', navDcj: 'navlabel-dcj',
+};
+const SETTINGS_PAGE_TITLE_KEY = {
+  navAll: 'all', navOrders: 'orders', navCompleted: 'completed', navClaims: 'claims',
+  navClosed: 'closed', navIssues: 'issues', navCancelled: 'cancelled', navCalendar: 'calendar',
+  navSubbies: 'subbies', navDashboard: 'dashboard', navSor: 'sor',
+};
+
+function applyUiLabels() {
+  const L = DB.uiLabels;
+  Object.keys(SETTINGS_LABEL_TO_ELEMENT_ID).forEach(key => {
+    const el = document.getElementById(SETTINGS_LABEL_TO_ELEMENT_ID[key]);
+    if (el) el.textContent = L[key];
+  });
+  Object.keys(SETTINGS_PAGE_TITLE_KEY).forEach(key => {
+    PAGE_TITLES[SETTINGS_PAGE_TITLE_KEY[key]] = L[key];
+  });
+  const titleEl = document.getElementById('page-title');
+  if (titleEl) titleEl.textContent = PAGE_TITLES[currentPage] || currentPage;
+}
+
+function openSettingsModal() {
+  SETTINGS_FIELDS.forEach(k => {
+    const el = document.getElementById('set-' + k);
+    if (el) el.value = DB.uiLabels[k];
+  });
+  openModal('settings-modal');
+}
+
+function saveUiLabels() {
+  SETTINGS_FIELDS.forEach(k => {
+    const el = document.getElementById('set-' + k);
+    if (el) DB.uiLabels[k] = el.value.trim() || DEFAULT_UI_LABELS[k];
+  });
+  lsSet('hom_ui_labels', JSON.stringify(DB.uiLabels));
+  applyUiLabels();
+  showPage(currentPage); // rebuilds header action buttons with the new labels
+  closeModal('settings-modal');
+  toast('Settings saved', 'success');
+}
+
+function resetUiLabels() {
+  DB.uiLabels = Object.assign({}, DEFAULT_UI_LABELS);
+  lsSet('hom_ui_labels', JSON.stringify(DB.uiLabels));
+  applyUiLabels();
+  showPage(currentPage);
+  SETTINGS_FIELDS.forEach(k => {
+    const el = document.getElementById('set-' + k);
+    if (el) el.value = DEFAULT_UI_LABELS[k];
+  });
+  toast('Reset to defaults', 'success');
+}
+
 // ── Header data menu (Cloud Sync / Import / Export) ──
 function toggleDataMenu(e) {
   if (e) e.stopPropagation();
@@ -1655,9 +1770,9 @@ function showPage(page) {
   document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
 
   const actions = document.getElementById('header-actions');
-  const newBtn = `<button class="btn btn-primary" onclick="openOrderModal()">+ New Order</button>`;
-  const csvBtn = `<button class="btn btn-secondary" onclick="exportCSV()">📊 Export CSV</button>`;
-  const importBtn = `<button class="btn btn-secondary" onclick="openEmailImport()">📧 Import Email</button>`;
+  const newBtn = `<button class="btn btn-primary" onclick="openOrderModal()">${DB.uiLabels.btnNewOrder}</button>`;
+  const csvBtn = `<button class="btn btn-secondary" onclick="exportCSV()">📊 ${DB.uiLabels.btnExportCsv}</button>`;
+  const importBtn = `<button class="btn btn-secondary" onclick="openEmailImport()">📧 ${DB.uiLabels.btnImportEmail}</button>`;
 
   if (page === 'all')       { actions.innerHTML = csvBtn + importBtn + newBtn; renderAll(); }
   else if (page === 'orders')    { actions.innerHTML = csvBtn + importBtn + newBtn; renderOrders(); }
@@ -4572,6 +4687,7 @@ function openEmailImport() {
 }
 
 function initApp() {
+  applyUiLabels();
   showPage('all');
   updateSidebar();
   updateCalBadge();
@@ -4589,3 +4705,4 @@ if (document.readyState === 'loading') {
 </script>
 </body>
 </html>
+                             
