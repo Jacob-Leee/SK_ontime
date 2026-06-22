@@ -865,6 +865,15 @@ tr.srow-issue:hover td { background: #FDE9A8; }
             <input type="hidden" id="f-amount">
           </div>
           <div class="form-group form-full">
+            <label class="form-label">Extra SOR Items <span style="color:var(--text3);font-weight:400;font-size:11px">(extra-over work on this SAME order — don't create a second order with the same Order Number for this)</span></label>
+            <div id="f-extra-items"></div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addExtraItemRow()" style="margin-top:4px">+ Add Extra SOR Item</button>
+          </div>
+          <div class="form-group form-full" id="f-total-wrap" style="display:none">
+            <label class="form-label">Order Total (base + extras)</label>
+            <div class="sor-price-display" id="f-total-display" style="font-size:17px;color:var(--gold-dark)">$0.00</div>
+          </div>
+          <div class="form-group form-full">
             <label class="form-label">Detail / Notes</label>
             <textarea class="form-control" id="f-detail" placeholder="Any special notes about this order..."></textarea>
           </div>
@@ -1111,310 +1120,6 @@ tr.srow-issue:hover td { background: #FDE9A8; }
   </div>
 </div>
 
-<!-- ORDER MODAL -->
-<div class="modal-overlay" id="order-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <h2 id="order-modal-title">New Order</h2>
-      <button class="modal-close" onclick="closeModal('order-modal')">×</button>
-    </div>
-    <div class="modal-body">
-      <form id="order-form" onsubmit="saveOrder(event)">
-        <div class="form-grid">
-          <div class="section-title">Dates & Reference</div>
-          <div class="form-group">
-            <label class="form-label">Order Date *</label>
-            <input type="date" class="form-control" id="f-orderDate" required>
-          </div>
-          <div class="form-group"></div>
-          <div class="form-group">
-            <label class="form-label">Order Number *</label>
-            <input type="text" class="form-control" id="f-orderNumber" placeholder="e.g. SCO-02254867" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">PRN</label>
-            <input type="text" class="form-control" id="f-prn" placeholder="e.g. 243002">
-          </div>
-
-          <div class="section-title">Property Details</div>
-          <div class="form-group form-full">
-            <label class="form-label">Address *</label>
-            <input type="text" class="form-control" id="f-address" placeholder="e.g. 8/1A, RICKARD RD, SOUTH HURSTVILLE, 2221" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Area (Region)</label>
-            <select class="form-control" id="f-area">
-              <option value="">— Select Area —</option>
-              <option value="CA1">CA1</option>
-              <option value="CA2">CA2</option>
-              <option value="CA3">CA3</option>
-              <option value="CA4">CA4</option>
-              <option value="CA9">CA9</option>
-              <option value="CA10">CA10</option>
-              <option value="CA11">CA11</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Work Type</label>
-            <select class="form-control" id="f-workType">
-              <option value="vac">VAC — Vacant</option>
-              <option value="res">RES — Responsive</option>
-              <option value="pro">PRO — Programmed</option>
-            </select>
-          </div>
-
-          <div class="section-title">SOR & Pricing</div>
-          <div class="form-group">
-            <label class="form-label">SOR Code *</label>
-            <select class="form-control" id="f-sorCode" onchange="onSORSelect()" required>
-              <option value="">— Select SOR Code —</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Amount (auto from SOR)</label>
-            <div class="sor-price-display" id="f-amount-display">$0.00</div>
-            <input type="hidden" id="f-amount">
-          </div>
-          <div class="form-group form-full">
-            <label class="form-label">Detail / Notes</label>
-            <textarea class="form-control" id="f-detail" placeholder="Any special notes about this order..."></textarea>
-          </div>
-
-          <div class="section-title">Work Info</div>
-          <div class="form-group">
-            <label class="form-label">Subbies</label>
-            <input type="text" class="form-control" id="f-subbies" placeholder="Select or type a name..." list="subbies-datalist" autocomplete="off">
-            <datalist id="subbies-datalist"></datalist>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Work Comments</label>
-            <input type="text" class="form-control" id="f-comments" placeholder="e.g. June, Jacob...">
-          </div>
-          <div class="form-group form-full">
-            <label class="form-label">SUI Work Order ID <span style="color:var(--text3);font-weight:400;font-size:11px">(from Ariba email — e.g. 0WOMn00000POJ1WOAX)</span></label>
-            <input type="text" class="form-control" id="f-suiId" placeholder="0WOMn...">
-          </div>
-        </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('order-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveOrder()">💾 Save Order</button>
-    </div>
-  </div>
-</div>
-
-<!-- CLAIM MODAL -->
-<div class="modal-overlay" id="claim-modal">
-  <div class="modal" style="width:700px">
-    <div class="modal-header">
-      <h2 id="claim-modal-title">Payment / Claim</h2>
-      <button class="modal-close" onclick="closeModal('claim-modal')">×</button>
-    </div>
-    <div class="modal-body">
-      <form id="claim-form">
-        <div class="form-grid">
-          <div class="section-title">Order Reference</div>
-          <div class="form-group">
-            <label class="form-label">Order Number</label>
-            <input type="text" class="form-control" id="c-orderNumber" placeholder="Order reference" readonly style="opacity:0.6">
-          </div>
-          <div class="form-group">
-            <label class="form-label">SOR Code</label>
-            <input type="text" class="form-control" id="c-sorCode" readonly style="opacity:0.6">
-          </div>
-          <div class="form-group form-full">
-            <label class="form-label">Address</label>
-            <input type="text" class="form-control" id="c-address" readonly style="opacity:0.6">
-          </div>
-
-          <div class="section-title">Payment</div>
-          <div class="form-group">
-            <label class="form-label">Date of Claim</label>
-            <input type="date" class="form-control" id="c-claimDate">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Order Amount</label>
-            <input type="number" class="form-control" id="c-amount" placeholder="0.00" step="0.01">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Amount Paid</label>
-            <input type="number" class="form-control" id="c-amtPaid" placeholder="0.00" step="0.01">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Paid?</label>
-            <select class="form-control" id="c-paid">
-              <option value="N">No</option>
-              <option value="Y">Yes</option>
-            </select>
-          </div>
-
-          <div class="section-title">Claim Details (optional)</div>
-          <div class="form-group">
-            <label class="form-label">Claim Status</label>
-            <select class="form-control" id="c-status">
-              <option value="">— Select —</option>
-              <option value="Issued">Issued</option>
-              <option value="Appointment Made">Appointment Made</option>
-              <option value="Appointment Impacted">Appointment Impacted</option>
-              <option value="On-hold">On-hold</option>
-              <option value="Work In-progress">Work In-progress</option>
-              <option value="Work Completed">Work Completed</option>
-              <option value="Closed">Closed</option>
-              <option value="Payment Claim Submitted">Payment Claim Submitted</option>
-            </select>
-          </div>
-          <div class="form-group"></div>
-          <div class="form-group form-full">
-            <label class="form-label">Claim Reason</label>
-            <textarea class="form-control" id="c-reason" placeholder="Describe the reason for this claim..."></textarea>
-          </div>
-          <div class="form-group form-full">
-            <label class="form-label">Resolution / Notes</label>
-            <textarea class="form-control" id="c-notes" placeholder="Resolution details, outcome..."></textarea>
-          </div>
-        </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-danger" id="btn-close-order" onclick="saveClaimAndClose()" style="margin-right:auto;display:none">🔒 Save & Close Order</button>
-      <button class="btn btn-secondary" onclick="closeModal('claim-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveClaim()">💾 Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- SOR EDIT MODAL -->
-<div class="modal-overlay" id="sor-modal">
-  <div class="modal" style="width:560px">
-    <div class="modal-header">
-      <h2 id="sor-modal-title">Edit SOR Code</h2>
-      <button class="modal-close" onclick="closeModal('sor-modal')">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group">
-          <label class="form-label">SOR Code *</label>
-          <input type="text" class="form-control" id="s-code" placeholder="e.g. SCO-VAC-SCO-009">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Unit</label>
-          <input type="text" class="form-control" id="s-unit" placeholder="e.g. Dwell, Item">
-        </div>
-        <div class="form-group form-full">
-          <label class="form-label">Description *</label>
-          <textarea class="form-control" id="s-description" rows="3"></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Type</label>
-          <select class="form-control" id="s-type">
-            <option value="VAC">VAC — Vacant</option>
-            <option value="RES">RES — Responsive</option>
-            <option value="PRO">PRO — Programmed</option>
-            <option value="EXT">EXT — Extra</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Price GST Inclusive ($)</label>
-          <input type="number" class="form-control" id="s-price" step="0.01" min="0">
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('sor-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveSOR()">💾 Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- EMAIL IMPORT MODAL -->
-<div class="modal-overlay" id="email-modal">
-  <div class="modal" style="width:700px">
-    <div class="modal-header">
-      <h2>📧 Import from Ariba Email</h2>
-      <button class="modal-close" onclick="closeModal('email-modal')">×</button>
-    </div>
-    <div class="modal-body">
-      <p style="color:var(--text2);font-size:13px;margin-bottom:16px">Paste the Ariba PO email body below — or drag &amp; drop the <strong>PO .htm</strong> attachment. All available fields will be auto-filled.</p>
-      <div id="email-drop-zone" class="import-drop" ondragover="event.preventDefault()" ondrop="handleEmailDrop(event)" onclick="document.getElementById('email-file-input').click()">
-        📄 Drop PO .htm file here, or click to browse
-        <input type="file" id="email-file-input" accept=".htm,.html" style="display:none" onchange="handleEmailFile(this)">
-      </div>
-      <div style="margin:14px 0;text-align:center;color:var(--text3);font-size:12px">— or paste email text —</div>
-      <textarea class="form-control" id="email-paste-area" rows="10" placeholder="Paste the full Ariba email body here (Ctrl+A → Ctrl+C from the email, then Ctrl+V here)..."></textarea>
-      <div id="email-parse-result" style="margin-top:14px;display:none">
-        <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:8px">✅ Parsed — review before saving:</div>
-        <div class="form-grid" id="email-parsed-fields" style="font-size:13px"></div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('email-modal')">Cancel</button>
-      <button class="btn btn-secondary" onclick="parseEmailText()">🔍 Parse</button>
-      <button class="btn btn-primary" id="btn-import-email" onclick="importParsedEmail()" style="display:none">📥 Add to Orders</button>
-    </div>
-  </div>
-</div>
-
-<!-- ISSUE MODAL -->
-<div class="modal-overlay" id="issue-modal">
-  <div class="modal" style="width:580px">
-    <div class="modal-header">
-      <h2>&#9888;&#65039; Flag Issue</h2>
-      <button class="modal-close" onclick="closeModal('issue-modal')">&#215;</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group">
-          <label class="form-label">Issue Date</label>
-          <input type="date" class="form-control" id="iss-date">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Status</label>
-          <select class="form-control" id="iss-status">
-            <option value="">&#8212; Select &#8212;</option>
-            <option>Issued</option><option>Appointment Made</option>
-            <option>Appointment Impacted</option><option>On-hold</option>
-            <option>Work In-progress</option><option>Work Completed</option>
-            <option>Closed</option><option>Payment Claim Submitted</option>
-          </select>
-        </div>
-        <div class="form-group form-full">
-          <label class="form-label">Issue Reason</label>
-          <textarea class="form-control" id="iss-reason" rows="4" placeholder="Describe the issue..."></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('issue-modal')">Cancel</button>
-      <button class="btn btn-danger" onclick="confirmIssueModal()">&#9888; Flag as Issue</button>
-    </div>
-  </div>
-</div>
-
-<!-- SUPERVISOR MODAL -->
-<div class="modal-overlay" id="sup-modal">
-  <div class="modal" style="width:820px">
-    <div class="modal-header">
-      <h2>&#128231; Supervisors</h2>
-      <button class="modal-close" onclick="closeModal('sup-modal')">&#215;</button>
-    </div>
-    <div class="modal-body">
-      <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px">
-        <input class="filter-input" id="sup-search" placeholder="&#128269;  Search name, role, email..." style="flex:1" oninput="renderSupList()">
-        <span id="sup-count" style="color:var(--text3);font-size:12px;white-space:nowrap"></span>
-      </div>
-      <div id="sup-list" style="max-height:440px;overflow-y:auto;margin-bottom:20px"></div>
-      <div style="border-top:1px solid var(--border);padding-top:16px">
-        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:10px">Add Supervisor</div>
-        <div class="form-grid form-grid-3">
-          <input class="form-control" id="sup-name" placeholder="Name">
-          <input class="form-control" id="sup-email" placeholder="email@example.com" type="email">
-          <button class="btn btn-primary" onclick="saveSupervisor()">+ Save</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- CALENDAR EVENT MODAL -->
 <div class="modal-overlay" id="cal-event-modal">
@@ -1869,18 +1574,26 @@ function openOrderModal(id = null) {
     document.getElementById('f-area').value = o.area || '';
     document.getElementById('f-workType').value = o.workType || 'vac';
     document.getElementById('f-sorCode').value = o.sorCode || '';
-    document.getElementById('f-amount').value = o.amount || 0;
-    document.getElementById('f-amount-display').textContent = '$' + Number(o.amount || 0).toFixed(2);
+    // baseAmount = the primary SOR line only. Older orders saved before "Extra SOR
+    // Items" existed don't have baseAmount — for those, amount IS the base (no extras).
+    const baseAmt = o.baseAmount != null ? o.baseAmount : (o.amount || 0);
+    document.getElementById('f-amount').value = baseAmt;
+    document.getElementById('f-amount-display').textContent = '$' + Number(baseAmt).toFixed(2);
     document.getElementById('f-detail').value = o.detail || '';
     document.getElementById('f-subbies').value = o.subbies || '';
     document.getElementById('f-comments').value = o.comments || '';
     document.getElementById('f-suiId').value = o.suiId || '';
+    document.getElementById('f-extra-items').innerHTML = '';
+    (o.extraItems || []).forEach(item => addExtraItemRow(item.sorCode, item.amount));
+    recomputeExtraTotal();
   } else {
     document.getElementById('order-modal-title').textContent = 'New Order';
     form.reset();
     document.getElementById('f-amount-display').textContent = '$0.00';
     document.getElementById('f-amount').value = 0;
     document.getElementById('f-suiId').value = '';
+    document.getElementById('f-extra-items').innerHTML = '';
+    document.getElementById('f-total-wrap').style.display = 'none';
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('f-orderDate').value = today;
   }
@@ -1954,8 +1667,8 @@ function openSORModal(idx = null) {
 // ============================================================
 // SOR SELECT
 // ============================================================
-function populateSORSelect() {
-  const sel = document.getElementById('f-sorCode');
+function populateSORSelect(targetSel) {
+  const sel = targetSel || document.getElementById('f-sorCode');
   const val = sel.value;
   sel.innerHTML = '<option value="">— Select SOR Code —</option>';
   DB.sorCodes.forEach(s => {
@@ -1967,12 +1680,76 @@ function populateSORSelect() {
   });
 }
 
+// ============================================================
+// EXTRA SOR ITEMS — extra-over work added to an EXISTING order.
+// Stored separately from the base SOR line so order.amount stays the
+// authoritative total (everything else in the app already reads
+// order.amount as the order's full dollar value — dashboards, CSV
+// export, claim auto-creation, etc. — so none of that needs to change).
+// ============================================================
+function addExtraItemRow(presetCode, presetAmount) {
+  const wrap = document.getElementById('f-extra-items');
+  const row = document.createElement('div');
+  row.className = 'extra-item-row';
+  row.style = 'display:flex;gap:8px;align-items:center;margin-bottom:6px';
+  row.innerHTML = `
+    <select class="form-control extra-item-sor" style="flex:2" onchange="onExtraItemChange(this)">
+      <option value="">— Select SOR Code —</option>
+    </select>
+    <div class="sor-price-display extra-item-amount-display" style="flex:1;text-align:right;white-space:nowrap">$0.00</div>
+    <input type="hidden" class="extra-item-amount" value="0">
+    <button type="button" class="icon-btn" title="Remove" onclick="removeExtraItemRow(this)">🗑️</button>
+  `;
+  wrap.appendChild(row);
+  const sel = row.querySelector('.extra-item-sor');
+  populateSORSelect(sel);
+  if (presetCode) {
+    sel.value = presetCode;
+    const sor = DB.sorCodes.find(s => s.code === presetCode);
+    const amt = presetAmount != null ? presetAmount : (sor ? sor.price : 0);
+    row.querySelector('.extra-item-amount').value = amt;
+    row.querySelector('.extra-item-amount-display').textContent = '$' + Number(amt).toFixed(2);
+  }
+  recomputeExtraTotal();
+}
+function onExtraItemChange(selectEl) {
+  const row = selectEl.closest('.extra-item-row');
+  const sor = DB.sorCodes.find(s => s.code === selectEl.value);
+  const price = sor ? sor.price : 0;
+  row.querySelector('.extra-item-amount').value = price;
+  row.querySelector('.extra-item-amount-display').textContent = '$' + price.toFixed(2);
+  recomputeExtraTotal();
+}
+function removeExtraItemRow(btnEl) {
+  btnEl.closest('.extra-item-row').remove();
+  recomputeExtraTotal();
+}
+function getExtraItemsFromForm() {
+  return [...document.querySelectorAll('#f-extra-items .extra-item-row')].map(row => ({
+    sorCode: row.querySelector('.extra-item-sor').value,
+    amount: parseFloat(row.querySelector('.extra-item-amount').value) || 0,
+  })).filter(i => i.sorCode);
+}
+function recomputeExtraTotal() {
+  const base = parseFloat(document.getElementById('f-amount').value) || 0;
+  const extras = getExtraItemsFromForm();
+  const extraSum = extras.reduce((s, i) => s + i.amount, 0);
+  const totalWrap = document.getElementById('f-total-wrap');
+  if (extras.length) {
+    totalWrap.style.display = '';
+    document.getElementById('f-total-display').textContent = '$' + (base + extraSum).toFixed(2) + '  (base $' + base.toFixed(2) + ' + ' + extras.length + ' extra)';
+  } else {
+    totalWrap.style.display = 'none';
+  }
+}
+
 function onSORSelect() {
   const code = document.getElementById('f-sorCode').value;
   const sor = DB.sorCodes.find(s => s.code === code);
   const price = sor ? sor.price : 0;
   document.getElementById('f-amount').value = price;
   document.getElementById('f-amount-display').textContent = '$' + price.toFixed(2);
+  recomputeExtraTotal();
 }
 
 // ============================================================
@@ -1994,6 +1771,10 @@ function saveOrder() {
     DB.subbies.push(subbiesVal);
   }
 
+  const baseAmount = parseFloat(document.getElementById('f-amount').value) || 0;
+  const extraItems = getExtraItemsFromForm();
+  const extraSum = extraItems.reduce((s, i) => s + i.amount, 0);
+
   const order = {
     id: editingOrderId || Date.now().toString(),
     orderDate,
@@ -2003,7 +1784,9 @@ function saveOrder() {
     area: document.getElementById('f-area').value,
     workType: document.getElementById('f-workType').value,
     sorCode,
-    amount: parseFloat(document.getElementById('f-amount').value) || 0,
+    baseAmount,
+    extraItems,
+    amount: baseAmount + extraSum, // total dollar value of the order — everything else (dashboard, CSV, claims) reads this
     detail: document.getElementById('f-detail').value.trim(),
     subbies: document.getElementById('f-subbies').value.trim(),
     comments: document.getElementById('f-comments').value.trim(),
@@ -3144,7 +2927,7 @@ function renderSubbiePerson(name, allOrders) {
 
 function bulkSubbiePaid(name) {
   if (!confirm(`Mark ALL unpaid orders for ${name} as paid?`)) return;
-  DB.orders.forEach(o => { if (o.subbies === name && o.subbiePaid !== 'Y') o.subbiePaid = 'Y'; });
+  DB.orders.forEach(o => { if (o.subbies === name && o.subbiePaid !== 'Y') { o.subbiePaid = 'Y'; o.updatedAt = Date.now(); } });
   save();
   renderSubbiesPage();
   toast(`All ${name} orders marked as paid`, 'success');
@@ -3155,7 +2938,7 @@ function markCheckedPaid(name) {
   if (!checked.length) { toast('No orders selected', 'error'); return; }
   checked.forEach(cb => {
     const o = DB.orders.find(x => x.id === cb.dataset.id);
-    if (o) o.subbiePaid = 'Y';
+    if (o) { o.subbiePaid = 'Y'; o.updatedAt = Date.now(); }
   });
   save();
   renderSubbiesPage();
@@ -3285,6 +3068,7 @@ function toggleSubbiePaid(id) {
   o.subbiePaid = o.subbiePaid === 'Y' ? 'N' : 'Y';
   if (o.subbiePaid === 'Y') { o.subbiePaidAt = new Date().toISOString().split('T')[0]; }
   else { delete o.subbiePaidAt; }
+  o.updatedAt = Date.now();
   save();
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, subbies:renderSubbiesPage };
   (renders[currentPage] || renderAll)();
@@ -3515,7 +3299,8 @@ function renderOrders() {
       : `<span class="badge badge-yellow">Unpaid</span>`;
     const amtClass = o.paid === 'Y' ? 'amount-paid' : 'amount-unpaid';
     const sor = DB.sorCodes.find(s => s.code === o.sorCode);
-    const sorDisplay = o.sorCode ? `<span title="${sor ? sor.description : ''}" style="font-size:11px;font-family:monospace">${o.sorCode}</span>` : '—';
+    const extraBadge = (o.extraItems && o.extraItems.length) ? ` <span class="badge badge-purple" title="${o.extraItems.length} extra SOR item(s), $${o.extraItems.reduce((s,i)=>s+i.amount,0).toFixed(2)} total">+${o.extraItems.length}</span>` : '';
+    const sorDisplay = o.sorCode ? `<span title="${sor ? sor.description : ''}" style="font-size:11px;font-family:monospace">${o.sorCode}</span>${extraBadge}` : '—';
 
     // find linked payment record
     const payment = DB.claims.find(c => c.orderNumber === o.orderNumber);
