@@ -349,26 +349,27 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </a>
         <div class="header-actions" id="header-actions"></div>
-        <div style="position:relative">
-          <button onclick="toggleDataMenu(event)" title="Cloud Sync / Backup" style="display:flex;align-items:center;gap:6px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;cursor:pointer;font-family:inherit">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div onclick="openCloudModal()" title="Click to open Cloud Sync settings" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 2px">
             <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text3)"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div id="data-menu" style="display:none;position:absolute;right:0;top:40px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);width:200px;z-index:100;overflow:hidden">
-            <div onclick="openCloudModal()" style="padding:10px 14px;font-size:12px;color:var(--text3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;cursor:pointer">
-              <span id="cloud-dot-2" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
-              Cloud Sync &middot; <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
+            Cloud Sync &middot; <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
+          </div>
+          <div style="position:relative">
+            <button onclick="toggleDataMenu(event)" title="Import / Export" style="display:flex;align-items:center;gap:6px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;cursor:pointer;font-family:inherit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text3)"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div id="data-menu" style="display:none;position:absolute;right:0;top:40px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);width:200px;z-index:100;overflow:hidden">
+              <div onclick="document.getElementById('import-file-input').click(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--blue)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Import Data Backup
+              </div>
+              <div onclick="exportData(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--gold-dark)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Data Backup
+              </div>
+              <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importDataFile(this.files[0])">
             </div>
-            <div onclick="document.getElementById('import-file-input').click(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--blue)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Import Data Backup
-            </div>
-            <div onclick="exportData(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--gold-dark)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Export Data Backup
-            </div>
-            <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importDataFile(this.files[0])">
           </div>
         </div>
       </div>
