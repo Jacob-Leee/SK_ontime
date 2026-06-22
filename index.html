@@ -1448,10 +1448,10 @@ function startCloudSync() {
 function stopCloudSync() { if (CLOUD.pullTimer) { clearInterval(CLOUD.pullTimer); CLOUD.pullTimer = null; } }
 
 function cloudPushDebounced() {
+  if (typeof CLOUD === 'undefined') { console.log('[CLOUD DEBUG] cloudPushDebounced called before CLOUD exists yet (page still loading) — normal, ignore.'); return; }
   console.log('[CLOUD DEBUG] cloudPushDebounced() called. enabled=', CLOUD.enabled, 'url=', CLOUD.url, 'applying=', CLOUD.applying);
-  if (typeof CLOUD === 'undefined' || !CLOUD.enabled || !CLOUD.url || CLOUD.applying) {
+  if (!CLOUD.enabled || !CLOUD.url || CLOUD.applying) {
     console.log('[CLOUD DEBUG] BLOCKED — push will NOT be scheduled. Reason:',
-      typeof CLOUD === 'undefined' ? 'CLOUD undefined' :
       !CLOUD.enabled ? 'CLOUD.enabled is false' :
       !CLOUD.url ? 'CLOUD.url is empty' : 'CLOUD.applying is stuck true');
     return;
@@ -1600,6 +1600,7 @@ document.addEventListener('click', (e) => {
 });
 
 function openCloudModal() {
+  if (typeof CLOUD === 'undefined') { toast('Still loading, try again in a moment', 'error'); return; }
   document.getElementById('cloud-url-input').value = CLOUD.url;
   document.getElementById('cloud-enabled-toggle').checked = CLOUD.enabled;
   openModal('cloud-modal');
