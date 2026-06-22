@@ -860,7 +860,11 @@ tr.srow-issue:hover td { background: #FDE9A8; }
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Amount (auto from SOR)</label>
+            <label class="form-label">Qty</label>
+            <input type="number" class="form-control" id="f-qty" value="1" min="0" step="any" onchange="onSORSelect()" style="width:90px">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Amount (price &times; qty)</label>
             <div class="sor-price-display" id="f-amount-display">$0.00</div>
             <input type="hidden" id="f-amount">
           </div>
@@ -1577,18 +1581,21 @@ function openOrderModal(id = null) {
     // baseAmount = the primary SOR line only. Older orders saved before "Extra SOR
     // Items" existed don't have baseAmount — for those, amount IS the base (no extras).
     const baseAmt = o.baseAmount != null ? o.baseAmount : (o.amount || 0);
+    const baseQty = o.baseQty != null ? o.baseQty : 1;
+    document.getElementById('f-qty').value = baseQty;
     document.getElementById('f-amount').value = baseAmt;
-    document.getElementById('f-amount-display').textContent = '$' + Number(baseAmt).toFixed(2);
+    document.getElementById('f-amount-display').textContent = '$' + Number(baseAmt).toFixed(2) + (baseQty !== 1 ? ' (' + baseQty + ' × $' + (baseAmt/baseQty).toFixed(2) + ')' : '');
     document.getElementById('f-detail').value = o.detail || '';
     document.getElementById('f-subbies').value = o.subbies || '';
     document.getElementById('f-comments').value = o.comments || '';
     document.getElementById('f-suiId').value = o.suiId || '';
     document.getElementById('f-extra-items').innerHTML = '';
-    (o.extraItems || []).forEach(item => addExtraItemRow(item.sorCode, item.amount));
+    (o.extraItems || []).forEach(item => addExtraItemRow(item.sorCode, item.amount, item.qty));
     recomputeExtraTotal();
   } else {
     document.getElementById('order-modal-title').textContent = 'New Order';
     form.reset();
+    document.getElementById('f-qty').value = 1;
     document.getElementById('f-amount-display').textContent = '$0.00';
     document.getElementById('f-amount').value = 0;
     document.getElementById('f-suiId').value = '';
@@ -1687,7 +1694,7 @@ function populateSORSelect(targetSel) {
 // order.amount as the order's full dollar value — dashboards, CSV
 // export, claim auto-creation, etc. — so none of that needs to change).
 // ============================================================
-function addExtraItemRow(presetCode, presetAmount) {
+function addExtraItemRow(presetCode, presetAmount, presetQty) {
   const wrap = document.getElementById('f-extra-items');
   const row = document.createElement('div');
   row.className = 'extra-item-row';
@@ -1696,6 +1703,7 @@ function addExtraItemRow(presetCode, presetAmount) {
     <select class="form-control extra-item-sor" style="flex:2" onchange="onExtraItemChange(this)">
       <option value="">— Select SOR Code —</option>
     </select>
+    <input type="number" class="form-control extra-item-qty" value="1" min="0" step="any" title="Qty" style="width:70px" onchange="onExtraItemChange(this)">
     <div class="sor-price-display extra-item-amount-display" style="flex:1;text-align:right;white-space:nowrap">$0.00</div>
     <input type="hidden" class="extra-item-amount" value="0">
     <button type="button" class="icon-btn" title="Remove" onclick="removeExtraItemRow(this)">🗑️</button>
@@ -1706,18 +1714,23 @@ function addExtraItemRow(presetCode, presetAmount) {
   if (presetCode) {
     sel.value = presetCode;
     const sor = DB.sorCodes.find(s => s.code === presetCode);
-    const amt = presetAmount != null ? presetAmount : (sor ? sor.price : 0);
+    const qty = presetQty != null ? presetQty : 1;
+    row.querySelector('.extra-item-qty').value = qty;
+    const amt = presetAmount != null ? presetAmount : (sor ? sor.price * qty : 0);
     row.querySelector('.extra-item-amount').value = amt;
     row.querySelector('.extra-item-amount-display').textContent = '$' + Number(amt).toFixed(2);
   }
   recomputeExtraTotal();
 }
-function onExtraItemChange(selectEl) {
-  const row = selectEl.closest('.extra-item-row');
-  const sor = DB.sorCodes.find(s => s.code === selectEl.value);
+function onExtraItemChange(el) {
+  const row = el.closest('.extra-item-row');
+  const code = row.querySelector('.extra-item-sor').value;
+  const qty = parseFloat(row.querySelector('.extra-item-qty').value) || 0;
+  const sor = DB.sorCodes.find(s => s.code === code);
   const price = sor ? sor.price : 0;
-  row.querySelector('.extra-item-amount').value = price;
-  row.querySelector('.extra-item-amount-display').textContent = '$' + price.toFixed(2);
+  const amount = price * qty;
+  row.querySelector('.extra-item-amount').value = amount;
+  row.querySelector('.extra-item-amount-display').textContent = '$' + amount.toFixed(2) + (qty !== 1 ? ' (' + qty + ' × $' + price.toFixed(2) + ')' : '');
   recomputeExtraTotal();
 }
 function removeExtraItemRow(btnEl) {
@@ -1727,6 +1740,7 @@ function removeExtraItemRow(btnEl) {
 function getExtraItemsFromForm() {
   return [...document.querySelectorAll('#f-extra-items .extra-item-row')].map(row => ({
     sorCode: row.querySelector('.extra-item-sor').value,
+    qty: parseFloat(row.querySelector('.extra-item-qty').value) || 0,
     amount: parseFloat(row.querySelector('.extra-item-amount').value) || 0,
   })).filter(i => i.sorCode);
 }
@@ -1745,10 +1759,12 @@ function recomputeExtraTotal() {
 
 function onSORSelect() {
   const code = document.getElementById('f-sorCode').value;
+  const qty = parseFloat(document.getElementById('f-qty').value) || 0;
   const sor = DB.sorCodes.find(s => s.code === code);
   const price = sor ? sor.price : 0;
-  document.getElementById('f-amount').value = price;
-  document.getElementById('f-amount-display').textContent = '$' + price.toFixed(2);
+  const amount = price * qty;
+  document.getElementById('f-amount').value = amount;
+  document.getElementById('f-amount-display').textContent = '$' + amount.toFixed(2) + (qty !== 1 ? ' (' + qty + ' × $' + price.toFixed(2) + ')' : '');
   recomputeExtraTotal();
 }
 
@@ -1771,11 +1787,20 @@ function saveOrder() {
     DB.subbies.push(subbiesVal);
   }
 
+  const baseQty = parseFloat(document.getElementById('f-qty').value) || 0;
   const baseAmount = parseFloat(document.getElementById('f-amount').value) || 0;
   const extraItems = getExtraItemsFromForm();
   const extraSum = extraItems.reduce((s, i) => s + i.amount, 0);
+  const totalAmount = baseAmount + extraSum; // total dollar value of the order — everything else (dashboard, CSV, claims) reads this
+
+  // Preserve status/lifecycle fields (status, closedAt, claimAt, completedAt, issueAt,
+  // cancelledAt, _dh, subbiePaid, etc.) when editing — only the form fields below get
+  // overwritten. Without this, editing an order from any page other than "Orders" reset
+  // its status back to active, which is why it appeared to "jump back to Orders".
+  const existing = editingOrderId ? DB.orders.find(x => x.id === editingOrderId) : null;
 
   const order = {
+    ...(existing || {}),
     id: editingOrderId || Date.now().toString(),
     orderDate,
     orderNumber,
@@ -1784,14 +1809,15 @@ function saveOrder() {
     area: document.getElementById('f-area').value,
     workType: document.getElementById('f-workType').value,
     sorCode,
+    baseQty,
     baseAmount,
     extraItems,
-    amount: baseAmount + extraSum, // total dollar value of the order — everything else (dashboard, CSV, claims) reads this
+    amount: totalAmount,
     detail: document.getElementById('f-detail').value.trim(),
     subbies: document.getElementById('f-subbies').value.trim(),
     comments: document.getElementById('f-comments').value.trim(),
     suiId: document.getElementById('f-suiId').value.trim(),
-    createdAt: editingOrderId ? (DB.orders.find(x => x.id === editingOrderId)?.createdAt || Date.now()) : Date.now(),
+    createdAt: existing?.createdAt || Date.now(),
     updatedAt: Date.now(),
   };
 
@@ -1804,9 +1830,22 @@ function saveOrder() {
     toast('Order saved successfully', 'success');
   }
 
+  // Keep the linked claim/payment record's claimed amount in sync with the order total.
+  // amtPaid (cash actually received) only follows automatically if it was already marked
+  // fully paid — otherwise it's a real-world fact we shouldn't silently overwrite.
+  const linkedClaim = DB.claims.find(c => c.orderNumber === order.orderNumber);
+  if (linkedClaim && linkedClaim.amount !== totalAmount) {
+    const wasFullyPaid = linkedClaim.paid === 'Y';
+    linkedClaim.amount = totalAmount;
+    if (wasFullyPaid) linkedClaim.amtPaid = totalAmount;
+    linkedClaim.updatedAt = Date.now();
+  }
+
   save();
   closeModal('order-modal');
-  renderOrders();
+  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims,
+                     closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
+  (renders[currentPage] || renderOrders)();
   updateSidebar();
 }
 
