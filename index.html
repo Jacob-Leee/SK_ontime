@@ -1673,6 +1673,18 @@ function showPage(page) {
   updateSidebar();
 }
 
+// Local-calendar-day date string, e.g. "2026-06-22" — NOT new Date().toISOString(),
+// which is UTC and rolls back to "yesterday" for roughly the first 10-11 hours of
+// every Sydney day (this caused Order Date/Claim Date/Issue Date etc. to silently
+// default to the wrong day whenever used before ~10-11am local time).
+function localDateStr(d) {
+  d = d || new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
 // ============================================================
 // MODALS
 // ============================================================
@@ -1722,7 +1734,7 @@ function openOrderModal(id = null) {
     document.getElementById('f-suiId').value = '';
     document.getElementById('f-extra-items').innerHTML = '';
     document.getElementById('f-total-wrap').style.display = 'none';
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateStr();
     document.getElementById('f-orderDate').value = today;
   }
   openModal('order-modal');
@@ -1734,7 +1746,7 @@ function openClaimModal(orderId = null) {
   document.getElementById('c-orderNumber').value = '';
   document.getElementById('c-sorCode').value = '';
   document.getElementById('c-address').value = '';
-  document.getElementById('c-claimDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('c-claimDate').value = localDateStr();
   document.getElementById('c-amount').value = '';
   document.getElementById('c-amtPaid').value = '';
   document.getElementById('c-paid').value = 'N';
@@ -2063,7 +2075,7 @@ function saveSOR() {
 function setOrderStatus(id, newStatus) {
   const o = DB.orders.find(x => x.id === id);
   if (!o) return;
-  const today = new Date().toISOString().split('T')[0];
+  const today = localDateStr();
   const prevStatus = o.status || 'active';
 
   // Date history: preserve existing dates so going back restores them
@@ -2212,7 +2224,7 @@ let issueTargetId = null;
 
 function openIssueModal(id) {
   issueTargetId = id;
-  document.getElementById('iss-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('iss-date').value = localDateStr();
   document.getElementById('iss-status').value = '';
   document.getElementById('iss-reason').value = '';
   openModal('issue-modal');
@@ -2975,14 +2987,14 @@ function renderSubPersonTabs() {
 
 function getSubPeriodOrders() {
   const now = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = localDateStr(now);
   return DB.orders.filter(o => {
     if (o.status === 'cancelled') return false;
     const ds = o.orderDate || o.completedAt || o.closedAt || '';
     if (!ds) return true;
     if (subPeriod === 'week') {
       const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay()+6)%7));
-      return ds >= mon.toISOString().split('T')[0] && ds <= today;
+      return ds >= localDateStr(mon) && ds <= today;
     }
     if (subPeriod === 'month') {
       const msel = document.getElementById('sub-month-sel')?.value;
@@ -3257,7 +3269,7 @@ function toggleSubbiePaid(id) {
   const o = DB.orders.find(x => x.id === id);
   if (!o) return;
   o.subbiePaid = o.subbiePaid === 'Y' ? 'N' : 'Y';
-  if (o.subbiePaid === 'Y') { o.subbiePaidAt = new Date().toISOString().split('T')[0]; }
+  if (o.subbiePaid === 'Y') { o.subbiePaidAt = localDateStr(); }
   else { delete o.subbiePaidAt; }
   o.updatedAt = Date.now();
   save();
@@ -4002,7 +4014,7 @@ function groupByPeriod(orders, period) {
     const d = new Date(o.orderDate);
     if (period === 'week') {
       const mon = new Date(d); mon.setDate(d.getDate() - d.getDay() + 1);
-      key = mon.toISOString().split('T')[0];
+      key = localDateStr(mon);
     } else if (period === 'month') {
       key = o.orderDate.slice(0, 7);
     } else {
@@ -4302,7 +4314,7 @@ function parseAribaText(raw) {
   const area = '';
 
   // ── Order Date
-  let orderDate = new Date().toISOString().split('T')[0];
+  let orderDate = localDateStr();
   const dm = text.match(/Order submitted on:\s*\w+\s+(\d{1,2})\s+(\w+)\s+(\d{4})/i);
   if (dm) {
     const months = {January:'01',February:'02',March:'03',April:'04',May:'05',June:'06',
