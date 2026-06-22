@@ -1577,6 +1577,8 @@ const DB = {
   claims: JSON.parse(lsGet('hom_claims') || 'null') || [],
   sorCodes: JSON.parse(lsGet('hom_sor') || 'null') || getDefaultSOR(),
   subbies: JSON.parse(lsGet('hom_subbies') || 'null') || ['SK_June', 'SK_Mo', 'SK_Jacob', 'SK_Jay', 'Jake', 'Kilmo', 'Jake Lee', 'Chris Choi', 'Sean Park', 'Kelvin Choi'],
+  // Deletion log for sync: { orders: {id: deletedAtMs}, claims: {id: deletedAtMs} } — lets merges know a record was removed.
+  tombstones: JSON.parse(lsGet('hom_tombstones') || 'null') || { orders: {}, claims: {} },
 };
 
 // Migrate internal staff names to SK_ prefix in the saved subbies list
@@ -1614,7 +1616,40 @@ function save() {
   lsSet('hom_claims', JSON.stringify(DB.claims));
   lsSet('hom_sor', JSON.stringify(DB.sorCodes));
   lsSet('hom_subbies', JSON.stringify(DB.subbies));
+  lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
   cloudPushDebounced();
+}
+
+// ============================================================
+// SYNC MERGE HELPERS — per-record "newest updatedAt wins" merge,
+// with a tombstone (deletion log) so deletes propagate across devices
+// instead of being silently re-added by the next sync.
+// ============================================================
+function mergeTombstones(localTomb, incomingTomb) {
+  const out = Object.assign({}, localTomb || {});
+  Object.keys(incomingTomb || {}).forEach(id => {
+    if (!out[id] || incomingTomb[id] > out[id]) out[id] = incomingTomb[id];
+  });
+  return out;
+}
+function mergeRecords(localArr, incomingArr, tomb) {
+  const map = {};
+  (localArr || []).forEach(r => { map[r.id] = r; });
+  (incomingArr || []).forEach(r => {
+    const deletedAt = tomb[r.id];
+    if (deletedAt && (!r.updatedAt || deletedAt >= r.updatedAt)) return; // stays deleted
+    const existing = map[r.id];
+    if (!existing || !existing.updatedAt || (r.updatedAt && r.updatedAt > existing.updatedAt)) {
+      map[r.id] = r;
+    }
+  });
+  return Object.keys(map)
+    .filter(id => {
+      const deletedAt = tomb[id];
+      const rec = map[id];
+      return !(deletedAt && (!rec.updatedAt || deletedAt >= rec.updatedAt));
+    })
+    .map(id => map[id]);
 }
 
 // ============================================================
@@ -1659,7 +1694,7 @@ async function cloudPush() {
   renderCloudStatus('Saving…');
   try {
     const blob = JSON.stringify({
-      orders: DB.orders, claims: DB.claims, subbies: DB.subbies,
+      orders: DB.orders, claims: DB.claims, subbies: DB.subbies, tombstones: DB.tombstones,
       savedAt: new Date().toISOString(),
     });
     const res = await fetch(CLOUD.url, {
@@ -1668,8 +1703,12 @@ async function cloudPush() {
       body: blob,
     });
     const out = await res.json();
-    if (out && out.ok) { CLOUD.lastSeenAt = out.updatedAt || ''; renderCloudStatus('Saved ✓'); }
-    else renderCloudStatus('Save failed');
+    if (out && out.ok) {
+      renderCloudStatus('Saved ✓');
+      // Server merges per-record (newest updatedAt wins) and may hold edits from other
+      // devices — pull immediately so this device reconciles instead of waiting up to 5s.
+      await cloudPull(true);
+    } else renderCloudStatus('Save failed');
   } catch (e) {
     renderCloudStatus('Offline');
   } finally {
@@ -1691,12 +1730,16 @@ async function cloudPull(initial) {
     if (!remote.orders) { renderCloudStatus('Synced ✓'); return; }
 
     CLOUD.applying = true;
-    DB.orders = remote.orders;
-    DB.claims = remote.claims || [];
-    if (remote.subbies) DB.subbies = remote.subbies;
+    const remoteTomb = remote.tombstones || { orders: {}, claims: {} };
+    DB.tombstones.orders = mergeTombstones(DB.tombstones.orders, remoteTomb.orders || {});
+    DB.tombstones.claims = mergeTombstones(DB.tombstones.claims, remoteTomb.claims || {});
+    DB.orders = mergeRecords(DB.orders, remote.orders, DB.tombstones.orders);
+    DB.claims = mergeRecords(DB.claims, remote.claims || [], DB.tombstones.claims);
+    if (remote.subbies) DB.subbies = [...new Set([...DB.subbies, ...remote.subbies])];
     lsSet('hom_orders', JSON.stringify(DB.orders));
     lsSet('hom_claims', JSON.stringify(DB.claims));
     lsSet('hom_subbies', JSON.stringify(DB.subbies));
+    lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
     CLOUD.lastSeenAt = out.updatedAt || '';
     CLOUD.applying = false;
 
@@ -1966,6 +2009,7 @@ function saveOrder() {
     comments: document.getElementById('f-comments').value.trim(),
     suiId: document.getElementById('f-suiId').value.trim(),
     createdAt: editingOrderId ? (DB.orders.find(x => x.id === editingOrderId)?.createdAt || Date.now()) : Date.now(),
+    updatedAt: Date.now(),
   };
 
   if (editingOrderId) {
@@ -2002,6 +2046,7 @@ function saveClaim() {
     reason: document.getElementById('c-reason').value.trim(),
     notes: document.getElementById('c-notes').value.trim(),
     createdAt: editingClaimId ? (DB.claims.find(x => x.id === editingClaimId)?.createdAt || Date.now()) : Date.now(),
+    updatedAt: Date.now(),
   };
 
   if (editingClaimId) {
@@ -2066,6 +2111,7 @@ function setOrderStatus(id, newStatus) {
   if (!o._dh) o._dh = {};
 
   o.status = newStatus;
+  o.updatedAt = Date.now();
 
   // FORWARD moves: stamp today, save old date to history
   if (newStatus === 'completed') {
@@ -2077,9 +2123,9 @@ function setOrderStatus(id, newStatus) {
     o.claimAt = today;
     let cRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
     if (!cRec) {
-      cRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: 0, paid: 'N', status: 'Payment Claim Submitted', claimDate: today, createdAt: today };
+      cRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: 0, paid: 'N', status: 'Payment Claim Submitted', claimDate: today, createdAt: today, updatedAt: Date.now() };
       DB.claims.push(cRec);
-    } else { cRec.status = 'Payment Claim Submitted'; if (!cRec.claimDate) cRec.claimDate = today; }
+    } else { cRec.status = 'Payment Claim Submitted'; if (!cRec.claimDate) cRec.claimDate = today; cRec.updatedAt = Date.now(); }
   }
   if (newStatus === 'closed') {
     if (!o._dh.closedAt) o._dh.closedAt = o.closedAt || null;
@@ -2088,12 +2134,13 @@ function setOrderStatus(id, newStatus) {
     // Payment received: record paid amount on the claim record
     let payRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
     if (!payRec) {
-      payRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: o.amount || 0, paid: 'Y', status: 'Closed', claimDate: o.claimAt, createdAt: today };
+      payRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: o.amount || 0, paid: 'Y', status: 'Closed', claimDate: o.claimAt, createdAt: today, updatedAt: Date.now() };
       DB.claims.push(payRec);
     } else {
       payRec.paid = 'Y';
       if (!payRec.amtPaid) payRec.amtPaid = o.amount || 0;
       payRec.status = 'Closed';
+      payRec.updatedAt = Date.now();
     }
   }
   if (newStatus === 'issue') {
@@ -2218,14 +2265,16 @@ function confirmIssueModal() {
   o.issueNote   = document.getElementById('iss-reason').value.trim();
   o.issueStatus = document.getElementById('iss-status').value;
   o.issueAt     = document.getElementById('iss-date').value;
+  o.updatedAt   = Date.now();
   let cRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
   if (!cRec) {
     cRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address,
              sorCode: o.sorCode, amount: o.amount, amtPaid: 0, paid: 'N',
-             status: o.issueStatus || '', claimDate: '', createdAt: o.issueAt };
+             status: o.issueStatus || '', claimDate: '', createdAt: o.issueAt, updatedAt: Date.now() };
     DB.claims.push(cRec);
   } else if (o.issueStatus) {
     cRec.status = o.issueStatus;
+    cRec.updatedAt = Date.now();
   }
   o.status = 'issue';
   save();
@@ -3353,6 +3402,7 @@ function renderCancelled() {
 // ============================================================
 function deleteOrder(id) {
   if (!confirm('Delete this order?')) return;
+  DB.tombstones.orders[id] = Date.now();
   DB.orders = DB.orders.filter(x => x.id !== id);
   save();
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
@@ -3363,6 +3413,7 @@ function deleteOrder(id) {
 
 function deleteClaim(id) {
   if (!confirm('Delete this claim?')) return;
+  DB.tombstones.claims[id] = Date.now();
   DB.claims = DB.claims.filter(x => x.id !== id);
   save();
   renderClaims();
@@ -4446,6 +4497,7 @@ function exportData() {
     orders: DB.orders,
     claims: DB.claims,
     subbies: DB.subbies,
+    tombstones: DB.tombstones,
     exportedAt: new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -4464,19 +4516,15 @@ function importDataFile(file) {
     try { data = JSON.parse(e.target.result); } catch (err) { toast('Invalid backup file', 'error'); return; }
     if (!data || !Array.isArray(data.orders)) { toast('Backup file is missing order data', 'error'); return; }
 
-    let addedO = 0, updatedO = 0;
-    (data.orders || []).forEach(o => {
-      const idx = DB.orders.findIndex(x => x.id === o.id);
-      if (idx === -1) { DB.orders.push(o); addedO++; }
-      else { DB.orders[idx] = o; updatedO++; }
-    });
-
-    let addedC = 0, updatedC = 0;
-    (data.claims || []).forEach(c => {
-      const idx = DB.claims.findIndex(x => x.id === c.id);
-      if (idx === -1) { DB.claims.push(c); addedC++; }
-      else { DB.claims[idx] = c; updatedC++; }
-    });
+    const beforeO = DB.orders.length, beforeC = DB.claims.length;
+    if (data.tombstones) {
+      DB.tombstones.orders = mergeTombstones(DB.tombstones.orders, data.tombstones.orders || {});
+      DB.tombstones.claims = mergeTombstones(DB.tombstones.claims, data.tombstones.claims || {});
+    }
+    DB.orders = mergeRecords(DB.orders, data.orders || [], DB.tombstones.orders);
+    DB.claims = mergeRecords(DB.claims, data.claims || [], DB.tombstones.claims);
+    const addedO = Math.max(0, DB.orders.length - beforeO), updatedO = (data.orders || []).length - addedO;
+    const addedC = Math.max(0, DB.claims.length - beforeC), updatedC = (data.claims || []).length - addedC;
 
     if (Array.isArray(data.subbies)) {
       DB.subbies = [...new Set([...DB.subbies, ...data.subbies])];
