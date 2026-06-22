@@ -1321,6 +1321,15 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <div class="form-group"><label class="form-label">Import Email button</label><input class="form-control" id="set-btnImportEmail"></div>
         <div class="form-group"><label class="form-label">New Order button</label><input class="form-control" id="set-btnNewOrder"></div>
       </div>
+      <div class="section-title">Colors</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Accent / brand color</label><input type="color" class="form-control" id="setcolor-accent" style="height:38px;padding:4px"></div>
+        <div class="form-group"></div>
+        <div class="form-group"><label class="form-label">Orders badge</label><input type="color" class="form-control" id="setcolor-badgeOrders" style="height:38px;padding:4px"></div>
+        <div class="form-group"><label class="form-label">Completed badge</label><input type="color" class="form-control" id="setcolor-badgeCompleted" style="height:38px;padding:4px"></div>
+        <div class="form-group"><label class="form-label">Claim badge</label><input type="color" class="form-control" id="setcolor-badgeClaims" style="height:38px;padding:4px"></div>
+        <div class="form-group"><label class="form-label">Issues badge</label><input type="color" class="form-control" id="setcolor-badgeIssues" style="height:38px;padding:4px"></div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="resetUiLabels()">Reset to defaults</button>
@@ -1350,11 +1359,19 @@ const DEFAULT_UI_LABELS = {
   navDcj: 'DCJ Portal', btnExportCsv: 'Export CSV', btnImportEmail: 'Import Email', btnNewOrder: '+ New Order',
 };
 
+const DEFAULT_UI_COLORS = {
+  accent: '#C9A84C',       // main brand/accent color — buttons, active states, calendar "today", focus rings
+  badgeOrders: '#E8C96A', badgeCompleted: '#FACC15', badgeClaims: '#F97316', badgeIssues: '#DC2626',
+  // Closed/Cancelled badges stay intentionally plain (no color) — that was a deliberate
+  // de-emphasis decision earlier, not exposed here on purpose.
+};
+
 const DB = {
   // Per-device only for now (not pushed through Cloud Sync) — each device/browser
-  // can have its own label preferences. Object.assign so any NEW label keys added
+  // can have its own label/color preferences. Object.assign so any NEW keys added
   // later always get a default even if an old saved object doesn't have them yet.
   uiLabels: Object.assign({}, DEFAULT_UI_LABELS, JSON.parse(lsGet('hom_ui_labels') || 'null') || {}),
+  uiColors: Object.assign({}, DEFAULT_UI_COLORS, JSON.parse(lsGet('hom_ui_colors') || 'null') || {}),
   orders: JSON.parse(lsGet('hom_orders') || 'null') || [],
   claims: JSON.parse(lsGet('hom_claims') || 'null') || [],
   sorCodes: JSON.parse(lsGet('hom_sor') || 'null') || getDefaultSOR(),
@@ -1665,10 +1682,35 @@ function applyUiLabels() {
   if (titleEl) titleEl.textContent = PAGE_TITLES[currentPage] || currentPage;
 }
 
+const COLOR_FIELDS = Object.keys(DEFAULT_UI_COLORS);
+const COLOR_BADGE_ELEMENT_ID = {
+  badgeOrders: 'orders-badge', badgeCompleted: 'completed-badge',
+  badgeClaims: 'claims-badge', badgeIssues: 'issues-badge',
+};
+
+function applyUiColors() {
+  const C = DB.uiColors;
+  // Re-themes the main brand color everywhere the CSS reads var(--gold)/var(--accent) —
+  // buttons, active sidebar border, calendar "today" highlight, focus rings, etc.
+  // --gold-light/--gold-dark stay fixed (computing a lighten/darken shade from an
+  // arbitrary chosen color is its own can of worms) — so a few spots (active sidebar
+  // text color, default Orders badge) won't shift with this.
+  document.documentElement.style.setProperty('--gold', C.accent);
+  document.documentElement.style.setProperty('--accent', C.accent);
+  Object.keys(COLOR_BADGE_ELEMENT_ID).forEach(key => {
+    const el = document.getElementById(COLOR_BADGE_ELEMENT_ID[key]);
+    if (el) el.style.background = C[key];
+  });
+}
+
 function openSettingsModal() {
   SETTINGS_FIELDS.forEach(k => {
     const el = document.getElementById('set-' + k);
     if (el) el.value = DB.uiLabels[k];
+  });
+  COLOR_FIELDS.forEach(k => {
+    const el = document.getElementById('setcolor-' + k);
+    if (el) el.value = DB.uiColors[k];
   });
   openModal('settings-modal');
 }
@@ -1680,6 +1722,14 @@ function saveUiLabels() {
   });
   lsSet('hom_ui_labels', JSON.stringify(DB.uiLabels));
   applyUiLabels();
+
+  COLOR_FIELDS.forEach(k => {
+    const el = document.getElementById('setcolor-' + k);
+    if (el) DB.uiColors[k] = el.value || DEFAULT_UI_COLORS[k];
+  });
+  lsSet('hom_ui_colors', JSON.stringify(DB.uiColors));
+  applyUiColors();
+
   showPage(currentPage); // rebuilds header action buttons with the new labels
   closeModal('settings-modal');
   toast('Settings saved', 'success');
@@ -1689,10 +1739,19 @@ function resetUiLabels() {
   DB.uiLabels = Object.assign({}, DEFAULT_UI_LABELS);
   lsSet('hom_ui_labels', JSON.stringify(DB.uiLabels));
   applyUiLabels();
+
+  DB.uiColors = Object.assign({}, DEFAULT_UI_COLORS);
+  lsSet('hom_ui_colors', JSON.stringify(DB.uiColors));
+  applyUiColors();
+
   showPage(currentPage);
   SETTINGS_FIELDS.forEach(k => {
     const el = document.getElementById('set-' + k);
     if (el) el.value = DEFAULT_UI_LABELS[k];
+  });
+  COLOR_FIELDS.forEach(k => {
+    const el = document.getElementById('setcolor-' + k);
+    if (el) el.value = DEFAULT_UI_COLORS[k];
   });
   toast('Reset to defaults', 'success');
 }
@@ -4688,6 +4747,7 @@ function openEmailImport() {
 
 function initApp() {
   applyUiLabels();
+  applyUiColors();
   showPage('all');
   updateSidebar();
   updateCalBadge();
