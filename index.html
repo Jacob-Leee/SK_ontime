@@ -500,6 +500,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
                 <thead>
                   <tr>
                     
+                    <th data-sort="orderDate" onclick="sortBy('completed','orderDate')">Order Date <span class="sort-icon">↕</span></th>
                     <th data-sort="completedAt" onclick="sortBy('completed','completedAt')">Completed <span class="sort-icon">↕</span></th>
                     <th data-sort="orderNumber" onclick="sortBy('completed','orderNumber')">Order # <span class="sort-icon">↕</span></th>
                     <th data-sort="address" onclick="sortBy('completed','address')">Address <span class="sort-icon">↕</span></th>
@@ -539,6 +540,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
                 <thead>
                   <tr>
                     
+                    <th data-sort="orderDate" onclick="sortBy('claims','orderDate')">Order Date <span class="sort-icon">↕</span></th>
                     <th data-sort="orderNumber" onclick="sortBy('claims','orderNumber')">Order # <span class="sort-icon">↕</span></th>
                     <th data-sort="address" onclick="sortBy('claims','address')">Address <span class="sort-icon">↕</span></th>
                     <th data-sort="area" onclick="sortBy('claims','area')">Area <span class="sort-icon">↕</span></th>
@@ -578,6 +580,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
                 <thead>
                   <tr>
                     
+                    <th data-sort="orderDate" onclick="sortBy('closed','orderDate')">Order Date <span class="sort-icon">↕</span></th>
                     <th data-sort="closedAt" onclick="sortBy('closed','closedAt')">Closed Date <span class="sort-icon">↕</span></th>
                     <th data-sort="orderNumber" onclick="sortBy('closed','orderNumber')">Order # <span class="sort-icon">↕</span></th>
                     <th data-sort="address" onclick="sortBy('closed','address')">Address <span class="sort-icon">↕</span></th>
@@ -2137,6 +2140,7 @@ function renderCompleted() {
       ? `<span class="badge badge-green">✓ Paid</span>`
       : `<span class="badge badge-yellow">Unpaid</span>`;
     return `<tr class="srow-completed">
+    <td style="white-space:nowrap;font-size:12px">${fmtDate(o.orderDate)}</td>
     <td style="white-space:nowrap;color:var(--green);font-size:12px">${fmtDate(o.completedAt)}</td>
     <td>${orderNumCell(o)}</td>
     <td><div class="addr-full">${esc(o.address)}</div></td>
@@ -3552,6 +3556,7 @@ function renderClaims() {
     const c = claimMap[o.orderNumber];
 
     return `<tr class="srow-claim">
+      <td style="white-space:nowrap;font-size:12px">${fmtDate(o.orderDate)}</td>
       <td>${orderNumCell(o)}</td>
       <td><div class="addr-full">${esc(o.address)}</div></td>
       <td><span class="area-tag">${esc(o.area)}</span></td>
@@ -3597,6 +3602,7 @@ function renderClosed() {
   tbody.innerHTML = orders.map(o => {
     const c = claimMap[o.orderNumber];
     return `<tr class="srow-closed">
+      <td style="white-space:nowrap;font-size:12px">${fmtDate(o.orderDate)}</td>
       <td style="white-space:nowrap;font-size:12px">${fmtDate(o.closedAt)}</td>
       <td>${orderNumCell(o)}</td>
       <td><div class="addr-full">${esc(o.address)}</div></td>
