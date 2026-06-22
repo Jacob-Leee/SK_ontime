@@ -1448,13 +1448,25 @@ function startCloudSync() {
 function stopCloudSync() { if (CLOUD.pullTimer) { clearInterval(CLOUD.pullTimer); CLOUD.pullTimer = null; } }
 
 function cloudPushDebounced() {
-  if (typeof CLOUD === 'undefined' || !CLOUD.enabled || !CLOUD.url || CLOUD.applying) return;
+  console.log('[CLOUD DEBUG] cloudPushDebounced() called. enabled=', CLOUD.enabled, 'url=', CLOUD.url, 'applying=', CLOUD.applying);
+  if (typeof CLOUD === 'undefined' || !CLOUD.enabled || !CLOUD.url || CLOUD.applying) {
+    console.log('[CLOUD DEBUG] BLOCKED — push will NOT be scheduled. Reason:',
+      typeof CLOUD === 'undefined' ? 'CLOUD undefined' :
+      !CLOUD.enabled ? 'CLOUD.enabled is false' :
+      !CLOUD.url ? 'CLOUD.url is empty' : 'CLOUD.applying is stuck true');
+    return;
+  }
   if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
+  console.log('[CLOUD DEBUG] push scheduled, firing in 1.2s...');
   CLOUD.pushTimer = setTimeout(cloudPush, 1200);
 }
 
 async function cloudPush() {
-  if (!CLOUD.enabled || !CLOUD.url || CLOUD.pushing) return;
+  console.log('[CLOUD DEBUG] cloudPush() firing now. url=', CLOUD.url);
+  if (!CLOUD.enabled || !CLOUD.url || CLOUD.pushing) {
+    console.log('[CLOUD DEBUG] cloudPush aborted at top guard. pushing=', CLOUD.pushing);
+    return;
+  }
   CLOUD.pushing = true;
   renderCloudStatus('Saving…');
   try {
@@ -1464,12 +1476,15 @@ async function cloudPush() {
       tombstones: DB.tombstones,
       savedAt: new Date().toISOString(),
     });
+    console.log('[CLOUD DEBUG] sending POST, payload bytes=', blob.length, 'orders count=', DB.orders.length);
     const res = await fetch(CLOUD.url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: blob,
     });
+    console.log('[CLOUD DEBUG] POST response status=', res.status);
     const out = await res.json();
+    console.log('[CLOUD DEBUG] POST response body=', out);
     if (out && out.ok) {
       renderCloudStatus('Saved ✓');
       // Server merges per-record (newest updatedAt wins) and may hold edits from other
@@ -1477,6 +1492,7 @@ async function cloudPush() {
       await cloudPull(true);
     } else renderCloudStatus('Save failed');
   } catch (e) {
+    console.log('[CLOUD DEBUG] cloudPush threw an exception:', e);
     renderCloudStatus('Offline');
   } finally {
     CLOUD.pushing = false;
@@ -1535,6 +1551,14 @@ async function cloudPull(initial) {
     renderCloudStatus('Offline');
   } finally {
     CLOUD.pulling = false;
+    // Safety net: if a past merge ever threw between `applying = true` and
+    // `applying = false`, this flag could stay stuck true forever — every
+    // later pull would hit the steady-state "no change" early-returns above,
+    // which never touch it, so it'd silently block every push from then on
+    // while still showing "Synced ✓" (this exact bug happened in practice).
+    // By the time we're here, no merge is in flight, so it's always safe
+    // to clear it.
+    CLOUD.applying = false;
   }
 }
 
