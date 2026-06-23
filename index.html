@@ -2429,12 +2429,13 @@ function setOrderStatus(id, newStatus) {
     // Payment received: record paid amount on the claim record
     let payRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
     if (!payRec) {
-      payRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: o.amount || 0, paid: 'Y', status: 'Closed', claimDate: o.claimAt, createdAt: today, updatedAt: Date.now() };
+      payRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: o.amount || 0, paid: 'Y', status: 'Closed', claimDate: o.claimAt, paidAt: today, createdAt: today, updatedAt: Date.now() };
       DB.claims.push(payRec);
     } else {
       payRec.paid = 'Y';
       if (!payRec.amtPaid) payRec.amtPaid = o.amount || 0;
       payRec.status = 'Closed';
+      if (!payRec.paidAt) payRec.paidAt = today;
       payRec.updatedAt = Date.now();
     }
   }
@@ -4365,17 +4366,21 @@ function buildStatusPipeline(base) {
 
 function buildClaimsPipeline(base) {
   const el = document.getElementById('dash-w-claims'); if (!el) return;
-  const claimedNums = new Set(DB.claims.map(c=>c.orderNumber));
-  const unclaimed   = base.filter(o=>o.status==='completed' && !claimedNums.has(o.orderNumber));
+  // All 'completed' orders = work done, not yet moved to claim status
+  const unclaimed = base.filter(o => o.status === 'completed');
   const unclaimedAmt = unclaimed.reduce((s,o)=>s+(o.amount||0),0);
-  const pending     = DB.claims.filter(c=>!['paid','closed','cancelled'].includes(c.status));
+  const pending     = DB.claims.filter(c=>c.status!=='Closed'&&c.status!=='cancelled');
   const pendingAmt  = pending.reduce((s,c)=>s+(c.amount||0),0);
   const now=new Date();
   const mS=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
   const mE=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-31`;
-  const paidMo  = DB.claims.filter(c=>c.status==='paid'&&c.paidAt&&c.paidAt>=mS&&c.paidAt<=mE);
+  // paidAt stamped from now on; fallback to updatedAt date for historical records
+  const paidMo  = DB.claims.filter(c=>c.status==='Closed'&&(
+    (c.paidAt&&c.paidAt>=mS&&c.paidAt<=mE) ||
+    (!c.paidAt&&c.closedAt&&c.closedAt>=mS&&c.closedAt<=mE)
+  ));
   const paidAmt = paidMo.reduce((s,c)=>s+(c.amtPaid||c.amount||0),0);
-  const allOut  = DB.claims.filter(c=>!['paid','closed','cancelled'].includes(c.status));
+  const allOut    = DB.claims.filter(c=>c.status!=='Closed'&&c.status!=='cancelled');
   const allOutAmt = allOut.reduce((s,c)=>s+(c.amount||0),0);
   const cols = [
     { label:'Work Done — Unclaimed', sub:'Completed, no claim yet',  count:unclaimed.length, amt:unclaimedAmt, color:'#4f7ef8', icon:'&#128296;' },
@@ -5166,7 +5171,7 @@ function openEmailImport() {
 function initApp() {
   applyUiLabels();
   applyUiColors();
-  showPage('orders');
+  showPage('dashboard');
   updateSidebar();
   updateCalBadge();
   renderCloudStatus();
