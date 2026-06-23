@@ -2202,15 +2202,23 @@ function saveOrder(e) {
     toast('Order saved successfully', 'success');
   }
 
-  // Keep the linked claim/payment record's claimed amount in sync with the order total.
-  // amtPaid (cash actually received) only follows automatically if it was already marked
-  // fully paid — otherwise it's a real-world fact we shouldn't silently overwrite.
+  // Keep the linked claim/payment record's claimed amount and supervisor in sync.
+  // amtPaid only follows automatically if it was already marked fully paid.
   const linkedClaim = DB.claims.find(c => c.orderNumber === order.orderNumber);
-  if (linkedClaim && linkedClaim.amount !== totalAmount) {
-    const wasFullyPaid = linkedClaim.paid === 'Y';
-    linkedClaim.amount = totalAmount;
-    if (wasFullyPaid) linkedClaim.amtPaid = totalAmount;
-    linkedClaim.updatedAt = now;
+  if (linkedClaim) {
+    let claimChanged = false;
+    if (linkedClaim.amount !== totalAmount) {
+      const wasFullyPaid = linkedClaim.paid === 'Y';
+      linkedClaim.amount = totalAmount;
+      if (wasFullyPaid) linkedClaim.amtPaid = totalAmount;
+      claimChanged = true;
+    }
+    // Sync supervisor — always keep claim in step with the order
+    if (linkedClaim.supervisor !== order.supervisor) {
+      linkedClaim.supervisor = order.supervisor;
+      claimChanged = true;
+    }
+    if (claimChanged) linkedClaim.updatedAt = now;
   }
 
   // Write to localStorage immediately, then push to the server RIGHT NOW
