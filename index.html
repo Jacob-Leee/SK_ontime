@@ -1476,7 +1476,7 @@ const DB = {
   DB.orders.forEach(o => {
     if (o.subbies && map[o.subbies]) {
       o.subbies = map[o.subbies];
-      o.updatedAt = Date.now();
+      o.updatedAt = _nowSafe();
       changed = true;
     }
   });
@@ -1794,6 +1794,7 @@ var CLOUD = {
   pushTimer: null,
   applying: false,
   _serverNow: 0,  // latest server timestamp from pull response (fixes clock skew)
+  _skewMs: 0,     // server_time - local_time at last pull (positive = local clock is behind)
 };
 
 function cloudSetUrl(u) { CLOUD.url = (u || '').trim(); lsSet('hom_cloud_url', CLOUD.url); }
@@ -1804,21 +1805,28 @@ function cloudEnable(on) {
   renderCloudStatus();
 }
 
+// Safe timestamp: compensates for device clock skew measured at last pull.
+// If this device's clock is N minutes behind the server, adds N to Date.now()
+// so this device's actions always get server-accurate timestamps.
+function _nowSafe() { return Date.now() + Math.max(0, CLOUD._skewMs || 0) + 1; }
+
 async function cloudForcePush() {
   if (!CLOUD.enabled || !CLOUD.url) { toast('Cloud Sync not enabled', 'error'); return; }
   const ok = confirm('Force Push: your current data will overwrite everyone else\'s copy.\n\nAll 4 users will receive your version on their next sync.\n\nProceed?');
   if (!ok) return;
   // Stamp ALL records with a timestamp guaranteed to win any LWW merge:
   // max(local clock, last server time) + 2 minutes
-  const forcedAt = Math.max(Date.now(), (CLOUD._serverNow || 0)) + 120000;
+  // +1000ms: just enough to beat anything currently on server, won't block future actions
+  const forcedAt = Math.max(Date.now(), (CLOUD._serverNow || 0)) + 1000;
   const stamp = r => Object.assign({}, r, { updatedAt: forcedAt, statusChangedAt: forcedAt, formSavedAt: forcedAt });
   DB.orders = DB.orders.map(stamp);
   DB.claims = DB.claims.map(stamp);
   lsSet('hom_orders', JSON.stringify(DB.orders));
   lsSet('hom_claims', JSON.stringify(DB.claims));
+  // Advance _serverNow so our OWN subsequent actions also beat the forced timestamps
+  CLOUD._serverNow = forcedAt;
   toast('Force pushing… all users will sync to your state', 'info');
   await cloudPush();
-  // Immediately pull back to confirm server accepted
   await cloudPull(true);
   toast('Force Push complete ✓ — others will update within 5 seconds', 'success');
 }
@@ -1947,8 +1955,16 @@ async function cloudPull(initial) {
     lsSet('hom_cal_events', JSON.stringify(mergedCalEvents));
     lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
     CLOUD.lastSeenAt = out.updatedAt || '';
-    // Track server time so _stampNow() can compensate for device clock skew
-    if (out.updatedAt) { const _sNow = new Date(out.updatedAt).getTime(); if (_sNow > CLOUD._serverNow) CLOUD._serverNow = _sNow; }
+    // Measure clock skew: server_time - local_time. Positive = local clock is behind.
+    if (out.updatedAt) {
+      const _sNow = new Date(out.updatedAt).getTime();
+      if (_sNow > CLOUD._serverNow) CLOUD._serverNow = _sNow;
+      const _skew = _sNow - Date.now();
+      // Only update skew if it suggests local clock is behind (we only correct slow clocks)
+      if (_skew > 0) CLOUD._skewMs = _skew;
+      else if (CLOUD._skewMs > 0 && _skew > -1000) CLOUD._skewMs = 0; // clocks now in sync
+      console.log('[SYNC DEBUG] clock skew=', CLOUD._skewMs, 'ms (positive = local behind server)');
+    }
     CLOUD.applying = false;
     console.log('[PULL DEBUG] merge done. DB.orders now=', DB.orders.length);
 
@@ -2571,7 +2587,7 @@ function saveClaim() {
     reason: document.getElementById('c-reason').value.trim(),
     notes: document.getElementById('c-notes').value.trim(),
     createdAt: editingClaimId ? (DB.claims.find(x => x.id === editingClaimId)?.createdAt || Date.now()) : Date.now(),
-    updatedAt: Date.now(),
+    updatedAt: _nowSafe(),
   };
 
   if (editingClaimId) {
@@ -2654,8 +2670,8 @@ function setOrderStatus(id, newStatus) {
   if (!o._dh) o._dh = {};
 
   o.status           = newStatus;
-  o.statusChangedAt  = Date.now();
-  o.updatedAt        = Date.now();
+  o.statusChangedAt  = _nowSafe();
+  o.updatedAt        = _nowSafe();
 
   // FORWARD moves: stamp today, save old date to history
   if (newStatus === 'completed') {
@@ -2820,7 +2836,7 @@ function confirmIssueModal() {
   o.issueNote   = document.getElementById('iss-reason').value.trim();
   o.issueStatus = document.getElementById('iss-status').value;
   o.issueAt     = document.getElementById('iss-date').value;
-  o.updatedAt   = Date.now();
+  o.updatedAt   = _nowSafe();
   let cRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
   if (!cRec) {
     cRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address,
@@ -3755,7 +3771,7 @@ function renderSubbiePerson(name, allOrders) {
 
 function bulkSubbiePaid(name) {
   if (!confirm(`Mark ALL unpaid orders for ${name} as paid?`)) return;
-  DB.orders.forEach(o => { if (o.subbies === name && o.subbiePaid !== 'Y') { o.subbiePaid = 'Y'; o.updatedAt = Date.now(); } });
+  DB.orders.forEach(o => { if (o.subbies === name && o.subbiePaid !== 'Y') { o.subbiePaid = 'Y'; o.updatedAt = _nowSafe(); } });
   save();
   renderSubbiesPage();
   toast(`All ${name} orders marked as paid`, 'success');
@@ -3766,7 +3782,7 @@ function markCheckedPaid(name) {
   if (!checked.length) { toast('No orders selected', 'error'); return; }
   checked.forEach(cb => {
     const o = DB.orders.find(x => x.id === cb.dataset.id);
-    if (o) { o.subbiePaid = 'Y'; o.updatedAt = Date.now(); }
+    if (o) { o.subbiePaid = 'Y'; o.updatedAt = _nowSafe(); }
   });
   save();
   renderSubbiesPage();
@@ -3896,7 +3912,7 @@ function toggleSubbiePaid(id) {
   o.subbiePaid = o.subbiePaid === 'Y' ? 'N' : 'Y';
   if (o.subbiePaid === 'Y') { o.subbiePaidAt = localDateStr(); }
   else { delete o.subbiePaidAt; }
-  o.updatedAt = Date.now();
+  o.updatedAt = _nowSafe();
   save();
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, subbies:renderSubbiesPage };
   (renders[currentPage] || renderAll)();
