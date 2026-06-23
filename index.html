@@ -1704,17 +1704,25 @@ function _historyCommit(label) {
   lsSet('hom_orders', JSON.stringify(DB.orders));
   lsSet('hom_claims', JSON.stringify(DB.claims));
   lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
-  // Push the undo/redo state to cloud. If another push is already in-flight
-  // (CLOUD.pushing=true), cloudPush() silently aborts — so we schedule a
-  // follow-up push to run after the in-flight one finishes instead.
+  console.log('[UNDO DEBUG] _historyCommit:', label,
+    '| CLOUD.enabled=', CLOUD.enabled,
+    '| CLOUD.url=', !!CLOUD.url,
+    '| CLOUD.pushing=', CLOUD.pushing,
+    '| CLOUD.applying=', CLOUD.applying);
   if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
   if (CLOUD.enabled && CLOUD.url) {
     if (!CLOUD.pushing) {
+      console.log('[UNDO DEBUG] firing cloudPush immediately');
       cloudPush();
     } else {
-      // In-flight push: schedule a fresh push 1.5s from now (enough time for it to finish)
-      CLOUD.pushTimer = setTimeout(cloudPush, 1500);
+      console.log('[UNDO DEBUG] push in-flight, scheduling retry in 1.5s');
+      CLOUD.pushTimer = setTimeout(function() {
+        console.log('[UNDO DEBUG] retry push firing, pushing=', CLOUD.pushing);
+        cloudPush();
+      }, 1500);
     }
+  } else {
+    console.log('[UNDO DEBUG] push skipped — cloud not enabled or no URL');
   }
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted,
     claims:renderClaims, closed:renderClosed, issues:renderIssues,
@@ -1855,7 +1863,7 @@ async function cloudPull(initial) {
   if (CLOUD.pulling) return; // avoid overlapping pulls (e.g. the 5s timer firing while an immediate post-push pull is still in flight)
   CLOUD.pulling = true;
   try {
-    const res = await fetch(CLOUD.url, { method: 'GET' });
+    const res = await fetch(CLOUD.url + '?t=' + Date.now(), { method: 'GET', cache: 'no-store' });
     const out = await res.json();
     if (!out || !out.ok) { renderCloudStatus('Offline'); return; }
     if (!out.data) { renderCloudStatus(initial ? 'Connected (empty)' : 'Synced ✓'); return; }
