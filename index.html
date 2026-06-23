@@ -1890,7 +1890,22 @@ async function cloudPull(initial) {
     DB.tombstones.supervisors = mergeTombstones(DB.tombstones.supervisors, remoteTomb.supervisors || {});
     DB.tombstones.calEvents   = mergeTombstones(DB.tombstones.calEvents, remoteTomb.calEvents || {});
 
+    const _statusBefore = {};
+    DB.orders.forEach(o => { _statusBefore[o.id] = { s: o.status, u: o.updatedAt, sc: o.statusChangedAt }; });
     DB.orders = mergeRecords(DB.orders, remote.orders, DB.tombstones.orders);
+    const _statusChanges = DB.orders.filter(o => _statusBefore[o.id] && _statusBefore[o.id].s !== o.status);
+    if (_statusChanges.length) {
+      console.log('[MERGE DEBUG] STATUS CHANGED in merge:', _statusChanges.map(o => o.orderNumber + ': ' + _statusBefore[o.id].s + '→' + o.status + ' (localUpdAt=' + _statusBefore[o.id].u + ' remoteUpdAt=' + o.updatedAt + ')'));
+    } else {
+      // Log one example record to see if remote has different status that's being rejected
+      const _sample = remote.orders.find(r => DB.orders.find(l => l.id === r.id && l.status !== r.status));
+      if (_sample) {
+        const _local = DB.orders.find(l => l.id === _sample.id);
+        console.log('[MERGE DEBUG] Remote has different status but was REJECTED:', _sample.orderNumber, 'remote.status=', _sample.status, 'remote.updatedAt=', _sample.updatedAt, 'local.status=', _local.status, 'local.updatedAt=', _local.updatedAt, 'local.statusChangedAt=', _local.statusChangedAt);
+      } else {
+        console.log('[MERGE DEBUG] No status differences between remote and local');
+      }
+    }
     DB.claims = mergeRecords(DB.claims, remote.claims || [], DB.tombstones.claims);
     if (remote.subbies) DB.subbies = [...new Set([...DB.subbies, ...remote.subbies])];
     if (remote.sorCodes) DB.sorCodes = mergeRecordsBy(DB.sorCodes, remote.sorCodes, DB.tombstones.sorCodes, s => s.code);
