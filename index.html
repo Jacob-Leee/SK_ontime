@@ -2463,7 +2463,16 @@ function setOrderStatus(id, newStatus) {
     delete o.closedAt;
     o._dh.closedAt = undefined;
   }
-  save();
+  // Save locally first
+  lsSet('hom_orders', JSON.stringify(DB.orders));
+  lsSet('hom_claims', JSON.stringify(DB.claims));
+  lsSet('hom_subbies', JSON.stringify(DB.subbies));
+  // Immediate push — bypass 1.2s debounce so a cloudPull in that window
+  // can't bring back the old status from the server before our push lands.
+  if (typeof CLOUD !== 'undefined' && CLOUD.enabled && CLOUD.url) {
+    if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
+    cloudPush();
+  }
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
   (renders[currentPage] || renderAll)();
   updateSidebar();
