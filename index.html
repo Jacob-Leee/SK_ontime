@@ -3894,7 +3894,7 @@ function renderOrders() {
       <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
       <td style="font-size:12px">
         ${esc(o.subbies)}
-        ${o.supervisor ? `<br>${supervisorLink(o.supervisor)}` : ''}
+        ${o.supervisor ? `<br>${supervisorLink(o.supervisor, o.area)}` : ''}
       </td>
       <td><div class="truncate" title="${esc(o.comments)}" style="max-width:140px">${esc(o.comments)}</div></td>
       <td>
@@ -4081,7 +4081,7 @@ function renderAll() {
       <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
       <td style="font-size:12px">
         ${esc(o.subbies)}
-        ${o.supervisor ? `<br>${supervisorLink(o.supervisor)}` : ''}
+        ${o.supervisor ? `<br>${supervisorLink(o.supervisor, o.area)}` : ''}
       </td>
       <td>${subbiePayBadge(o)}</td>
       <td><span class="badge ${stClass}" style="font-size:10px">${stLabel}</span></td>
@@ -4704,14 +4704,26 @@ function updateAreaFilter() {
   sel.innerHTML = '<option value="">All Areas</option>' + areas.map(a => `<option ${a === cur ? 'selected' : ''}>${a}</option>`).join('');
 }
 
-// Returns supervisor name as a mailto link if the supervisor has an email
-// in the contacts list, otherwise plain text.
-function supervisorLink(name) {
+// CA area → Homes NSW HP Central team email
+const CA_CC_EMAIL = {
+  CA1:  'HomesNSW-HP-Centralca1@homes.nsw.gov.au',
+  CA2:  'HomesNSW-HP-Centralca2@homes.nsw.gov.au',
+  CA3:  'HomesNSW-HP-Centralca3@homes.nsw.gov.au',
+  CA4:  'HomesNSW-HP-Centralca4@homes.nsw.gov.au',
+  CA9:  'HomesNSW-HP-Centralca9@homes.nsw.gov.au',
+  CA10: 'HomesNSW-HP-Centralca10@homes.nsw.gov.au',
+  CA11: 'HomesNSW-HP-Centralca11@homes.nsw.gov.au',
+};
+
+// Returns supervisor name as a mailto link (with optional CC for CA area).
+function supervisorLink(name, area) {
   if (!name) return '';
   const sups = loadSupervisors();
   const sup = sups.find(s => s.name === name);
   if (sup && sup.email) {
-    return `<a href="mailto:${esc(sup.email)}" title="Email ${esc(name)} (${esc(sup.email)})"
+    const cc = area && CA_CC_EMAIL[area] ? `?cc=${encodeURIComponent(CA_CC_EMAIL[area])}` : '';
+    const tipCc = area && CA_CC_EMAIL[area] ? ` | CC: ${CA_CC_EMAIL[area]}` : '';
+    return `<a href="mailto:${esc(sup.email)}${cc}" title="Email ${esc(name)} (${esc(sup.email)}${tipCc})"
       style="color:var(--text3);font-size:11px;text-decoration:none"
       onmouseover="this.style.color='var(--accent)';this.style.textDecoration='underline'"
       onmouseout="this.style.color='var(--text3)';this.style.textDecoration='none'">
