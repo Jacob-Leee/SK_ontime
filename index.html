@@ -1158,6 +1158,49 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
       </div>
     </div>
+
+    <!-- Supervisor Edit Modal -->
+    <div id="sup-edit-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9000;align-items:center;justify-content:center" onclick="if(event.target===this)closeEditSupervisor()">
+      <div style="background:var(--cream);border-radius:12px;padding:28px;width:480px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,0.25)">
+        <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:20px">Edit Contact</div>
+        <input type="hidden" id="edit-sup-idx">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Name *</label>
+            <input class="form-control" id="edit-sup-name" placeholder="Name">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Role / Title</label>
+            <input class="form-control" id="edit-sup-role" placeholder="Role / Title">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Email *</label>
+            <input class="form-control" id="edit-sup-email" placeholder="email@homes.nsw.gov.au" type="email">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Mobile</label>
+            <input class="form-control" id="edit-sup-phone" placeholder="Mobile">
+          </div>
+        </div>
+        <div style="margin-bottom:20px">
+          <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Group</label>
+          <select class="form-control" id="edit-sup-group">
+            <option>Homes NSW</option>
+            <option>IT Team</option>
+            <option>LAHC System</option>
+            <option>High Cost Team &amp; MPW</option>
+            <option>Relocation Team</option>
+            <option>CA1</option><option>CA2</option><option>CA3</option>
+            <option>CA4</option><option>CA9</option><option>CA10</option><option>CA11</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn" style="background:var(--cream2);color:var(--text);border:1px solid var(--border)" onclick="closeEditSupervisor()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveEditSupervisor()">Save Changes</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2650,6 +2693,7 @@ function renderSupList() {
             </div>
             <div style="margin-top:6px;display:flex;gap:6px">
               <a href="mailto:${esc(s.email)}" style="flex:1;text-align:center;padding:5px 0;border-radius:6px;background:var(--gold);color:#fff;font-size:11px;font-weight:600;text-decoration:none">&#128231; Email</a>
+              <button class="btn btn-sm" style="font-size:11px;padding:5px 8px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer" onclick="openEditSupervisor(${s._idx})">&#9998;</button>
               <button class="btn btn-sm btn-danger" style="font-size:11px;padding:5px 8px" onclick="deleteSupervisor(${s._idx})">&#10005;</button>
             </div>
           </div>`).join('')}
@@ -2674,6 +2718,44 @@ function saveSupervisor() {
   if (groupSel) groupSel.value = '';
   renderSupList();
   toast('Contact saved', 'success');
+}
+
+function openEditSupervisor(i) {
+  const list = loadSupervisors();
+  const s = list[i];
+  if (!s) return;
+  document.getElementById('edit-sup-idx').value   = i;
+  document.getElementById('edit-sup-name').value  = s.name  || '';
+  document.getElementById('edit-sup-role').value  = s.role  || '';
+  document.getElementById('edit-sup-email').value = s.email || '';
+  document.getElementById('edit-sup-phone').value = s.phone || '';
+  const grpSel = document.getElementById('edit-sup-group');
+  grpSel.value = s.group || 'Other';
+  if (!grpSel.value) grpSel.value = 'Other'; // fallback if unknown group
+  const overlay = document.getElementById('sup-edit-overlay');
+  overlay.style.display = 'flex';
+}
+
+function closeEditSupervisor() {
+  document.getElementById('sup-edit-overlay').style.display = 'none';
+}
+
+function saveEditSupervisor() {
+  const i     = parseInt(document.getElementById('edit-sup-idx').value, 10);
+  const name  = document.getElementById('edit-sup-name').value.trim();
+  const role  = document.getElementById('edit-sup-role').value.trim();
+  const email = document.getElementById('edit-sup-email').value.trim();
+  const phone = document.getElementById('edit-sup-phone').value.trim();
+  const group = document.getElementById('edit-sup-group').value;
+  if (!name || !email) { toast('Name and email required', 'error'); return; }
+  const list = loadSupervisors();
+  if (!list[i]) { toast('Contact not found', 'error'); return; }
+  list[i] = { ...list[i], name, role, email, phone, group, updatedAt: Date.now() };
+  saveSupervisors(list);
+  closeEditSupervisor();
+  renderSupGroupTabs();
+  renderSupList();
+  toast('Contact updated', 'success');
 }
 
 function deleteSupervisor(i) {
