@@ -766,9 +766,9 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <div class="period-tabs">
-              <div class="period-tab active" onclick="setPeriod('day',this)">Daily</div>
+              <div class="period-tab" onclick="setPeriod('day',this)">Daily</div>
               <div class="period-tab" onclick="setPeriod('week',this)">Weekly</div>
-              <div class="period-tab" onclick="setPeriod('month',this)">Monthly</div>
+              <div class="period-tab active" onclick="setPeriod('month',this)">Monthly</div>
               <div class="period-tab" onclick="setPeriod('year',this)">Yearly (FY)</div>
             </div>
             <select class="filter-input" id="dash-window" onchange="renderDashboard()" title="Select specific week / month / financial year"></select>
@@ -4121,7 +4121,7 @@ function renderSOR() {
 // ============================================================
 // DASHBOARD
 // ============================================================
-let dashPeriod = 'day';
+let dashPeriod = 'month';
 let charts = {};
 
 function setPeriod(p, el) {
@@ -4254,7 +4254,6 @@ const DASH_WIDGETS_DEF = [
   { id:'compare',  label:'Period Comparison',         defaultSize:'half' },
   { id:'area',     label:'Orders by Area',            defaultSize:'full' },
   { id:'revenue',  label:'Revenue Over Time',         defaultSize:'full' },
-  { id:'issues',   label:'Issues by Area',            defaultSize:'half' },
   { id:'subbies',  label:'Subbie Payment Summary',    defaultSize:'full' },
 ];
 
@@ -4285,8 +4284,6 @@ function renderDashWidgets() {
       ? `<div class="chart-wrap" style="height:260px"><canvas id="chart-revenue"></canvas></div>`
       : id==='area'
       ? `<div id="dash-area-table"></div><div class="chart-wrap" style="height:180px;margin-top:10px"><canvas id="chart-area"></canvas></div>`
-      : id==='issues'
-      ? `<div class="chart-wrap" style="height:220px"><canvas id="chart-issues"></canvas></div>`
       : '';
     return `
     <div class="dash-widget" id="dash-widget-${id}" data-id="${id}"
@@ -4342,16 +4339,18 @@ function buildStatusPipeline(base) {
   const el = document.getElementById('dash-w-pipeline'); if (!el) return;
   const sumAmt = arr => arr.reduce((s,o)=>s+(o.amount||0),0);
   const stages = [
-    { label:'Active',     status:'orders',    icon:'&#128203;', color:'#4f7ef8' },
-    { label:'Completed',  status:'completed', icon:'&#9989;',   color:'#2ecc71' },
-    { label:'Claimed',    status:'claims',    icon:'&#128228;', color:'#f39c12' },
-    { label:'Closed',     status:'closed',    icon:'&#128274;', color:'#8b90a7' },
-    { label:'Issues',     status:'issues',    icon:'&#9888;',   color:'#e74c3c' },
+    { label:'Active',     status:'active',    nav:'orders',    icon:'&#128203;', color:'#4f7ef8' },
+    { label:'Completed',  status:'completed', nav:'completed', icon:'&#9989;',   color:'#2ecc71' },
+    { label:'Claimed',    status:'claim',     nav:'claims',    icon:'&#128228;', color:'#f39c12' },
+    { label:'Closed',     status:'closed',    nav:'closed',    icon:'&#128274;', color:'#8b90a7' },
+    { label:'Issues',     status:'issue',     nav:'issues',    icon:'&#9888;',   color:'#e74c3c' },
   ];
   const cards = stages.map(s => {
-    const arr = base.filter(o=>o.status===s.status);
+    const arr = s.status==='active'
+      ? base.filter(o=>!o.status||o.status==='active')
+      : base.filter(o=>o.status===s.status);
     return `
-      <div onclick="showPage('${s.status}')" style="cursor:pointer;text-align:center;padding:14px 6px;border-radius:8px;background:var(--cream2);border:2px solid ${s.color}22;transition:all 0.15s"
+      <div onclick="showPage('${s.nav}')" style="cursor:pointer;text-align:center;padding:14px 6px;border-radius:8px;background:var(--cream2);border:2px solid ${s.color}22;transition:all 0.15s"
         onmouseover="this.style.background='${s.color}18';this.style.borderColor='${s.color}'"
         onmouseout="this.style.background='var(--cream2)';this.style.borderColor='${s.color}22'">
         <div style="font-size:22px;margin-bottom:6px">${s.icon}</div>
@@ -4501,7 +4500,6 @@ function renderDashboard() {
   buildAreaTableWidget(cur,prev,w,periodFiltered); // Area table
   buildRevenueChart(periodFiltered);
   buildAreaChart(periodFiltered);
-  buildIssuesChart(base);
   buildSubbiesDashSection(base);
 }
 
@@ -4597,12 +4595,54 @@ function buildAreaChart(orders) {
   const groups = {};
   orders.forEach(o => { if (o.area) groups[o.area] = (groups[o.area] || 0) + (o.amount || 0); });
   const sorted = Object.entries(groups).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  buildChart('chart-area', 'bar', sorted.map(x => x[0]), [{
-    label: 'Revenue by Area',
-    data: sorted.map(x => x[1]),
-    backgroundColor: 'rgba(124,92,191,0.6)',
-    borderRadius: 4,
-  }]);
+
+  const barLabelsPlugin = {
+    id: 'barLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      chart.data.datasets.forEach((ds, i) => {
+        chart.getDatasetMeta(i).data.forEach((bar, idx) => {
+          const val = ds.data[idx];
+          if (!val) return;
+          ctx.save();
+          ctx.font = 'bold 10px sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText('$' + fmtNum(val), bar.x, bar.base - 5);
+          ctx.restore();
+        });
+      });
+    }
+  };
+
+  if (charts['chart-area']) { charts['chart-area'].destroy(); }
+  const ctx = document.getElementById('chart-area');
+  if (!ctx) return;
+  charts['chart-area'] = new Chart(ctx, {
+    type: 'bar',
+    plugins: [barLabelsPlugin],
+    data: {
+      labels: sorted.map(x => x[0]),
+      datasets: [{
+        label: 'Revenue by Area',
+        data: sorted.map(x => x[1]),
+        backgroundColor: 'rgba(124,92,191,0.72)',
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#8b90a7', font: { size: 11 } } },
+        tooltip: { callbacks: { label: c => ' $' + fmtNum(c.parsed.y) } }
+      },
+      scales: {
+        x: { ticks: { color: '#5a5f76', font: { size: 10 } }, grid: { color: '#2d3248' } },
+        y: { ticks: { color: '#5a5f76', font: { size: 10 }, callback: v => '$' + fmtNum(v) }, grid: { color: '#2d3248' } },
+      }
+    }
+  });
 }
 
 function buildIssuesChart(orders) {
