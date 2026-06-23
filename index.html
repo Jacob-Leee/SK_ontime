@@ -4715,14 +4715,16 @@ const CA_CC_EMAIL = {
   CA11: 'HomesNSW-HP-Centralca11@homes.nsw.gov.au',
 };
 
-// Returns supervisor name as a mailto link (with optional CC for CA area).
-function supervisorLink(name, area) {
+// Returns supervisor name as a mailto link.
+// CC is based on the supervisor's own group (from Supervisors page), not the order area.
+function supervisorLink(name, _unused) {
   if (!name) return '';
   const sups = loadSupervisors();
   const sup = sups.find(s => s.name === name);
   if (sup && sup.email) {
-    const cc = area && CA_CC_EMAIL[area] ? `?cc=${encodeURIComponent(CA_CC_EMAIL[area])}` : '';
-    const tipCc = area && CA_CC_EMAIL[area] ? ` | CC: ${CA_CC_EMAIL[area]}` : '';
+    const ccEmail = CA_CC_EMAIL[sup.group] || '';
+    const cc     = ccEmail ? `?cc=${encodeURIComponent(ccEmail)}` : '';
+    const tipCc  = ccEmail ? ` | CC: ${ccEmail}` : '';
     return `<a href="mailto:${esc(sup.email)}${cc}" title="Email ${esc(name)} (${esc(sup.email)}${tipCc})"
       style="color:var(--text3);font-size:11px;text-decoration:none"
       onmouseover="this.style.color='var(--accent)';this.style.textDecoration='underline'"
