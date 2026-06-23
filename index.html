@@ -361,6 +361,10 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           <button id="redo-btn" onclick="redo()" disabled title="Nothing to redo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)" style="transform:scaleX(-1)"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.5"/></svg>
           </button>
+          <button onclick="cloudForcePush()" title="Force Push — overwrite everyone's data with your current state" style="display:flex;align-items:center;gap:5px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:0 10px;height:34px;cursor:pointer;font-size:12px;font-family:inherit;color:var(--text2);white-space:nowrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--orange)"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            Force Push
+          </button>
           <button onclick="openSettingsModal()" title="App Settings — rename menu/button labels" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:pointer">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
@@ -1660,9 +1664,11 @@ function _captureCurrentEntry(entry) {
 
 function _applyHistoryEntry(entry) {
   // Stamp NOW on all restored records so they WIN the server-side LWW merge.
-  // Without this, the restored snapshot has an older updatedAt than what's
-  // already on the server → server ignores the undo → other users don't see it.
-  const now = Date.now();
+  // Use the GREATER of local clock and last-known server time to compensate
+  // for device clock skew — if this device's clock is behind another user's
+  // clock, the undo timestamp would otherwise lose the LWW merge.
+  const now = Math.max(Date.now(), (CLOUD._serverNow || 0) + 100);
+  console.log('[UNDO DEBUG] _stampNow base:', now, '(local=', Date.now(), 'serverBase=', CLOUD._serverNow, ')');
   function _stampNow(snap) {
     const r = _hClone(snap);
     r.updatedAt       = now;
@@ -1787,6 +1793,7 @@ var CLOUD = {
   pullTimer: null,
   pushTimer: null,
   applying: false,
+  _serverNow: 0,  // latest server timestamp from pull response (fixes clock skew)
 };
 
 function cloudSetUrl(u) { CLOUD.url = (u || '').trim(); lsSet('hom_cloud_url', CLOUD.url); }
@@ -1795,6 +1802,25 @@ function cloudEnable(on) {
   lsSet('hom_cloud_enabled', on ? '1' : '0');
   if (on) startCloudSync(); else stopCloudSync();
   renderCloudStatus();
+}
+
+async function cloudForcePush() {
+  if (!CLOUD.enabled || !CLOUD.url) { toast('Cloud Sync not enabled', 'error'); return; }
+  const ok = confirm('Force Push: your current data will overwrite everyone else\'s copy.\n\nAll 4 users will receive your version on their next sync.\n\nProceed?');
+  if (!ok) return;
+  // Stamp ALL records with a timestamp guaranteed to win any LWW merge:
+  // max(local clock, last server time) + 2 minutes
+  const forcedAt = Math.max(Date.now(), (CLOUD._serverNow || 0)) + 120000;
+  const stamp = r => Object.assign({}, r, { updatedAt: forcedAt, statusChangedAt: forcedAt, formSavedAt: forcedAt });
+  DB.orders = DB.orders.map(stamp);
+  DB.claims = DB.claims.map(stamp);
+  lsSet('hom_orders', JSON.stringify(DB.orders));
+  lsSet('hom_claims', JSON.stringify(DB.claims));
+  toast('Force pushing… all users will sync to your state', 'info');
+  await cloudPush();
+  // Immediately pull back to confirm server accepted
+  await cloudPull(true);
+  toast('Force Push complete ✓ — others will update within 5 seconds', 'success');
 }
 
 function startCloudSync() {
@@ -1921,6 +1947,8 @@ async function cloudPull(initial) {
     lsSet('hom_cal_events', JSON.stringify(mergedCalEvents));
     lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
     CLOUD.lastSeenAt = out.updatedAt || '';
+    // Track server time so _stampNow() can compensate for device clock skew
+    if (out.updatedAt) { const _sNow = new Date(out.updatedAt).getTime(); if (_sNow > CLOUD._serverNow) CLOUD._serverNow = _sNow; }
     CLOUD.applying = false;
     console.log('[PULL DEBUG] merge done. DB.orders now=', DB.orders.length);
 
