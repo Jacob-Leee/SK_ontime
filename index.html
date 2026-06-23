@@ -4274,6 +4274,19 @@ function renderDashWidgets() {
   const container = document.getElementById('dash-widgets');
   if (!container) return;
   const tInput = document.getElementById('dash-target-input');
+  // restore collapsed state after render
+  requestAnimationFrame(() => {
+    const layout = loadDashLayout();
+    if (layout.collapsed) {
+      Object.entries(layout.collapsed).forEach(([id, isCollapsed]) => {
+        if (!isCollapsed) return;
+        const body = document.getElementById('dash-w-' + id);
+        const btn  = document.getElementById('dash-collapse-btn-' + id);
+        if (body) body.style.display = 'none';
+        if (btn)  btn.textContent = '⌄';
+      });
+    }
+  });
   if (tInput) tInput.value = loadDashTarget();
 
   container.innerHTML = layout.order.map(id => {
@@ -4300,10 +4313,27 @@ function renderDashWidgets() {
           onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">
           ${isFull?'&#8596; Half':'&#8596; Full'}
         </button>
+        <button onclick="toggleWidgetCollapse('${id}')" id="dash-collapse-btn-${id}" title="Collapse/Expand"
+          style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px;margin-left:2px"
+          onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">&#8963;</button>
       </div>
       <div id="dash-w-${id}" style="padding:14px">${bodyContent}</div>
     </div>`;
   }).join('');
+}
+
+function toggleWidgetCollapse(id) {
+  const body = document.getElementById('dash-w-' + id);
+  const btn  = document.getElementById('dash-collapse-btn-' + id);
+  if (!body) return;
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  if (btn) btn.textContent = collapsed ? '⌃' : '⌄';
+  // persist collapsed state
+  const layout = loadDashLayout();
+  if (!layout.collapsed) layout.collapsed = {};
+  layout.collapsed[id] = !collapsed;
+  saveDashLayout(layout);
 }
 
 function toggleWidgetSize(id) {
@@ -4385,10 +4415,9 @@ function buildClaimsPipeline(base) {
   const cols = [
     { label:'Work Done — Unclaimed', sub:'Completed, no claim yet',  count:unclaimed.length, amt:unclaimedAmt, color:'#4f7ef8', icon:'&#128296;' },
     { label:'Submitted — Awaiting',  sub:'Claimed, payment pending', count:pending.length,   amt:pendingAmt,   color:'#f39c12', icon:'&#9203;'   },
-    { label:'Received This Month',   sub:now.toLocaleString('en-AU',{month:'long'})+' '+now.getFullYear(), count:paidMo.length, amt:paidAmt, color:'#2ecc71', icon:'&#128176;' },
   ];
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:12px">
       ${cols.map(c=>`
         <div style="padding:14px;border-radius:8px;background:var(--cream2);border-left:4px solid ${c.color}">
           <div style="font-size:20px;margin-bottom:6px">${c.icon}</div>
