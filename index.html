@@ -3668,16 +3668,18 @@ function renderSubbiesPage() {
   const allNames = [...new Set([...TRACKED_SUBBIES, ...orders.map(o=>o.subbies).filter(Boolean)])].filter(n => !n.startsWith('SK_'));
   const names = subActivePerson !== 'All' ? [subActivePerson] : allNames;
 
-  // ── Summary cards ──
-  const totalOrders = orders.length;
+  // ── Summary cards — filter by selected subbie if not 'All' ──
+  const cardOrders = subActivePerson !== 'All' ? orders.filter(o => o.subbies === subActivePerson) : orders;
+  const cardLabel  = subActivePerson !== 'All' ? subActivePerson : 'all subbies';
+  const totalOrders = cardOrders.length;
   const sumSubbie = (arr) => arr.reduce((s,o)=> s + (getSubbiePrice(o) || 0), 0);
-  const totalAmt = sumSubbie(orders);
-  const unpaidOrders = orders.filter(o => o.subbiePaid !== 'Y');
+  const totalAmt = sumSubbie(cardOrders);
+  const unpaidOrders = cardOrders.filter(o => o.subbiePaid !== 'Y');
   const unpaidAmt = sumSubbie(unpaidOrders);
   const unpaidCount = unpaidOrders.length;
 
   document.getElementById('sub-summary-cards').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Total Orders (Subbies)</div><div class="stat-value stat-blue">${totalOrders}</div><div class="stat-sub">across all subbies</div></div>
+    <div class="stat-card"><div class="stat-label">Total Orders (Subbies)</div><div class="stat-value stat-blue">${totalOrders}</div><div class="stat-sub">across ${esc(cardLabel)}</div></div>
     <div class="stat-card"><div class="stat-label">Total Subbie Value</div><div class="stat-value stat-blue">$${fmtNum(totalAmt)}</div><div class="stat-sub">at subbie rates</div></div>
     <div class="stat-card"><div class="stat-label">Outstanding to Subbies</div><div class="stat-value stat-yellow">${unpaidCount} orders</div><div class="stat-sub">$${fmtNum(unpaidAmt)} outstanding</div></div>
     <div class="stat-card"><div class="stat-label">Settled to Subbies</div><div class="stat-value stat-green">${totalOrders-unpaidCount} orders</div><div class="stat-sub">$${fmtNum(totalAmt-unpaidAmt)} settled</div></div>`;
