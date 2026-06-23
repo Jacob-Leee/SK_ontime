@@ -1476,22 +1476,46 @@ function mergeTombstones(localTomb, incomingTomb) {
   });
   return out;
 }
-// Apply field-level subbiesAt merge on top of a record-level LWW result.
-// winner = the record that won on updatedAt; loser = the other one.
-// If loser has a strictly newer subbiesAt, its subbies value is preserved.
+// Fields set by saveOrder (the order form). When two devices both edit the
+// same order but touch different things — e.g. Device A fills in subbies &
+// supervisor while Device B changes status — the record-level LWW would
+// silently discard Device A's form edits because B's updatedAt is newer.
+//
+// formSavedAt is stamped by saveOrder each time the form is submitted.
+// Status actions (setOrderStatus, toggleSubbiePaid, etc.) do NOT touch it.
+// So even when B's record wins on updatedAt, we can detect that A saved the
+// FORM more recently and splice A's form field values back in.
+//
+// subbiesAt is kept for backward compatibility with older records that were
+// pushed before formSavedAt existed.
+const FORM_FIELDS = [
+  'orderDate','orderNumber','prn','address','area','workType',
+  'sorCode','baseQty','baseAmount','extraItems','amount','detail',
+  'subbies','subbiesAt','supervisor','comments','suiId',
+];
+
 function mergeFieldAt(winner, loser) {
   if (!loser) return winner;
   const merged = Object.assign({}, winner);
-  // Use subbiesAt directly — do NOT fall back to updatedAt here.
-  // subbiesAt=0 (or missing) means this device never explicitly set subbies;
-  // using updatedAt as fallback would incorrectly make a newer-but-unrelated
-  // edit appear to have set subbies more recently.
+
+  // Part A — subbiesAt (backward compat, fine-grained subbies protection)
   const winnerSubbiesAt = winner.subbiesAt || 0;
   const loserSubbiesAt  = loser.subbiesAt  || 0;
   if (loserSubbiesAt > winnerSubbiesAt) {
     merged.subbies   = loser.subbies;
     merged.subbiesAt = loser.subbiesAt;
   }
+
+  // Part B — formSavedAt: if loser saved the order form more recently than
+  // winner, splice ALL form fields from loser (covers supervisor, PRN, SOR,
+  // comments, address, etc. in one shot).
+  const winnerFormAt = winner.formSavedAt || 0;
+  const loserFormAt  = loser.formSavedAt  || 0;
+  if (loserFormAt > winnerFormAt) {
+    FORM_FIELDS.forEach(f => { if (loser[f] !== undefined) merged[f] = loser[f]; });
+    merged.formSavedAt = loserFormAt;
+  }
+
   return merged;
 }
 function mergeRecordsBy(localArr, incomingArr, tomb, keyFn) {
@@ -1505,12 +1529,12 @@ function mergeRecordsBy(localArr, incomingArr, tomb, keyFn) {
     if (!existing || !existing.updatedAt || (r.updatedAt && r.updatedAt > existing.updatedAt)) {
       // Remote wins record-level — but protect subbies if local has a newer subbiesAt
       map[key] = mergeFieldAt(r, existing);
-    } else if (existing && r.subbiesAt && (!existing.subbiesAt || r.subbiesAt > existing.subbiesAt)) {
-      // Local wins record-level, but remote has a newer subbiesAt — splice in remote's subbies
-      const merged = Object.assign({}, existing);
-      merged.subbies   = r.subbies;
-      merged.subbiesAt = r.subbiesAt;
-      map[key] = merged;
+    } else if (existing && (
+      (r.subbiesAt   && (!existing.subbiesAt   || r.subbiesAt   > existing.subbiesAt))   ||
+      (r.formSavedAt && (!existing.formSavedAt || r.formSavedAt > existing.formSavedAt))
+    )) {
+      // Local wins record-level, but remote has newer field-level form data — splice it in
+      map[key] = mergeFieldAt(existing, r);
     }
     // else: existing stays as-is (local record-level winner, no newer remote subbiesAt)
   });
@@ -2191,6 +2215,10 @@ function saveOrder(e) {
     suiId: document.getElementById('f-suiId').value.trim(),
     createdAt: existing?.createdAt || now,
     updatedAt: now,
+    // formSavedAt stamps when the order FORM was last saved on this device.
+    // The merge logic uses this to protect all form-editable fields from being
+    // overwritten by a newer-but-unrelated status change on another device.
+    formSavedAt: now,
   };
 
   if (editingOrderId) {
