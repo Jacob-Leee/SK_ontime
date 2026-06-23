@@ -1872,7 +1872,8 @@ async function cloudPull(initial) {
       body: JSON.stringify({ action: 'pull' }),
     });
     console.log('[PULL DEBUG] pull POST status=', res.status);
-    const out = await res.json();
+    let out;
+    try { out = await res.json(); } catch(jsonErr) { console.log('[PULL DEBUG] res.json() PARSE ERROR:', jsonErr.message); throw jsonErr; }
     console.log('[PULL DEBUG] pull response ok=', out?.ok, 'hasData=', !!out?.data, 'updatedAt=', out?.updatedAt);
     if (!out || !out.ok) { console.log('[PULL DEBUG] pull failed. ok=', out?.ok, 'error=', out?.error); renderCloudStatus('Offline'); return; }
     if (!out.data) { renderCloudStatus(initial ? 'Connected (empty)' : 'Synced ✓'); return; }
@@ -1932,6 +1933,7 @@ async function cloudPull(initial) {
     updateSidebar();
     renderCloudStatus('Synced ✓');
   } catch (e) {
+    console.log('[PULL DEBUG] cloudPull CATCH:', e.message || e);
     renderCloudStatus('Offline');
   } finally {
     CLOUD.pulling = false;
