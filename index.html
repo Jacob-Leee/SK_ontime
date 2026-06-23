@@ -1456,6 +1456,13 @@ function save() {
 // SYNC MERGE HELPERS — per-record "newest updatedAt wins" merge,
 // with a tombstone (deletion log) so deletes propagate across devices
 // instead of being silently re-added by the next sync.
+//
+// Field-level merge for subbies: when two devices edit different fields
+// of the same order (e.g. Device A sets subbies, Device B changes status),
+// the record-level LWW would silently drop Device A's edit if B's
+// updatedAt is even 1ms newer. subbiesAt tracks when the subbies field
+// was last intentionally set — mergeFieldAt() uses it to protect subbies
+// from being overwritten by a newer-but-unrelated record-level edit.
 // ============================================================
 function mergeTombstones(localTomb, incomingTomb) {
   const out = Object.assign({}, localTomb || {});
@@ -1463,6 +1470,24 @@ function mergeTombstones(localTomb, incomingTomb) {
     if (!out[id] || incomingTomb[id] > out[id]) out[id] = incomingTomb[id];
   });
   return out;
+}
+// Apply field-level subbiesAt merge on top of a record-level LWW result.
+// winner = the record that won on updatedAt; loser = the other one.
+// If loser has a strictly newer subbiesAt, its subbies value is preserved.
+function mergeFieldAt(winner, loser) {
+  if (!loser) return winner;
+  const merged = Object.assign({}, winner);
+  // Use subbiesAt directly — do NOT fall back to updatedAt here.
+  // subbiesAt=0 (or missing) means this device never explicitly set subbies;
+  // using updatedAt as fallback would incorrectly make a newer-but-unrelated
+  // edit appear to have set subbies more recently.
+  const winnerSubbiesAt = winner.subbiesAt || 0;
+  const loserSubbiesAt  = loser.subbiesAt  || 0;
+  if (loserSubbiesAt > winnerSubbiesAt) {
+    merged.subbies   = loser.subbies;
+    merged.subbiesAt = loser.subbiesAt;
+  }
+  return merged;
 }
 function mergeRecordsBy(localArr, incomingArr, tomb, keyFn) {
   const map = {};
@@ -1473,8 +1498,16 @@ function mergeRecordsBy(localArr, incomingArr, tomb, keyFn) {
     if (deletedAt && (!r.updatedAt || deletedAt >= r.updatedAt)) return; // stays deleted
     const existing = map[key];
     if (!existing || !existing.updatedAt || (r.updatedAt && r.updatedAt > existing.updatedAt)) {
-      map[key] = r;
+      // Remote wins record-level — but protect subbies if local has a newer subbiesAt
+      map[key] = mergeFieldAt(r, existing);
+    } else if (existing && r.subbiesAt && (!existing.subbiesAt || r.subbiesAt > existing.subbiesAt)) {
+      // Local wins record-level, but remote has a newer subbiesAt — splice in remote's subbies
+      const merged = Object.assign({}, existing);
+      merged.subbies   = r.subbies;
+      merged.subbiesAt = r.subbiesAt;
+      map[key] = merged;
     }
+    // else: existing stays as-is (local record-level winner, no newer remote subbiesAt)
   });
   return Object.keys(map)
     .filter(key => {
@@ -2079,7 +2112,10 @@ function onSORSelect() {
 // ============================================================
 // SAVE ORDER
 // ============================================================
-function saveOrder() {
+function saveOrder(e) {
+  // Prevent HTML form GET submission (triggered when user presses Enter in a
+  // form field) — without this, the page would reload and cancel the push timer.
+  if (e && e.preventDefault) e.preventDefault();
   const orderNumber = document.getElementById('f-orderNumber').value.trim();
   const address = document.getElementById('f-address').value.trim();
   const orderDate = document.getElementById('f-orderDate').value;
@@ -2116,9 +2152,19 @@ function saveOrder() {
   // its status back to active, which is why it appeared to "jump back to Orders".
   const existing = editingOrderId ? DB.orders.find(x => x.id === editingOrderId) : null;
 
+  const now = Date.now();
+  // subbiesAt tracks WHEN subbies was last intentionally set on this device.
+  // The merge logic uses this for field-level conflict resolution: if Device B
+  // edits status (making B's record-level updatedAt newer), subbiesAt still
+  // lets Device A's subbies value win the merge for that specific field.
+  const prevSubbies = existing ? existing.subbies : undefined;
+  const subbiesAt   = subbiesVal !== prevSubbies
+    ? now
+    : (existing && existing.subbiesAt ? existing.subbiesAt : (existing ? existing.updatedAt || 0 : 0));
+
   const order = {
     ...(existing || {}),
-    id: editingOrderId || Date.now().toString(),
+    id: editingOrderId || now.toString(),
     orderDate,
     orderNumber,
     prn: document.getElementById('f-prn').value.trim(),
@@ -2131,11 +2177,12 @@ function saveOrder() {
     extraItems,
     amount: totalAmount,
     detail: document.getElementById('f-detail').value.trim(),
-    subbies: document.getElementById('f-subbies').value.trim(),
+    subbies: subbiesVal,
+    subbiesAt,
     comments: document.getElementById('f-comments').value.trim(),
     suiId: document.getElementById('f-suiId').value.trim(),
-    createdAt: existing?.createdAt || Date.now(),
-    updatedAt: Date.now(),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
   };
 
   if (editingOrderId) {
@@ -2155,10 +2202,19 @@ function saveOrder() {
     const wasFullyPaid = linkedClaim.paid === 'Y';
     linkedClaim.amount = totalAmount;
     if (wasFullyPaid) linkedClaim.amtPaid = totalAmount;
-    linkedClaim.updatedAt = Date.now();
+    linkedClaim.updatedAt = now;
   }
 
-  save();
+  // Write to localStorage immediately, then push to the server RIGHT NOW
+  // (bypassing the normal 1.2s debounce). This minimises the window where
+  // a 5-second cloudPull could bring in another device's stale version of
+  // this order before our edit has landed on the server.
+  lsSet('hom_orders', JSON.stringify(DB.orders));
+  lsSet('hom_claims', JSON.stringify(DB.claims));
+  lsSet('hom_subbies', JSON.stringify(DB.subbies));
+  if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
+  cloudPush(); // immediate — don't wait for debounce
+
   closeModal('order-modal');
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims,
                      closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
@@ -4765,4 +4821,3 @@ if (document.readyState === 'loading') {
 </script>
 </body>
 </html>
-                             
