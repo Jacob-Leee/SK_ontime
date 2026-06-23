@@ -1860,8 +1860,15 @@ function cloudPushDebounced() {
 
 async function cloudPush() {
   console.log('[CLOUD DEBUG] cloudPush() firing now. url=', CLOUD.url);
-  if (!CLOUD.enabled || !CLOUD.url || CLOUD.pushing) {
-    console.log('[CLOUD DEBUG] cloudPush aborted at top guard. pushing=', CLOUD.pushing);
+  if (!CLOUD.enabled || !CLOUD.url) {
+    console.log('[CLOUD DEBUG] cloudPush aborted — not enabled or no URL');
+    return;
+  }
+  if (CLOUD.pushing) {
+    // Previous push still in-flight — reschedule instead of dropping
+    console.log('[CLOUD DEBUG] cloudPush: already pushing, rescheduling in 600ms...');
+    if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
+    CLOUD.pushTimer = setTimeout(cloudPush, 600);
     return;
   }
   CLOUD.pushing = true;
@@ -1943,7 +1950,14 @@ async function cloudPull(initial) {
         const _local = DB.orders.find(l => l.id === _sample.id);
         console.log('[MERGE DEBUG] Remote has different status but was REJECTED:', _sample.orderNumber, 'remote.status=', _sample.status, 'remote.updatedAt=', _sample.updatedAt, 'local.status=', _local.status, 'local.updatedAt=', _local.updatedAt, 'local.statusChangedAt=', _local.statusChangedAt);
       } else {
+        // Log max updatedAt from remote vs local — tells us if server got User B's push
+        const _maxRU = remote.orders.reduce((m,o) => Math.max(m, o.updatedAt||0), 0);
+        const _maxLU = DB.orders.reduce((m,o) => Math.max(m, o.updatedAt||0), 0);
         console.log('[MERGE DEBUG] No status differences between remote and local');
+        console.log('[MERGE DEBUG] max remote updatedAt=', _maxRU ? new Date(_maxRU).toISOString() : 'n/a', '| max local updatedAt=', _maxLU ? new Date(_maxLU).toISOString() : 'n/a', '| remote newer?', _maxRU > _maxLU);
+        // Log the WOLUMBA / SCO-1324 order timestamps specifically
+        const _wolTest = remote.orders.find(o => o.orderNumber && o.orderNumber.includes('13245678'));
+        if (_wolTest) { const _wl = DB.orders.find(l => l.id === _wolTest.id); console.log('[MERGE DEBUG] WOLUMBA remote:', _wolTest.status, '@', _wolTest.updatedAt, '| local:', _wl?.status, '@', _wl?.updatedAt); }
       }
     }
     DB.claims = mergeRecords(DB.claims, remote.claims || [], DB.tombstones.claims);
@@ -2638,7 +2652,7 @@ function saveSOR() {
     type: document.getElementById('s-type').value,
     unit: document.getElementById('s-unit').value.trim(),
     price,
-    updatedAt: Date.now(),
+    updatedAt: _nowSafe(),
   };
 
   if (editingSORIdx !== null) {
@@ -2688,9 +2702,9 @@ function setOrderStatus(id, newStatus) {
     o.claimAt = today;
     let cRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
     if (!cRec) {
-      cRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: 0, paid: 'N', status: 'Payment Claim Submitted', claimDate: today, createdAt: today, updatedAt: Date.now() };
+      cRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: 0, paid: 'N', status: 'Payment Claim Submitted', claimDate: today, createdAt: today, updatedAt: _nowSafe() };
       DB.claims.push(cRec);
-    } else { cRec.status = 'Payment Claim Submitted'; if (!cRec.claimDate) cRec.claimDate = today; cRec.updatedAt = Date.now(); }
+    } else { cRec.status = 'Payment Claim Submitted'; if (!cRec.claimDate) cRec.claimDate = today; cRec.updatedAt = _nowSafe(); }
   }
   if (newStatus === 'closed') {
     if (!o._dh.closedAt) o._dh.closedAt = o.closedAt || null;
@@ -2699,14 +2713,14 @@ function setOrderStatus(id, newStatus) {
     // Payment received: record paid amount on the claim record
     let payRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
     if (!payRec) {
-      payRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: o.amount || 0, paid: 'Y', status: 'Closed', claimDate: o.claimAt, paidAt: today, createdAt: today, updatedAt: Date.now() };
+      payRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: o.amount || 0, paid: 'Y', status: 'Closed', claimDate: o.claimAt, paidAt: today, createdAt: today, updatedAt: _nowSafe() };
       DB.claims.push(payRec);
     } else {
       payRec.paid = 'Y';
       if (!payRec.amtPaid) payRec.amtPaid = o.amount || 0;
       payRec.status = 'Closed';
       if (!payRec.paidAt) payRec.paidAt = today;
-      payRec.updatedAt = Date.now();
+      payRec.updatedAt = _nowSafe();
     }
   }
   if (newStatus === 'issue') {
@@ -2850,7 +2864,7 @@ function confirmIssueModal() {
     DB.claims.push(cRec);
   } else if (o.issueStatus) {
     cRec.status = o.issueStatus;
-    cRec.updatedAt = Date.now();
+    cRec.updatedAt = _nowSafe();
   }
   o.status = 'issue';
   save();
@@ -3026,7 +3040,7 @@ function saveEditSupervisor() {
   if (!name || !email) { toast('Name and email required', 'error'); return; }
   const list = loadSupervisors();
   if (!list[i]) { toast('Contact not found', 'error'); return; }
-  list[i] = { ...list[i], name, role, email, phone, group, updatedAt: Date.now() };
+  list[i] = { ...list[i], name, role, email, phone, group, updatedAt: _nowSafe() };
   saveSupervisors(list);
   closeEditSupervisor();
   renderSupGroupTabs();
@@ -3500,7 +3514,7 @@ function saveCalEvent() {
     reminder:  document.getElementById('ce-reminder').value,
     notes:     document.getElementById('ce-notes').value.trim(),
     createdAt: editingCalEventId ? (events.find(e=>e.id===editingCalEventId)?.createdAt||Date.now()) : Date.now(),
-    updatedAt: Date.now(),
+    updatedAt: _nowSafe(),
   };
   if (editingCalEventId) {
     const idx = events.findIndex(e => e.id === editingCalEventId);
