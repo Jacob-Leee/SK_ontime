@@ -1139,11 +1139,21 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <!-- Add new -->
       <div style="padding:16px 28px;border-top:1px solid var(--border);background:var(--cream2)">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px">Add Contact</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:10px">
           <input class="form-control" id="sup-name" placeholder="Name">
           <input class="form-control" id="sup-role" placeholder="Role / Title">
           <input class="form-control" id="sup-email" placeholder="email@homes.nsw.gov.au" type="email">
           <input class="form-control" id="sup-phone" placeholder="Mobile">
+          <select class="form-control" id="sup-group">
+            <option value="">— Group —</option>
+            <option>Homes NSW</option>
+            <option>IT Team</option>
+            <option>LAHC System</option>
+            <option>High Cost Team &amp; MPW</option>
+            <option>Relocation Team</option>
+            <option>CA1</option><option>CA2</option><option>CA3</option>
+            <option>CA4</option><option>CA9</option><option>CA10</option><option>CA11</option>
+          </select>
           <button class="btn btn-primary" onclick="saveSupervisor()">+ Add</button>
         </div>
       </div>
@@ -2655,10 +2665,13 @@ function saveSupervisor() {
   const phone = document.getElementById('sup-phone')?.value.trim() || '';
   if (!name || !email) { toast('Name and email required', 'error'); return; }
   const list = loadSupervisors();
-  const group = supActiveGroup !== 'All' ? supActiveGroup : 'Other';
+  const groupSel = document.getElementById('sup-group');
+  const group = (groupSel && groupSel.value) ? groupSel.value
+              : (supActiveGroup !== 'All' ? supActiveGroup : 'Other');
   list.push({ id: 'sup_' + Math.random().toString(36).slice(2) + Date.now().toString(36), name, role, email, phone, group, updatedAt: Date.now() });
   saveSupervisors(list);
   ['sup-name','sup-role','sup-email','sup-phone'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  if (groupSel) groupSel.value = '';
   renderSupList();
   toast('Contact saved', 'success');
 }
