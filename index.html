@@ -1842,10 +1842,15 @@ function stopCloudSync() { if (CLOUD.pullTimer) { clearInterval(CLOUD.pullTimer)
 function cloudPushDebounced() {
   if (typeof CLOUD === 'undefined') { console.log('[CLOUD DEBUG] cloudPushDebounced called before CLOUD exists yet (page still loading) — normal, ignore.'); return; }
   console.log('[CLOUD DEBUG] cloudPushDebounced() called. enabled=', CLOUD.enabled, 'url=', CLOUD.url, 'applying=', CLOUD.applying);
-  if (!CLOUD.enabled || !CLOUD.url || CLOUD.applying) {
-    console.log('[CLOUD DEBUG] BLOCKED — push will NOT be scheduled. Reason:',
-      !CLOUD.enabled ? 'CLOUD.enabled is false' :
-      !CLOUD.url ? 'CLOUD.url is empty' : 'CLOUD.applying is stuck true');
+  if (!CLOUD.enabled || !CLOUD.url) {
+    console.log('[CLOUD DEBUG] BLOCKED — cloud not enabled or no URL');
+    return;
+  }
+  if (CLOUD.applying) {
+    // Merge in progress — reschedule instead of dropping the push
+    console.log('[CLOUD DEBUG] applying in progress, rescheduling push in 300ms...');
+    if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
+    CLOUD.pushTimer = setTimeout(cloudPushDebounced, 300);
     return;
   }
   if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
