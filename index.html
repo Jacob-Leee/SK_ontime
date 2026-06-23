@@ -1863,7 +1863,12 @@ async function cloudPull(initial) {
   if (CLOUD.pulling) return; // avoid overlapping pulls (e.g. the 5s timer firing while an immediate post-push pull is still in flight)
   CLOUD.pulling = true;
   try {
-    const res = await fetch(CLOUD.url + '?t=' + Date.now(), { method: 'GET', cache: 'no-store' });
+    // Use POST for pull to avoid GAS GET redirect 404 issue
+    const res = await fetch(CLOUD.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'pull' }),
+    });
     const out = await res.json();
     if (!out || !out.ok) { renderCloudStatus('Offline'); return; }
     if (!out.data) { renderCloudStatus(initial ? 'Connected (empty)' : 'Synced ✓'); return; }
