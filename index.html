@@ -355,6 +355,12 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
             <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
             Cloud Sync &middot; <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
           </div>
+          <button id="undo-btn" onclick="undo()" disabled title="Nothing to undo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+          </button>
+          <button id="redo-btn" onclick="redo()" disabled title="Nothing to redo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)" style="transform:scaleX(-1)"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.5"/></svg>
+          </button>
           <button onclick="openSettingsModal()" title="App Settings — rename menu/button labels" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:pointer">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
@@ -1613,6 +1619,132 @@ function mergeRecords(localArr, incomingArr, tomb) {
   return mergeRecordsBy(localArr, incomingArr, tomb, r => r.id);
 }
 
+
+// ============================================================
+// UNDO / REDO (in-memory, max 30 actions)
+// ============================================================
+const HISTORY = { past: [], future: [], MAX: 30 };
+
+function _hClone(x) { return JSON.parse(JSON.stringify(x)); }
+
+// Call with pre-built snapshots (arrays of record objects or {id,_wasAbsent:true})
+function historyPush(description, orderSnaps, claimSnaps) {
+  const entry = {
+    description,
+    orderIds: (orderSnaps || []).map(o => o.id),
+    claimIds: (claimSnaps || []).map(c => c.id),
+    orders:   _hClone(orderSnaps || []),
+    claims:   _hClone(claimSnaps || []),
+  };
+  HISTORY.past.push(entry);
+  HISTORY.future = [];
+  if (HISTORY.past.length > HISTORY.MAX) HISTORY.past.shift();
+  updateUndoRedoUI();
+}
+
+function _captureCurrentEntry(entry) {
+  return {
+    description: entry.description,
+    orderIds: entry.orderIds,
+    claimIds: entry.claimIds,
+    orders: entry.orderIds.map(id => {
+      const o = DB.orders.find(x => x.id === id);
+      return o ? _hClone(o) : { id, _wasAbsent: true };
+    }),
+    claims: entry.claimIds.map(id => {
+      const c = DB.claims.find(x => x.id === id);
+      return c ? _hClone(c) : { id, _wasAbsent: true };
+    }),
+  };
+}
+
+function _applyHistoryEntry(entry) {
+  entry.orders.forEach((snap, i) => {
+    const id = entry.orderIds[i];
+    const curIdx = DB.orders.findIndex(x => x.id === id);
+    if (snap._wasAbsent) {
+      // was newly created → delete it
+      DB.tombstones.orders[id] = Date.now();
+      if (curIdx >= 0) DB.orders.splice(curIdx, 1);
+    } else if (curIdx >= 0) {
+      DB.orders[curIdx] = _hClone(snap);
+    } else {
+      // was deleted → restore
+      delete DB.tombstones.orders[id];
+      DB.orders.push(_hClone(snap));
+    }
+  });
+  entry.claims.forEach((snap, i) => {
+    const id = entry.claimIds[i];
+    const curIdx = DB.claims.findIndex(x => x.id === id);
+    if (snap._wasAbsent) {
+      DB.tombstones.claims[id] = Date.now();
+      if (curIdx >= 0) DB.claims.splice(curIdx, 1);
+    } else if (curIdx >= 0) {
+      DB.claims[curIdx] = _hClone(snap);
+    } else {
+      delete DB.tombstones.claims[id];
+      DB.claims.push(_hClone(snap));
+    }
+  });
+}
+
+function _historyCommit(label) {
+  lsSet('hom_orders', JSON.stringify(DB.orders));
+  lsSet('hom_claims', JSON.stringify(DB.claims));
+  lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
+  if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
+  cloudPush();
+  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted,
+    claims:renderClaims, closed:renderClosed, issues:renderIssues,
+    cancelled:renderCancelled, dashboard:renderDashboard };
+  (renders[currentPage] || renderAll)();
+  updateSidebar();
+  toast(label, 'info');
+  updateUndoRedoUI();
+}
+
+function undo() {
+  if (!HISTORY.past.length) return;
+  const entry = HISTORY.past.pop();
+  HISTORY.future.push(_captureCurrentEntry(entry));
+  _applyHistoryEntry(entry);
+  _historyCommit('↩ Undid: ' + entry.description);
+}
+
+function redo() {
+  if (!HISTORY.future.length) return;
+  const entry = HISTORY.future.pop();
+  HISTORY.past.push(_captureCurrentEntry(entry));
+  _applyHistoryEntry(entry);
+  _historyCommit('↪ Redid: ' + entry.description);
+}
+
+function updateUndoRedoUI() {
+  const u = document.getElementById('undo-btn');
+  const r = document.getElementById('redo-btn');
+  if (u) {
+    const canUndo = HISTORY.past.length > 0;
+    u.disabled = !canUndo;
+    u.style.opacity = canUndo ? '1' : '0.35';
+    u.style.cursor  = canUndo ? 'pointer' : 'default';
+    u.title = canUndo ? '↩ Undo: ' + HISTORY.past[HISTORY.past.length-1].description + '  (Ctrl+Z)' : 'Nothing to undo';
+  }
+  if (r) {
+    const canRedo = HISTORY.future.length > 0;
+    r.disabled = !canRedo;
+    r.style.opacity = canRedo ? '1' : '0.35';
+    r.style.cursor  = canRedo ? 'pointer' : 'default';
+    r.title = canRedo ? '↪ Redo: ' + HISTORY.future[HISTORY.future.length-1].description + '  (Ctrl+Y)' : 'Nothing to redo';
+  }
+}
+
+document.addEventListener('keydown', function(ev) {
+  if (ev.target && ev.target.matches('input,textarea,select,[contenteditable]')) return;
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); }
+  if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'y' || (ev.key === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); }
+});
+
 // ============================================================
 // CLOUD SYNC (Google Sheets via Apps Script) — HTTPS version
 // Standard fetch GET/POST. Works when the app is served over https://
@@ -2285,11 +2417,17 @@ function saveOrder(e) {
   };
 
   if (editingOrderId) {
+    const _prevOrder = DB.orders.find(x => x.id === editingOrderId);
+    const _prevClaim = DB.claims.find(c => c.orderNumber === _prevOrder?.orderNumber);
+    historyPush(`Order edited: ${_prevOrder?.orderNumber || editingOrderId}`,
+      _prevOrder ? [_hClone(_prevOrder)] : [],
+      _prevClaim  ? [_hClone(_prevClaim)]  : []);
     const idx = DB.orders.findIndex(x => x.id === editingOrderId);
     DB.orders[idx] = order;
     toast('Order updated successfully', 'success');
   } else {
     DB.orders.push(order);
+    historyPush(`New order: ${order.orderNumber}`, [{ id: order.id, _wasAbsent: true }], []);
     toast('Order saved successfully', 'success');
   }
 
@@ -2352,11 +2490,14 @@ function saveClaim() {
   };
 
   if (editingClaimId) {
+    const _prevClaim = DB.claims.find(x => x.id === editingClaimId);
+    historyPush(`Claim edited: ${_prevClaim?.orderNumber || editingClaimId}`, [], _prevClaim ? [_hClone(_prevClaim)] : []);
     const idx = DB.claims.findIndex(x => x.id === editingClaimId);
     DB.claims[idx] = claim;
     toast('Claim updated', 'success');
   } else {
     DB.claims.push(claim);
+    historyPush(`New claim: ${claim.orderNumber}`, [], [{ id: claim.id, _wasAbsent: true }]);
     toast('Claim added', 'success');
   }
 
@@ -2415,6 +2556,14 @@ function setOrderStatus(id, newStatus) {
   if (!o) return;
   const today = localDateStr();
   const prevStatus = o.status || 'active';
+  // Snapshot BEFORE mutation for undo
+  const _statusLabels = { active:'Active', completed:'Completed', claim:'Claimed', closed:'Closed', issue:'Issue', cancelled:'Cancelled' };
+  const _linkedClaim = DB.claims.find(c => c.orderNumber === o.orderNumber);
+  historyPush(
+    `Status: ${_statusLabels[prevStatus]||prevStatus} → ${_statusLabels[newStatus]||newStatus} (${o.orderNumber})`,
+    [_hClone(o)],
+    _linkedClaim ? [_hClone(_linkedClaim)] : []
+  );
 
   // Date history: preserve existing dates so going back restores them
   if (!o._dh) o._dh = {};
@@ -3780,6 +3929,11 @@ function renderCancelled() {
 // ============================================================
 function deleteOrder(id) {
   if (!confirm('Delete this order?')) return;
+  const _delOrder = DB.orders.find(x => x.id === id);
+  const _delClaim = DB.claims.find(c => c.orderNumber === _delOrder?.orderNumber);
+  historyPush(`Order deleted: ${_delOrder?.orderNumber || id}`,
+    _delOrder ? [_hClone(_delOrder)] : [],
+    _delClaim  ? [_hClone(_delClaim)]  : []);
   DB.tombstones.orders[id] = Date.now();
   DB.orders = DB.orders.filter(x => x.id !== id);
   save();
@@ -3791,6 +3945,8 @@ function deleteOrder(id) {
 
 function deleteClaim(id) {
   if (!confirm('Delete this claim?')) return;
+  const _delClaim = DB.claims.find(x => x.id === id);
+  historyPush(`Claim deleted: ${_delClaim?.orderNumber || id}`, [], _delClaim ? [_hClone(_delClaim)] : []);
   DB.tombstones.claims[id] = Date.now();
   DB.claims = DB.claims.filter(x => x.id !== id);
   save();
