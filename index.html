@@ -1858,7 +1858,8 @@ async function cloudPush() {
 }
 
 async function cloudPull(initial) {
-  if (!CLOUD.enabled || !CLOUD.url) return;
+  console.log('[PULL DEBUG] cloudPull() called. enabled=', CLOUD.enabled, 'hasUrl=', !!CLOUD.url, 'initial=', initial, 'pulling=', CLOUD.pulling, 'hidden=', document.hidden);
+  if (!CLOUD.enabled || !CLOUD.url) { console.log('[PULL DEBUG] aborted — not enabled or no url'); return; }
   if (!initial && document.hidden) { renderCloudStatus('Paused (background)'); return; }
   if (CLOUD.pulling) { console.log('[PULL DEBUG] skipped — already pulling'); return; }
   CLOUD.pulling = true;
@@ -1873,7 +1874,7 @@ async function cloudPull(initial) {
     console.log('[PULL DEBUG] pull POST status=', res.status);
     const out = await res.json();
     console.log('[PULL DEBUG] pull response ok=', out?.ok, 'hasData=', !!out?.data, 'updatedAt=', out?.updatedAt);
-    if (!out || !out.ok) { renderCloudStatus('Offline'); return; }
+    if (!out || !out.ok) { console.log('[PULL DEBUG] pull failed. ok=', out?.ok, 'error=', out?.error); renderCloudStatus('Offline'); return; }
     if (!out.data) { renderCloudStatus(initial ? 'Connected (empty)' : 'Synced ✓'); return; }
     if (out.updatedAt && out.updatedAt === CLOUD.lastSeenAt) { console.log('[PULL DEBUG] same updatedAt — skipping merge'); renderCloudStatus('Synced ✓'); return; }
 
