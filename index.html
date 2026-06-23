@@ -229,6 +229,8 @@ textarea.form-control { resize: vertical; min-height: 72px; }
    page that's already filtered to one status, painting every row the same color adds
    noise without adding information. Neutral zebra striping reads faster instead. */
 tr.srow-orders td, tr.srow-completed td, tr.srow-claim td, tr.srow-closed td, tr.srow-issue td { background: var(--surface); color: var(--text); }
+tr[data-sub] td { background: inherit !important; }
+tr[data-sub]:nth-child(even) td { background: inherit !important; }
 tr.srow-orders:nth-child(even) td, tr.srow-completed:nth-child(even) td, tr.srow-claim:nth-child(even) td, tr.srow-closed:nth-child(even) td, tr.srow-issue:nth-child(even) td { background: var(--cream2); }
 tr.srow-cancelled td { background: var(--surface); color: var(--text3); }
 tr.srow-cancelled:nth-child(even) td { background: var(--cream2); }
@@ -1810,6 +1812,29 @@ function cloudEnable(on) {
 // so this device's actions always get server-accurate timestamps.
 function _nowSafe() { return Date.now() + Math.max(0, CLOUD._skewMs || 0) + 1; }
 
+// Pastel row-tint per subbie — deterministic hash so any new name gets a colour automatically
+const _SUBBIE_PALETTES = [
+  { bg: 'rgba(191,219,254,0.38)', border: 'rgba(59,130,246,0.18)' },   // blue
+  { bg: 'rgba(187,247,208,0.38)', border: 'rgba(22,163,74,0.18)' },    // green
+  { bg: 'rgba(254,215,170,0.38)', border: 'rgba(234,88,12,0.18)' },    // orange
+  { bg: 'rgba(233,213,255,0.38)', border: 'rgba(147,51,234,0.18)' },   // purple
+  { bg: 'rgba(254,240,138,0.38)', border: 'rgba(202,138,4,0.18)' },    // yellow
+  { bg: 'rgba(251,207,232,0.38)', border: 'rgba(219,39,119,0.18)' },   // pink
+  { bg: 'rgba(153,246,228,0.38)', border: 'rgba(13,148,136,0.18)' },   // teal
+  { bg: 'rgba(254,202,202,0.38)', border: 'rgba(220,38,38,0.18)' },    // red
+];
+const _subbieColorCache = {};
+function getSubbieStyle(name) {
+  if (!name) return '';
+  if (_subbieColorCache[name] === undefined) {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+    const p = _SUBBIE_PALETTES[hash % _SUBBIE_PALETTES.length];
+    _subbieColorCache[name] = `background:${p.bg};border-left:3px solid ${p.border};`;
+  }
+  return _subbieColorCache[name];
+}
+
 async function cloudForcePush() {
   if (!CLOUD.enabled || !CLOUD.url) { toast('Cloud Sync not enabled', 'error'); return; }
   const ok = confirm('Force Push: your current data will overwrite everyone else\'s copy.\n\nAll 4 users will receive your version on their next sync.\n\nProceed?');
@@ -1894,7 +1919,20 @@ async function cloudPush() {
       // Server merges per-record (newest updatedAt wins) and may hold edits from other
       // devices — pull immediately so this device reconciles instead of waiting up to 5s.
       await cloudPull(true);
-    } else renderCloudStatus('Save failed');
+    } else if (out && out.error && out.error.toLowerCase().includes('busy')) {
+      // GAS script lock contention — another device is pushing right now.
+      // Retry after 2s so this change is not silently lost.
+      console.log('[CLOUD DEBUG] Server busy (lock conflict) — retrying push in 2s. error=', out.error);
+      renderCloudStatus('Retrying…');
+      if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
+      CLOUD.pushTimer = setTimeout(cloudPush, 2000);
+    } else {
+      console.log('[CLOUD DEBUG] Push failed. out=', out);
+      renderCloudStatus('Save failed — will retry');
+      // Generic failure — retry once after 3s
+      if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
+      CLOUD.pushTimer = setTimeout(cloudPush, 3000);
+    }
   } catch (e) {
     console.log('[CLOUD DEBUG] cloudPush threw an exception:', e);
     renderCloudStatus('Offline');
@@ -1974,6 +2012,16 @@ async function cloudPull(initial) {
     lsSet('hom_cal_events', JSON.stringify(mergedCalEvents));
     lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
     CLOUD.lastSeenAt = out.updatedAt || '';
+    // If any local records beat remote (local has newer data not yet on server),
+    // push them so the server converges to the fully-merged state.
+    const _remoteMap = {};
+    (remote.orders || []).forEach(r => { _remoteMap[r.id] = r.updatedAt || 0; });
+    const _hasLocalAhead = DB.orders.some(lo => lo.updatedAt && (_remoteMap[lo.id] === undefined || lo.updatedAt > _remoteMap[lo.id]));
+    if (_hasLocalAhead && !CLOUD.pushing && !initial) {
+      console.log('[PULL DEBUG] local has records newer than remote — scheduling push to reconcile');
+      if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
+      CLOUD.pushTimer = setTimeout(cloudPush, 800);
+    }
     // Measure clock skew: server_time - local_time. Positive = local clock is behind.
     if (out.updatedAt) {
       const _sNow = new Date(out.updatedAt).getTime();
@@ -4185,7 +4233,8 @@ function renderOrders() {
       : `<span class="badge badge-yellow">Unpaid</span>`;
     const hasClaim2 = payment && payment.status && payment.status !== 'none';
 
-    return `<tr class="${hasClaim2 ? 'claim-row' : ''}">
+    const _subBg = o.subbies ? getSubbieStyle(o.subbies) : '';
+    return `<tr class="${hasClaim2 ? 'claim-row' : ''}" ${o.subbies ? `data-sub="${o.subbies}"` : ''} style="${_subBg}">
       <td style="white-space:nowrap">${fmtDate(o.orderDate)}</td>
       <td style="white-space:nowrap">${orderNumCell(o)}</td>
       <td><div class="addr-full">${esc(o.address)}</div></td>
