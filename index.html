@@ -1565,6 +1565,18 @@ function mergeFieldAt(winner, loser) {
     merged.formSavedAt = loserFormAt;
   }
 
+  // Part C — statusChangedAt: protects status/date-stamps from being
+  // overwritten by a record-level winner that had an older status change.
+  const winnerStatusAt = winner.statusChangedAt || 0;
+  const loserStatusAt  = loser.statusChangedAt  || 0;
+  if (loserStatusAt > winnerStatusAt) {
+    merged.status          = loser.status;
+    merged.statusChangedAt = loserStatusAt;
+    ['completedAt','claimAt','closedAt','issueAt','cancelledAt'].forEach(f => {
+      if (loser[f] !== undefined) merged[f] = loser[f];
+    });
+  }
+
   return merged;
 }
 function mergeRecordsBy(localArr, incomingArr, tomb, keyFn) {
@@ -1579,8 +1591,9 @@ function mergeRecordsBy(localArr, incomingArr, tomb, keyFn) {
       // Remote wins record-level — but protect subbies if local has a newer subbiesAt
       map[key] = mergeFieldAt(r, existing);
     } else if (existing && (
-      (r.subbiesAt   && (!existing.subbiesAt   || r.subbiesAt   > existing.subbiesAt))   ||
-      (r.formSavedAt && (!existing.formSavedAt || r.formSavedAt > existing.formSavedAt))
+      (r.subbiesAt      && (!existing.subbiesAt      || r.subbiesAt      > existing.subbiesAt))      ||
+      (r.formSavedAt    && (!existing.formSavedAt    || r.formSavedAt    > existing.formSavedAt))    ||
+      (r.statusChangedAt && (!existing.statusChangedAt || r.statusChangedAt > existing.statusChangedAt))
     )) {
       // Local wins record-level, but remote has newer field-level form data — splice it in
       map[key] = mergeFieldAt(existing, r);
@@ -2405,8 +2418,9 @@ function setOrderStatus(id, newStatus) {
   // Date history: preserve existing dates so going back restores them
   if (!o._dh) o._dh = {};
 
-  o.status = newStatus;
-  o.updatedAt = Date.now();
+  o.status           = newStatus;
+  o.statusChangedAt  = Date.now();
+  o.updatedAt        = Date.now();
 
   // FORWARD moves: stamp today, save old date to history
   if (newStatus === 'completed') {
