@@ -1659,32 +1659,43 @@ function _captureCurrentEntry(entry) {
 }
 
 function _applyHistoryEntry(entry) {
+  // Stamp NOW on all restored records so they WIN the server-side LWW merge.
+  // Without this, the restored snapshot has an older updatedAt than what's
+  // already on the server → server ignores the undo → other users don't see it.
+  const now = Date.now();
+  function _stampNow(snap) {
+    const r = _hClone(snap);
+    r.updatedAt       = now;
+    r.statusChangedAt = now;  // wins status field merge
+    r.formSavedAt     = now;  // wins form field merge
+    return r;
+  }
   entry.orders.forEach((snap, i) => {
     const id = entry.orderIds[i];
     const curIdx = DB.orders.findIndex(x => x.id === id);
     if (snap._wasAbsent) {
       // was newly created → delete it
-      DB.tombstones.orders[id] = Date.now();
+      DB.tombstones.orders[id] = now;
       if (curIdx >= 0) DB.orders.splice(curIdx, 1);
     } else if (curIdx >= 0) {
-      DB.orders[curIdx] = _hClone(snap);
+      DB.orders[curIdx] = _stampNow(snap);
     } else {
-      // was deleted → restore
+      // was deleted → restore (updatedAt > tombstone timestamp = wins merge)
       delete DB.tombstones.orders[id];
-      DB.orders.push(_hClone(snap));
+      DB.orders.push(_stampNow(snap));
     }
   });
   entry.claims.forEach((snap, i) => {
     const id = entry.claimIds[i];
     const curIdx = DB.claims.findIndex(x => x.id === id);
     if (snap._wasAbsent) {
-      DB.tombstones.claims[id] = Date.now();
+      DB.tombstones.claims[id] = now;
       if (curIdx >= 0) DB.claims.splice(curIdx, 1);
     } else if (curIdx >= 0) {
-      DB.claims[curIdx] = _hClone(snap);
+      DB.claims[curIdx] = _stampNow(snap);
     } else {
       delete DB.tombstones.claims[id];
-      DB.claims.push(_hClone(snap));
+      DB.claims.push(_stampNow(snap));
     }
   });
 }
