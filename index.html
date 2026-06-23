@@ -1860,8 +1860,9 @@ async function cloudPush() {
 async function cloudPull(initial) {
   if (!CLOUD.enabled || !CLOUD.url) return;
   if (!initial && document.hidden) { renderCloudStatus('Paused (background)'); return; }
-  if (CLOUD.pulling) return; // avoid overlapping pulls (e.g. the 5s timer firing while an immediate post-push pull is still in flight)
+  if (CLOUD.pulling) { console.log('[PULL DEBUG] skipped — already pulling'); return; }
   CLOUD.pulling = true;
+  console.log('[PULL DEBUG] cloudPull() start. initial=', initial);
   try {
     // Use POST for pull to avoid GAS GET redirect 404 issue
     const res = await fetch(CLOUD.url, {
@@ -1869,12 +1870,15 @@ async function cloudPull(initial) {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action: 'pull' }),
     });
+    console.log('[PULL DEBUG] pull POST status=', res.status);
     const out = await res.json();
+    console.log('[PULL DEBUG] pull response ok=', out?.ok, 'hasData=', !!out?.data, 'updatedAt=', out?.updatedAt);
     if (!out || !out.ok) { renderCloudStatus('Offline'); return; }
     if (!out.data) { renderCloudStatus(initial ? 'Connected (empty)' : 'Synced ✓'); return; }
-    if (out.updatedAt && out.updatedAt === CLOUD.lastSeenAt) { renderCloudStatus('Synced ✓'); return; }
+    if (out.updatedAt && out.updatedAt === CLOUD.lastSeenAt) { console.log('[PULL DEBUG] same updatedAt — skipping merge'); renderCloudStatus('Synced ✓'); return; }
 
     const remote = JSON.parse(out.data);
+    console.log('[PULL DEBUG] remote orders=', remote.orders?.length, 'local orders=', DB.orders.length);
     if (!remote.orders) { renderCloudStatus('Synced ✓'); return; }
 
     CLOUD.applying = true;
@@ -1901,6 +1905,7 @@ async function cloudPull(initial) {
     lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
     CLOUD.lastSeenAt = out.updatedAt || '';
     CLOUD.applying = false;
+    console.log('[PULL DEBUG] merge done. DB.orders now=', DB.orders.length);
 
     const r = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims,
                 closed:renderClosed, issues:renderIssues, cancelled:renderCancelled,
