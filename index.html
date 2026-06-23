@@ -1871,7 +1871,7 @@ function startCloudSync() {
   if (!CLOUD.url) return;
   stopCloudSync();
   cloudPull(true);
-  CLOUD.pullTimer = setInterval(() => cloudPull(false), 5000);  // every 5s
+  CLOUD.pullTimer = setInterval(() => cloudPull(false), 3000);  // every 3s
 }
 function stopCloudSync() { if (CLOUD.pullTimer) { clearInterval(CLOUD.pullTimer); CLOUD.pullTimer = null; } }
 
