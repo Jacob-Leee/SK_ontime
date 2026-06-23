@@ -3766,7 +3766,7 @@ function renderOrders() {
       <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
       <td style="font-size:12px">
         ${esc(o.subbies)}
-        ${o.supervisor ? `<br><span style="color:var(--text3);font-size:11px">👤 ${esc(o.supervisor)}</span>` : ''}
+        ${o.supervisor ? `<br>${supervisorLink(o.supervisor)}` : ''}
       </td>
       <td><div class="truncate" title="${esc(o.comments)}" style="max-width:140px">${esc(o.comments)}</div></td>
       <td>
@@ -3953,7 +3953,7 @@ function renderAll() {
       <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
       <td style="font-size:12px">
         ${esc(o.subbies)}
-        ${o.supervisor ? `<br><span style="color:var(--text3);font-size:11px">👤 ${esc(o.supervisor)}</span>` : ''}
+        ${o.supervisor ? `<br>${supervisorLink(o.supervisor)}` : ''}
       </td>
       <td>${subbiePayBadge(o)}</td>
       <td><span class="badge ${stClass}" style="font-size:10px">${stLabel}</span></td>
@@ -4344,6 +4344,22 @@ function updateAreaFilter() {
   const cur = sel.value;
   const areas = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
   sel.innerHTML = '<option value="">All Areas</option>' + areas.map(a => `<option ${a === cur ? 'selected' : ''}>${a}</option>`).join('');
+}
+
+// Returns supervisor name as a mailto link if the supervisor has an email
+// in the contacts list, otherwise plain text.
+function supervisorLink(name) {
+  if (!name) return '';
+  const sups = loadSupervisors();
+  const sup = sups.find(s => s.name === name);
+  if (sup && sup.email) {
+    return `<a href="mailto:${esc(sup.email)}" title="Email ${esc(name)} (${esc(sup.email)})"
+      style="color:var(--text3);font-size:11px;text-decoration:none"
+      onmouseover="this.style.color='var(--accent)';this.style.textDecoration='underline'"
+      onmouseout="this.style.color='var(--text3)';this.style.textDecoration='none'">
+      👤 ${esc(name)}</a>`;
+  }
+  return `<span style="color:var(--text3);font-size:11px">👤 ${esc(name)}</span>`;
 }
 
 function updateSubbiesDatalist() {
