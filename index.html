@@ -1812,24 +1812,35 @@ function cloudEnable(on) {
 // so this device's actions always get server-accurate timestamps.
 function _nowSafe() { return Date.now() + Math.max(0, CLOUD._skewMs || 0) + 1; }
 
-// Pastel row-tint per subbie — deterministic hash so any new name gets a colour automatically
+// Pastel row-tint per subbie — fixed map for known names, hash fallback for unknowns
+const _SUBBIE_FIXED = {
+  'SK_Mo':     { bg: 'rgba(191,219,254,0.42)', border: 'rgba(59,130,246,0.28)' },   // blue
+  'SK_Jacob':  { bg: 'rgba(187,247,208,0.42)', border: 'rgba(22,163,74,0.28)' },    // green
+  'SK_June':   { bg: 'rgba(254,215,170,0.42)', border: 'rgba(234,88,12,0.28)' },    // orange
+  'SK_Jay':    { bg: 'rgba(233,213,255,0.42)', border: 'rgba(147,51,234,0.28)' },   // purple
+  'Jake Lee':  { bg: 'rgba(153,246,228,0.42)', border: 'rgba(13,148,136,0.28)' },   // teal
+  'Sean Park': { bg: 'rgba(251,207,232,0.42)', border: 'rgba(219,39,119,0.28)' },   // pink
+  'Chris Choi':{ bg: 'rgba(254,240,138,0.42)', border: 'rgba(202,138,4,0.28)' },    // yellow
+};
 const _SUBBIE_PALETTES = [
-  { bg: 'rgba(191,219,254,0.38)', border: 'rgba(59,130,246,0.18)' },   // blue
-  { bg: 'rgba(187,247,208,0.38)', border: 'rgba(22,163,74,0.18)' },    // green
-  { bg: 'rgba(254,215,170,0.38)', border: 'rgba(234,88,12,0.18)' },    // orange
-  { bg: 'rgba(233,213,255,0.38)', border: 'rgba(147,51,234,0.18)' },   // purple
-  { bg: 'rgba(254,240,138,0.38)', border: 'rgba(202,138,4,0.18)' },    // yellow
-  { bg: 'rgba(251,207,232,0.38)', border: 'rgba(219,39,119,0.18)' },   // pink
-  { bg: 'rgba(153,246,228,0.38)', border: 'rgba(13,148,136,0.18)' },   // teal
-  { bg: 'rgba(254,202,202,0.38)', border: 'rgba(220,38,38,0.18)' },    // red
+  { bg: 'rgba(191,219,254,0.42)', border: 'rgba(59,130,246,0.28)' },
+  { bg: 'rgba(187,247,208,0.42)', border: 'rgba(22,163,74,0.28)' },
+  { bg: 'rgba(254,215,170,0.42)', border: 'rgba(234,88,12,0.28)' },
+  { bg: 'rgba(233,213,255,0.42)', border: 'rgba(147,51,234,0.28)' },
+  { bg: 'rgba(254,240,138,0.42)', border: 'rgba(202,138,4,0.28)' },
+  { bg: 'rgba(251,207,232,0.42)', border: 'rgba(219,39,119,0.28)' },
+  { bg: 'rgba(153,246,228,0.42)', border: 'rgba(13,148,136,0.28)' },
+  { bg: 'rgba(254,202,202,0.42)', border: 'rgba(220,38,38,0.28)' },
 ];
 const _subbieColorCache = {};
 function getSubbieStyle(name) {
   if (!name) return '';
   if (_subbieColorCache[name] === undefined) {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-    const p = _SUBBIE_PALETTES[hash % _SUBBIE_PALETTES.length];
+    const p = _SUBBIE_FIXED[name] || (() => {
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+      return _SUBBIE_PALETTES[hash % _SUBBIE_PALETTES.length];
+    })();
     _subbieColorCache[name] = `background:${p.bg};border-left:3px solid ${p.border};`;
   }
   return _subbieColorCache[name];
