@@ -4618,6 +4618,7 @@ const DASH_WIDGETS_DEF = [
   { id:'area',     label:'Orders by Area',            defaultSize:'full' },
   { id:'revenue',  label:'Revenue Over Time',         defaultSize:'full' },
   { id:'subbies',  label:'Subbie Payment Summary',    defaultSize:'full' },
+  { id:'calendar', label:'Upcoming Events',             defaultSize:'half' },
 ];
 
 function loadDashLayout() {
@@ -4879,6 +4880,77 @@ function buildAreaTableWidget(cur, prev, w) {
     ${rows||'<p style="color:var(--text3);font-size:12px">No data.</p>'}`;
 }
 
+
+function buildUpcomingCalWidget() {
+  const el = document.getElementById('dash-w-calendar');
+  if (!el) return;
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const in30 = new Date(today);
+  in30.setDate(in30.getDate() + 30);
+
+  const events = getExpandedEvents(today, in30)
+    .filter(e => e.startDate >= calYMD(today))
+    .sort((a,b) => a.startDate.localeCompare(b.startDate) || (a.startTime||'').localeCompare(b.startTime||''));
+
+  if (!events.length) {
+    el.innerHTML = `<div style="text-align:center;padding:28px 0;color:var(--text3);font-size:13px">
+      No upcoming events in the next 30 days<br>
+      <button onclick="showPage('calendar')" class="btn btn-sm btn-secondary" style="margin-top:12px;font-size:12px">Open Calendar →</button>
+    </div>`;
+    return;
+  }
+
+  // Group by date
+  const groups = {};
+  events.forEach(e => {
+    if (!groups[e.startDate]) groups[e.startDate] = [];
+    groups[e.startDate].push(e);
+  });
+
+  const todayStr = calYMD(today);
+  const tomorrowStr = calYMD(new Date(today.getTime() + 86400000));
+
+  const rows = Object.keys(groups).slice(0, 10).map(ds => {
+    const dayEvents = groups[ds];
+    const d = new Date(ds + 'T00:00:00');
+    const dayNum  = d.getDate();
+    const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+    const monthAb = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+    const isToday    = ds === todayStr;
+    const isTomorrow = ds === tomorrowStr;
+    const label = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : dayName;
+
+    const evHtml = dayEvents.map(e => {
+      const cat = CAL_CATS[e.category] || CAL_CATS.general;
+      const timeStr = e.startTime ? `<span style="color:var(--text3);font-size:11px;margin-left:6px">${e.startTime}</span>` : '';
+      return `<div onclick="showPage('calendar')" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;border-left:3px solid ${cat.color};background:${cat.color}12;margin-bottom:4px"
+        onmouseover="this.style.background='${cat.color}22'" onmouseout="this.style.background='${cat.color}12'">
+        <div style="flex:1;font-size:12px;font-weight:600;color:var(--text)">${esc(e.title)}${timeStr}</div>
+        <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${cat.color}22;color:${cat.color};font-weight:600;white-space:nowrap">${cat.label}</span>
+      </div>`;
+    }).join('');
+
+    return `<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="width:42px;text-align:center;flex-shrink:0">
+        <div style="font-size:11px;font-weight:700;color:${isToday?'var(--gold)':'var(--text3)'}">${label}</div>
+        <div style="font-size:22px;font-weight:800;line-height:1.1;color:${isToday?'var(--gold)':'var(--text)'}">${dayNum}</div>
+        <div style="font-size:10px;color:var(--text3)">${monthAb}</div>
+      </div>
+      <div style="flex:1;padding-top:2px">${evHtml}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="margin:-14px;padding:0 14px">
+      ${rows}
+      <div style="padding:12px 0;text-align:center">
+        <button onclick="showPage('calendar')" class="btn btn-sm btn-secondary" style="font-size:12px;width:100%">📅  Open Full Calendar →</button>
+      </div>
+    </div>`;
+}
+
 function renderDashboard() {
   updateDashWindow();
   const base = DB.orders.filter(o => o.status !== 'cancelled');
@@ -4897,6 +4969,7 @@ function renderDashboard() {
   buildRevenueChart(periodFiltered);
   buildAreaChart(periodFiltered);
   buildSubbiesDashSection(base);
+  buildUpcomingCalWidget();
 }
 
 function buildSubbiesDashSection(orders) {
