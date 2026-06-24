@@ -264,11 +264,118 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 }
 .mob-menu-link:hover { color: var(--gold); border-left-color: var(--gold); background: rgba(255,255,255,0.04); }
 
+
+/* ══════════════════════════════════════════════
+   MOBILE RESPONSIVE  (≤768px)
+══════════════════════════════════════════════ */
+
+/* Mobile header - hidden on desktop */
+#mob-header {
+  display: none;
+  background: var(--dark); color: #fff;
+  align-items: center;
+  padding: 0 10px;
+  height: 44px;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  position: sticky; top: 0; z-index: 200;
+  flex-shrink: 0;
+}
+#mob-header .mob-logo { color: var(--gold); font-size: 13px; font-weight: 800; letter-spacing: 1px; flex-shrink: 0; }
+#mob-search-wrap { flex: 1; position: relative; }
+#mob-search-wrap input {
+  width: 100%; background: rgba(255,255,255,0.1); border: none; border-radius: 6px;
+  padding: 4px 8px 4px 22px; font-size: 11px; color: #fff; outline: none;
+}
+#mob-search-wrap input::placeholder { color: rgba(255,255,255,0.4); }
+#mob-search-wrap .mob-search-icon { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 11px; color: rgba(255,255,255,0.4); pointer-events:none; }
+#mob-menu-btn { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 4px; font-size: 18px; line-height: 1; }
+
+/* Mobile bottom nav - hidden on desktop */
+#mob-nav {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+  background: var(--dark); border-top: 1px solid rgba(255,255,255,0.1);
+  height: 54px; align-items: stretch;
+}
+.mob-nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; cursor: pointer;
+  color: #6b7280; font-size: 8px; font-weight: 600;
+  border: none; background: none; padding: 4px 0;
+  transition: color 0.15s; position: relative;
+}
+.mob-nav-item svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+.mob-nav-item.active { color: var(--gold); }
+
+/* Mobile order cards */
+.mob-cards { display: none; padding: 6px 8px; }
+.mob-card {
+  background: var(--surface); border-radius: 8px; padding: 9px 11px; margin-bottom: 6px;
+  border-left: 3px solid #4f7ef8; cursor: pointer; transition: opacity 0.1s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.mob-card:active { opacity: 0.7; }
+.mob-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+.mob-card-no  { font-size: 12px; font-weight: 700; color: var(--text); }
+.mob-card-st  { font-size: 10px; padding: 1px 7px; border-radius: 8px; font-weight: 700; }
+.mob-card-addr{ font-size: 11px; color: var(--text2); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mob-card-bot { display: flex; justify-content: space-between; align-items: center; }
+.mob-card-meta{ font-size: 10px; color: var(--text3); }
+.mob-card-amt { font-size: 12px; font-weight: 700; color: var(--gold-dark); }
+
+@media (max-width: 768px) {
+  /* body layout */
+  html, body { overflow: auto !important; height: auto !important; }
+
+  /* app: stack vertically, full height minus header+nav */
+  #app { height: calc(100dvh - 44px - 54px) !important; overflow: hidden !important; }
+
+  /* show mobile UI */
+  #mob-header { display: flex !important; }
+  #mob-nav    { display: flex !important; }
+
+  /* hide sidebar */
+  #sidebar { display: none !important; }
+
+  /* main takes full width */
+  #main { width: 100% !important; overflow: hidden !important; }
+
+  /* hide desktop table, show mobile cards */
+  .mob-hide { display: none !important; }
+  .mob-cards { display: block !important; }
+
+  /* compact filter bar */
+  .filters { flex-wrap: wrap; gap: 5px; padding: 6px 10px; }
+  .filters .filter-input[id^="search"] { width: 100% !important; font-size: 12px !important; padding: 5px 10px !important; }
+  .filters select { font-size: 11px; padding: 4px 6px; }
+
+  /* page padding */
+  .page { padding: 0 !important; }
+  .card { border-radius: 0 !important; margin: 0 !important; box-shadow: none !important; }
+  .card-body { padding: 0 !important; }
+
+  /* dashboard: single column */
+  #dash-widgets { grid-template-columns: 1fr !important; gap: 8px !important; }
+  #dash-widgets .dash-widget { grid-column: span 1 !important; }
+
+  /* modals: slide up from bottom */
+  .modal { align-items: flex-end !important; padding: 0 !important; }
+  .modal-content {
+    width: 100% !important; max-width: 100% !important;
+    max-height: 90dvh !important; border-radius: 14px 14px 0 0 !important;
+    margin: 0 !important; overflow-y: auto !important;
+  }
+
+  /* hide desktop page header action buttons row on mobile */
+  .page-header { padding: 8px 10px !important; }
+  .page-header h2 { font-size: 14px !important; }
+}
+
 </style>
 </head>
 <body>
 
-<div id="app">
 
 <!-- ══ MOBILE HEADER ══ -->
 <div id="mob-header">
@@ -312,6 +419,9 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   <div class="mob-menu-link" onclick="showPage('calendar');mobMenuClose()">Calendar</div>
   <div class="mob-menu-link" onclick="showPage('subbies');mobMenuClose()">Subbies</div>
   <div class="mob-menu-link" onclick="showPage('dashboard');mobMenuClose()">Dashboard</div>
+
+
+<div id="app">
 </div>
 
   <!-- Sidebar -->
