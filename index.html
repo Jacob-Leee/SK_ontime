@@ -229,8 +229,6 @@ textarea.form-control { resize: vertical; min-height: 72px; }
    page that's already filtered to one status, painting every row the same color adds
    noise without adding information. Neutral zebra striping reads faster instead. */
 tr.srow-orders td, tr.srow-completed td, tr.srow-claim td, tr.srow-closed td, tr.srow-issue td { background: var(--surface); color: var(--text); }
-tr[data-sub] td { background: inherit !important; }
-tr[data-sub]:nth-child(even) td { background: inherit !important; }
 tr.srow-orders:nth-child(even) td, tr.srow-completed:nth-child(even) td, tr.srow-claim:nth-child(even) td, tr.srow-closed:nth-child(even) td, tr.srow-issue:nth-child(even) td { background: var(--cream2); }
 tr.srow-cancelled td { background: var(--surface); color: var(--text3); }
 tr.srow-cancelled:nth-child(even) td { background: var(--cream2); }
@@ -258,115 +256,82 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 .toast-error   { border-left: 3px solid var(--red); }
 @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-.mob-menu-link {
-  padding: 11px 16px; font-size: 13px; color: #d1d5db; cursor: pointer;
-  border-left: 3px solid transparent;
-}
-.mob-menu-link:hover { color: var(--gold); border-left-color: var(--gold); background: rgba(255,255,255,0.04); }
-
-
-/* ══════════════════════════════════════════════
-   MOBILE RESPONSIVE  (≤768px)
-══════════════════════════════════════════════ */
-
-/* Mobile header - hidden on desktop */
+/* ══════════════════ MOBILE SUPPORT ══════════════════ */
 #mob-header {
   display: none;
-  background: var(--dark); color: #fff;
+  background: var(--dark);
   align-items: center;
   padding: 0 10px;
   height: 44px;
+  position: sticky;
+  top: 0;
+  z-index: 200;
   gap: 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  position: sticky; top: 0; z-index: 200;
-  flex-shrink: 0;
 }
-#mob-header .mob-logo { color: var(--gold); font-size: 13px; font-weight: 800; letter-spacing: 1px; flex-shrink: 0; }
-#mob-search-wrap { flex: 1; position: relative; }
-#mob-search-wrap input {
-  width: 100%; background: rgba(255,255,255,0.1); border: none; border-radius: 6px;
-  padding: 4px 8px 4px 22px; font-size: 11px; color: #fff; outline: none;
-}
-#mob-search-wrap input::placeholder { color: rgba(255,255,255,0.4); }
-#mob-search-wrap .mob-search-icon { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-size: 11px; color: rgba(255,255,255,0.4); pointer-events:none; }
-#mob-menu-btn { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 4px; font-size: 18px; line-height: 1; }
+.mob-logo { font-size: 13px; font-weight: 800; color: var(--gold); letter-spacing: 1px; white-space: nowrap; }
+#mob-search-wrap { flex: 1; display: flex; align-items: center; background: rgba(255,255,255,0.07); border-radius: 20px; padding: 0 10px; gap: 6px; height: 30px; }
+.mob-search-icon { font-size: 12px; opacity: 0.6; }
+#mob-search { background: none; border: none; outline: none; color: var(--text); font-size: 12px; width: 100%; }
+.mob-menu-btn { background: none; border: none; color: var(--text); font-size: 20px; cursor: pointer; padding: 4px 6px; }
 
-/* Mobile bottom nav - hidden on desktop */
 #mob-nav {
   display: none;
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-  background: var(--dark); border-top: 1px solid rgba(255,255,255,0.1);
-  height: 54px; align-items: stretch;
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 200;
+  background: var(--dark);
+  height: 54px;
+  align-items: stretch;
+  border-top: 1px solid rgba(255,255,255,0.06);
 }
 .mob-nav-item {
-  flex: 1; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 2px; cursor: pointer;
-  color: #6b7280; font-size: 8px; font-weight: 600;
-  border: none; background: none; padding: 4px 0;
-  transition: color 0.15s; position: relative;
+  flex: 1; background: none; border: none; color: var(--text2);
+  font-size: 9px; font-weight: 600; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 4px 2px; letter-spacing: 0.3px;
 }
-.mob-nav-item svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+.mob-nav-item .mob-nav-icon { font-size: 17px; line-height: 1; }
 .mob-nav-item.active { color: var(--gold); }
 
-/* Mobile order cards */
-.mob-cards { display: none; padding: 6px 8px; }
-.mob-card {
-  background: var(--surface); border-radius: 8px; padding: 9px 11px; margin-bottom: 6px;
-  border-left: 3px solid #4f7ef8; cursor: pointer; transition: opacity 0.1s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+.mob-menu-link {
+  display: block; padding: 12px 20px;
+  color: var(--text); font-size: 14px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05);
 }
-.mob-card:active { opacity: 0.7; }
-.mob-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
-.mob-card-no  { font-size: 12px; font-weight: 700; color: var(--text); }
-.mob-card-st  { font-size: 10px; padding: 1px 7px; border-radius: 8px; font-weight: 700; }
-.mob-card-addr{ font-size: 11px; color: var(--text2); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mob-card-bot { display: flex; justify-content: space-between; align-items: center; }
-.mob-card-meta{ font-size: 10px; color: var(--text3); }
-.mob-card-amt { font-size: 12px; font-weight: 700; color: var(--gold-dark); }
+.mob-menu-link:hover { background: rgba(255,255,255,0.05); }
+.mob-menu-title { padding: 12px 20px 6px; font-size: 10px; color: #6b7280; font-weight: 700; letter-spacing: 1px; }
+
+.mob-cards { display: none; padding: 6px 8px 8px; }
+.mob-card {
+  background: var(--surface); border-radius: 8px; padding: 9px 11px;
+  margin-bottom: 6px; border-left: 3px solid #4f7ef8; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+}
+.mob-card-top  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+.mob-card-no   { font-size: 12px; font-weight: 700; color: var(--text); }
+.mob-card-st   { font-size: 10px; padding: 1px 7px; border-radius: 8px; font-weight: 700; }
+.mob-card-addr { font-size: 11px; color: var(--text2); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mob-card-bot  { display: flex; justify-content: space-between; align-items: center; }
+.mob-card-meta { font-size: 10px; color: var(--text3); }
+.mob-card-amt  { font-size: 12px; font-weight: 700; color: var(--gold-dark); }
 
 @media (max-width: 768px) {
-  /* show mobile chrome */
   #mob-header { display: flex !important; }
   #mob-nav    { display: flex !important; }
-
-  /* hide sidebar, full-width main */
-  #sidebar { display: none !important; }
-  #main {
-    width: 100% !important;
-    padding-top: 44px !important;
-    padding-bottom: 54px !important;
-  }
-
-  /* hide desktop table, show mobile cards */
+  #sidebar    { display: none !important; }
+  #main { width: 100% !important; padding-top: 44px !important; padding-bottom: 54px !important; }
   .mob-hide  { display: none !important; }
-  .mob-cards { display: block !important; }
-
-  /* compact filter bar */
+  .mob-cards { display: block; }
   .filters { flex-wrap: wrap; gap: 5px; padding: 6px 10px; }
-  .filters .filter-input[id^="search"] {
-    width: 100% !important; font-size: 12px !important; padding: 5px 10px !important;
-  }
+  .filters .filter-input[id^="search"] { width: 100% !important; font-size: 12px !important; padding: 5px 10px !important; }
   .filters select { font-size: 11px; padding: 4px 6px; }
-
-  /* page/card padding */
   .page { padding: 0 !important; }
   .card { border-radius: 0 !important; margin: 0 !important; box-shadow: none !important; }
   .card-body { padding: 0 !important; }
-
-  /* dashboard: single column */
   #dash-widgets { grid-template-columns: 1fr !important; gap: 8px !important; }
   #dash-widgets .dash-widget { grid-column: span 1 !important; }
-
-  /* modals: slide up from bottom */
   .modal { align-items: flex-end !important; padding: 0 !important; }
-  .modal-content {
-    width: 100% !important; max-width: 100% !important;
-    max-height: 90dvh !important;
-    border-radius: 14px 14px 0 0 !important;
-    margin: 0 !important; overflow-y: auto !important;
-  }
+  .modal-content { width: 100% !important; max-width: 100% !important; max-height: 90dvh !important; border-radius: 14px 14px 0 0 !important; margin: 0 !important; overflow-y: auto !important; }
 }
-
 </style>
 </head>
 <body>
@@ -379,45 +344,46 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
     <span class="mob-search-icon">🔍</span>
     <input id="mob-search" type="text" placeholder="Order#, address, subbie..." oninput="mobSearch(this.value)" autocomplete="off" />
   </div>
-  <button class="mob-menu-btn" id="mob-menu-btn" onclick="mobMenuToggle()" aria-label="Menu">☰</button>
+  <button class="mob-menu-btn" id="mob-menu-btn" onclick="mobMenuToggle()">☰</button>
 </div>
 
 <!-- ══ MOBILE BOTTOM NAV ══ -->
 <div id="mob-nav">
   <button class="mob-nav-item active" id="mobnav-all" onclick="showPage('all')">
-    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>All
+    <span class="mob-nav-icon">📋</span>All
   </button>
   <button class="mob-nav-item" id="mobnav-orders" onclick="showPage('orders')">
-    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Active
+    <span class="mob-nav-icon">⚡</span>Active
   </button>
   <button class="mob-nav-item" id="mobnav-dashboard" onclick="showPage('dashboard')">
-    <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Board
+    <span class="mob-nav-icon">📊</span>Board
   </button>
   <button class="mob-nav-item" id="mobnav-claims" onclick="showPage('claims')">
-    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Claims
+    <span class="mob-nav-icon">🛡️</span>Claims
   </button>
   <button class="mob-nav-item" id="mobnav-more" onclick="mobMenuToggle()">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>More
+    <span class="mob-nav-icon">⋯</span>More
   </button>
 </div>
 
-<!-- ══ MOBILE SLIDE-OUT MENU ══ -->
+<!-- ══ MOBILE SLIDE-OUT OVERLAY ══ -->
 <div id="mob-menu-overlay" onclick="mobMenuClose()" style="display:none;position:fixed;inset:0;z-index:299;background:rgba(0,0,0,0.4)"></div>
+
+<!-- ══ MOBILE SLIDE-OUT DRAWER ══ -->
 <div id="mob-menu-drawer" style="display:none;position:fixed;top:0;right:0;bottom:0;width:220px;z-index:300;background:var(--dark);padding:16px 0;overflow-y:auto">
-  <div style="padding:10px 16px 16px;font-size:11px;color:#6b7280;font-weight:700;letter-spacing:1px">NAVIGATION</div>
-  <div class="mob-menu-link" onclick="showPage('all');mobMenuClose()">All Orders</div>
-  <div class="mob-menu-link" onclick="showPage('orders');mobMenuClose()">Active</div>
-  <div class="mob-menu-link" onclick="showPage('completed');mobMenuClose()">Completed</div>
-  <div class="mob-menu-link" onclick="showPage('claims');mobMenuClose()">Claims</div>
-  <div class="mob-menu-link" onclick="showPage('closed');mobMenuClose()">Closed</div>
-  <div class="mob-menu-link" onclick="showPage('issues');mobMenuClose()">Issues</div>
-  <div class="mob-menu-link" onclick="showPage('calendar');mobMenuClose()">Calendar</div>
-  <div class="mob-menu-link" onclick="showPage('subbies');mobMenuClose()">Subbies</div>
-  <div class="mob-menu-link" onclick="showPage('dashboard');mobMenuClose()">Dashboard</div>
+  <div class="mob-menu-title">NAVIGATION</div>
+  <div class="mob-menu-link" onclick="showPage('all');mobMenuClose()">📋 All Orders</div>
+  <div class="mob-menu-link" onclick="showPage('orders');mobMenuClose()">⚡ Active</div>
+  <div class="mob-menu-link" onclick="showPage('completed');mobMenuClose()">✅ Completed</div>
+  <div class="mob-menu-link" onclick="showPage('claims');mobMenuClose()">🛡️ Claims</div>
+  <div class="mob-menu-link" onclick="showPage('closed');mobMenuClose()">🔒 Closed</div>
+  <div class="mob-menu-link" onclick="showPage('issues');mobMenuClose()">⚠️ Issues</div>
+  <div class="mob-menu-link" onclick="showPage('calendar');mobMenuClose()">📅 Calendar</div>
+  <div class="mob-menu-link" onclick="showPage('subbies');mobMenuClose()">👷 Subbies</div>
+  <div class="mob-menu-link" onclick="showPage('dashboard');mobMenuClose()">📊 Dashboard</div>
 </div>
 
 <div id="app">
-
   <!-- Sidebar -->
   <div id="sidebar">
     <div class="logo">
@@ -425,11 +391,6 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <div class="logo-sub">Holmes Order Manager</div>
     </div>
     <nav>
-      <div class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        <span id="navlabel-dashboard">Dashboard</span>
-      </div>
-      <div class="nav-divider"></div>
       <div class="nav-item active" onclick="showPage('all')" id="nav-all">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         <span id="navlabel-all">All Orders</span>
@@ -476,6 +437,10 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <span id="navlabel-subbies">Subbies</span>
         <span class="nav-badge" id="subbies-badge" style="background:var(--yellow);display:none">0</span>
       </div>
+      <div class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span id="navlabel-dashboard">Dashboard</span>
+      </div>
       <div class="nav-item" onclick="openSupModal()" id="nav-sup">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span id="navlabel-sup">Supervisors</span>
@@ -513,16 +478,6 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
             <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
             Cloud Sync &middot; <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
           </div>
-          <button id="undo-btn" onclick="undo()" disabled title="Nothing to undo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
-          </button>
-          <button id="redo-btn" onclick="redo()" disabled title="Nothing to redo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)" style="transform:scaleX(-1)"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.5"/></svg>
-          </button>
-          <button onclick="cloudForcePush()" title="Force Push — overwrite everyone's data with your current state" style="display:flex;align-items:center;gap:5px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:0 10px;height:34px;cursor:pointer;font-size:12px;font-family:inherit;color:var(--text2);white-space:nowrap">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--orange)"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-            Force Push
-          </button>
           <button onclick="openSettingsModal()" title="App Settings — rename menu/button labels" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:pointer">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
@@ -570,7 +525,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
-            <div class="table-wrap">
+            <div class="table-wrap mob-hide">
               <table>
                 <thead>
                   <tr>
@@ -623,7 +578,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
-            <div class="table-wrap">
+            <div class="table-wrap mob-hide">
               <table id="orders-table">
                 <thead>
                   <tr>
@@ -670,7 +625,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
-            <div class="table-wrap">
+            <div class="table-wrap mob-hide">
               <table>
                 <thead>
                   <tr>
@@ -711,7 +666,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
-            <div class="table-wrap">
+            <div class="table-wrap mob-hide">
               <table>
                 <thead>
                   <tr>
@@ -935,30 +890,34 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
       <!-- DASHBOARD PAGE -->
       <div id="page-dashboard" class="page">
-        <!-- Dashboard Header -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <div class="period-tabs">
-              <div class="period-tab" onclick="setPeriod('day',this)">Daily</div>
-              <div class="period-tab" onclick="setPeriod('week',this)">Weekly</div>
-              <div class="period-tab active" onclick="setPeriod('month',this)">Monthly</div>
-              <div class="period-tab" onclick="setPeriod('year',this)">Yearly (FY)</div>
-            </div>
-            <select class="filter-input" id="dash-window" onchange="renderDashboard()" title="Select specific week / month / financial year"></select>
+          <div class="period-tabs">
+            <div class="period-tab active" onclick="setPeriod('day',this)">Daily</div>
+            <div class="period-tab" onclick="setPeriod('week',this)">Weekly</div>
+            <div class="period-tab" onclick="setPeriod('month',this)">Monthly</div>
+            <div class="period-tab" onclick="setPeriod('year',this)">Yearly (FY)</div>
           </div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-size:11px;color:var(--text3);font-weight:600">Monthly Target:</span>
-            <input id="dash-target-input" type="number" min="1" max="9999"
-              style="width:68px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--cream2);color:var(--text);font-size:12px;font-weight:700;text-align:center"
-              onchange="saveDashTarget(this.value)" title="Set monthly order target">
-            <span style="font-size:11px;color:var(--text3)">orders/mo</span>
-            <button onclick="resetDashLayout()" title="Reset widget layout"
-              style="margin-left:6px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--cream2);color:var(--text3);font-size:11px;cursor:pointer"
-              onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='var(--cream2)'">&#8635; Reset Layout</button>
+          <select class="filter-input" id="dash-window" onchange="renderDashboard()" title="Select specific week / month / financial year"></select>
+        </div>
+
+        <!-- Comparison section: This period vs Last year same period -->
+        <div id="dash-compare"></div>
+
+        <!-- Revenue chart -->
+        <div class="charts-grid" style="grid-template-columns:1fr">
+          <div class="chart-card">
+            <div class="chart-title">Revenue Over Time</div>
+            <div class="chart-wrap" style="height:260px"><canvas id="chart-revenue"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Revenue by Area</div>
+            <div class="chart-wrap" style="height:220px"><canvas id="chart-area"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">&#9888;&#65039; Open Issues by Area</div>
+            <div class="chart-wrap" style="height:220px"><canvas id="chart-issues"></canvas></div>
           </div>
         </div>
-        <!-- Draggable Widget Grid -->
-        <div id="dash-widgets" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start"></div>
       </div>
 
       <!-- SOR PAGE -->
@@ -1078,11 +1037,6 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
             <label class="form-label">Subbies</label>
             <input type="text" class="form-control" id="f-subbies" placeholder="Select or type a name..." list="subbies-datalist" autocomplete="off">
             <datalist id="subbies-datalist"></datalist>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Supervisor</label>
-            <input type="text" class="form-control" id="f-supervisor" placeholder="Select or type supervisor name..." list="supervisor-datalist" autocomplete="off">
-            <datalist id="supervisor-datalist"></datalist>
           </div>
           <div class="form-group">
             <label class="form-label">Work Comments</label>
@@ -1308,65 +1262,12 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <!-- Add new -->
       <div style="padding:16px 28px;border-top:1px solid var(--border);background:var(--cream2)">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px">Add Contact</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px">
           <input class="form-control" id="sup-name" placeholder="Name">
           <input class="form-control" id="sup-role" placeholder="Role / Title">
           <input class="form-control" id="sup-email" placeholder="email@homes.nsw.gov.au" type="email">
           <input class="form-control" id="sup-phone" placeholder="Mobile">
-          <select class="form-control" id="sup-group">
-            <option value="">— Group —</option>
-            <option>Homes NSW</option>
-            <option>IT Team</option>
-            <option>LAHC System</option>
-            <option>High Cost Team &amp; MPW</option>
-            <option>Relocation Team</option>
-            <option>CA1</option><option>CA2</option><option>CA3</option>
-            <option>CA4</option><option>CA9</option><option>CA10</option><option>CA11</option>
-          </select>
           <button class="btn btn-primary" onclick="saveSupervisor()">+ Add</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Supervisor Edit Modal -->
-    <div id="sup-edit-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9000;align-items:center;justify-content:center" onclick="if(event.target===this)closeEditSupervisor()">
-      <div style="background:var(--cream);border-radius:12px;padding:28px;width:480px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,0.25)">
-        <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:20px">Edit Contact</div>
-        <input type="hidden" id="edit-sup-idx">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <div>
-            <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Name *</label>
-            <input class="form-control" id="edit-sup-name" placeholder="Name">
-          </div>
-          <div>
-            <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Role / Title</label>
-            <input class="form-control" id="edit-sup-role" placeholder="Role / Title">
-          </div>
-          <div>
-            <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Email *</label>
-            <input class="form-control" id="edit-sup-email" placeholder="email@homes.nsw.gov.au" type="email">
-          </div>
-          <div>
-            <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Mobile</label>
-            <input class="form-control" id="edit-sup-phone" placeholder="Mobile">
-          </div>
-        </div>
-        <div style="margin-bottom:20px">
-          <label style="font-size:11px;color:var(--text3);font-weight:600;display:block;margin-bottom:4px">Group</label>
-          <select class="form-control" id="edit-sup-group">
-            <option>Homes NSW</option>
-            <option>IT Team</option>
-            <option>LAHC System</option>
-            <option>High Cost Team &amp; MPW</option>
-            <option>Relocation Team</option>
-            <option>CA1</option><option>CA2</option><option>CA3</option>
-            <option>CA4</option><option>CA9</option><option>CA10</option><option>CA11</option>
-            <option>Other</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end">
-          <button class="btn" style="background:var(--cream2);color:var(--text);border:1px solid var(--border)" onclick="closeEditSupervisor()">Cancel</button>
-          <button class="btn btn-primary" onclick="saveEditSupervisor()">Save Changes</button>
         </div>
       </div>
     </div>
@@ -1638,7 +1539,7 @@ const DB = {
   DB.orders.forEach(o => {
     if (o.subbies && map[o.subbies]) {
       o.subbies = map[o.subbies];
-      o.updatedAt = _nowSafe();
+      o.updatedAt = Date.now();
       changed = true;
     }
   });
@@ -1683,13 +1584,6 @@ function save() {
 // SYNC MERGE HELPERS — per-record "newest updatedAt wins" merge,
 // with a tombstone (deletion log) so deletes propagate across devices
 // instead of being silently re-added by the next sync.
-//
-// Field-level merge for subbies: when two devices edit different fields
-// of the same order (e.g. Device A sets subbies, Device B changes status),
-// the record-level LWW would silently drop Device A's edit if B's
-// updatedAt is even 1ms newer. subbiesAt tracks when the subbies field
-// was last intentionally set — mergeFieldAt() uses it to protect subbies
-// from being overwritten by a newer-but-unrelated record-level edit.
 // ============================================================
 function mergeTombstones(localTomb, incomingTomb) {
   const out = Object.assign({}, localTomb || {});
@@ -1697,60 +1591,6 @@ function mergeTombstones(localTomb, incomingTomb) {
     if (!out[id] || incomingTomb[id] > out[id]) out[id] = incomingTomb[id];
   });
   return out;
-}
-// Fields set by saveOrder (the order form). When two devices both edit the
-// same order but touch different things — e.g. Device A fills in subbies &
-// supervisor while Device B changes status — the record-level LWW would
-// silently discard Device A's form edits because B's updatedAt is newer.
-//
-// formSavedAt is stamped by saveOrder each time the form is submitted.
-// Status actions (setOrderStatus, toggleSubbiePaid, etc.) do NOT touch it.
-// So even when B's record wins on updatedAt, we can detect that A saved the
-// FORM more recently and splice A's form field values back in.
-//
-// subbiesAt is kept for backward compatibility with older records that were
-// pushed before formSavedAt existed.
-const FORM_FIELDS = [
-  'orderDate','orderNumber','prn','address','area','workType',
-  'sorCode','baseQty','baseAmount','extraItems','amount','detail',
-  'subbies','subbiesAt','supervisor','comments','suiId',
-];
-
-function mergeFieldAt(winner, loser) {
-  if (!loser) return winner;
-  const merged = Object.assign({}, winner);
-
-  // Part A — subbiesAt (backward compat, fine-grained subbies protection)
-  const winnerSubbiesAt = winner.subbiesAt || 0;
-  const loserSubbiesAt  = loser.subbiesAt  || 0;
-  if (loserSubbiesAt > winnerSubbiesAt) {
-    merged.subbies   = loser.subbies;
-    merged.subbiesAt = loser.subbiesAt;
-  }
-
-  // Part B — formSavedAt: if loser saved the order form more recently than
-  // winner, splice ALL form fields from loser (covers supervisor, PRN, SOR,
-  // comments, address, etc. in one shot).
-  const winnerFormAt = winner.formSavedAt || 0;
-  const loserFormAt  = loser.formSavedAt  || 0;
-  if (loserFormAt > winnerFormAt) {
-    FORM_FIELDS.forEach(f => { if (loser[f] !== undefined) merged[f] = loser[f]; });
-    merged.formSavedAt = loserFormAt;
-  }
-
-  // Part C — statusChangedAt: protects status/date-stamps from being
-  // overwritten by a record-level winner that had an older status change.
-  const winnerStatusAt = winner.statusChangedAt || 0;
-  const loserStatusAt  = loser.statusChangedAt  || 0;
-  if (loserStatusAt > winnerStatusAt) {
-    merged.status          = loser.status;
-    merged.statusChangedAt = loserStatusAt;
-    ['completedAt','claimAt','closedAt','issueAt','cancelledAt'].forEach(f => {
-      if (loser[f] !== undefined) merged[f] = loser[f];
-    });
-  }
-
-  return merged;
 }
 function mergeRecordsBy(localArr, incomingArr, tomb, keyFn) {
   const map = {};
@@ -1761,17 +1601,8 @@ function mergeRecordsBy(localArr, incomingArr, tomb, keyFn) {
     if (deletedAt && (!r.updatedAt || deletedAt >= r.updatedAt)) return; // stays deleted
     const existing = map[key];
     if (!existing || !existing.updatedAt || (r.updatedAt && r.updatedAt > existing.updatedAt)) {
-      // Remote wins record-level — but protect subbies if local has a newer subbiesAt
-      map[key] = mergeFieldAt(r, existing);
-    } else if (existing && (
-      (r.subbiesAt      && (!existing.subbiesAt      || r.subbiesAt      > existing.subbiesAt))      ||
-      (r.formSavedAt    && (!existing.formSavedAt    || r.formSavedAt    > existing.formSavedAt))    ||
-      (r.statusChangedAt && (!existing.statusChangedAt || r.statusChangedAt > existing.statusChangedAt))
-    )) {
-      // Local wins record-level, but remote has newer field-level form data — splice it in
-      map[key] = mergeFieldAt(existing, r);
+      map[key] = r;
     }
-    // else: existing stays as-is (local record-level winner, no newer remote subbiesAt)
   });
   return Object.keys(map)
     .filter(key => {
@@ -1784,163 +1615,6 @@ function mergeRecordsBy(localArr, incomingArr, tomb, keyFn) {
 function mergeRecords(localArr, incomingArr, tomb) {
   return mergeRecordsBy(localArr, incomingArr, tomb, r => r.id);
 }
-
-
-// ============================================================
-// UNDO / REDO (in-memory, max 30 actions)
-// ============================================================
-const HISTORY = { past: [], future: [], MAX: 30 };
-
-function _hClone(x) { return JSON.parse(JSON.stringify(x)); }
-
-// Call with pre-built snapshots (arrays of record objects or {id,_wasAbsent:true})
-function historyPush(description, orderSnaps, claimSnaps) {
-  const entry = {
-    description,
-    orderIds: (orderSnaps || []).map(o => o.id),
-    claimIds: (claimSnaps || []).map(c => c.id),
-    orders:   _hClone(orderSnaps || []),
-    claims:   _hClone(claimSnaps || []),
-  };
-  HISTORY.past.push(entry);
-  HISTORY.future = [];
-  if (HISTORY.past.length > HISTORY.MAX) HISTORY.past.shift();
-  updateUndoRedoUI();
-}
-
-function _captureCurrentEntry(entry) {
-  return {
-    description: entry.description,
-    orderIds: entry.orderIds,
-    claimIds: entry.claimIds,
-    orders: entry.orderIds.map(id => {
-      const o = DB.orders.find(x => x.id === id);
-      return o ? _hClone(o) : { id, _wasAbsent: true };
-    }),
-    claims: entry.claimIds.map(id => {
-      const c = DB.claims.find(x => x.id === id);
-      return c ? _hClone(c) : { id, _wasAbsent: true };
-    }),
-  };
-}
-
-function _applyHistoryEntry(entry) {
-  // Stamp NOW on all restored records so they WIN the server-side LWW merge.
-  // Use the GREATER of local clock and last-known server time to compensate
-  // for device clock skew — if this device's clock is behind another user's
-  // clock, the undo timestamp would otherwise lose the LWW merge.
-  const now = Math.max(Date.now(), (CLOUD._serverNow || 0) + 100);
-  console.log('[UNDO DEBUG] _stampNow base:', now, '(local=', Date.now(), 'serverBase=', CLOUD._serverNow, ')');
-  function _stampNow(snap) {
-    const r = _hClone(snap);
-    r.updatedAt       = now;
-    r.statusChangedAt = now;  // wins status field merge
-    r.formSavedAt     = now;  // wins form field merge
-    return r;
-  }
-  entry.orders.forEach((snap, i) => {
-    const id = entry.orderIds[i];
-    const curIdx = DB.orders.findIndex(x => x.id === id);
-    if (snap._wasAbsent) {
-      // was newly created → delete it
-      DB.tombstones.orders[id] = now;
-      if (curIdx >= 0) DB.orders.splice(curIdx, 1);
-    } else if (curIdx >= 0) {
-      DB.orders[curIdx] = _stampNow(snap);
-    } else {
-      // was deleted → restore (updatedAt > tombstone timestamp = wins merge)
-      delete DB.tombstones.orders[id];
-      DB.orders.push(_stampNow(snap));
-    }
-  });
-  entry.claims.forEach((snap, i) => {
-    const id = entry.claimIds[i];
-    const curIdx = DB.claims.findIndex(x => x.id === id);
-    if (snap._wasAbsent) {
-      DB.tombstones.claims[id] = now;
-      if (curIdx >= 0) DB.claims.splice(curIdx, 1);
-    } else if (curIdx >= 0) {
-      DB.claims[curIdx] = _stampNow(snap);
-    } else {
-      delete DB.tombstones.claims[id];
-      DB.claims.push(_stampNow(snap));
-    }
-  });
-}
-
-function _historyCommit(label) {
-  lsSet('hom_orders', JSON.stringify(DB.orders));
-  lsSet('hom_claims', JSON.stringify(DB.claims));
-  lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
-  console.log('[UNDO DEBUG] _historyCommit:', label,
-    '| CLOUD.enabled=', CLOUD.enabled,
-    '| CLOUD.url=', !!CLOUD.url,
-    '| CLOUD.pushing=', CLOUD.pushing,
-    '| CLOUD.applying=', CLOUD.applying);
-  if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
-  if (CLOUD.enabled && CLOUD.url) {
-    if (!CLOUD.pushing) {
-      console.log('[UNDO DEBUG] firing cloudPush immediately');
-      cloudPush();
-    } else {
-      console.log('[UNDO DEBUG] push in-flight, scheduling retry in 1.5s');
-      CLOUD.pushTimer = setTimeout(function() {
-        console.log('[UNDO DEBUG] retry push firing, pushing=', CLOUD.pushing);
-        cloudPush();
-      }, 1500);
-    }
-  } else {
-    console.log('[UNDO DEBUG] push skipped — cloud not enabled or no URL');
-  }
-  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted,
-    claims:renderClaims, closed:renderClosed, issues:renderIssues,
-    cancelled:renderCancelled, dashboard:renderDashboard };
-  (renders[currentPage] || renderAll)();
-  updateSidebar();
-  toast(label, 'info');
-  updateUndoRedoUI();
-}
-
-function undo() {
-  if (!HISTORY.past.length) return;
-  const entry = HISTORY.past.pop();
-  HISTORY.future.push(_captureCurrentEntry(entry));
-  _applyHistoryEntry(entry);
-  _historyCommit('↩ Undid: ' + entry.description);
-}
-
-function redo() {
-  if (!HISTORY.future.length) return;
-  const entry = HISTORY.future.pop();
-  HISTORY.past.push(_captureCurrentEntry(entry));
-  _applyHistoryEntry(entry);
-  _historyCommit('↪ Redid: ' + entry.description);
-}
-
-function updateUndoRedoUI() {
-  const u = document.getElementById('undo-btn');
-  const r = document.getElementById('redo-btn');
-  if (u) {
-    const canUndo = HISTORY.past.length > 0;
-    u.disabled = !canUndo;
-    u.style.opacity = canUndo ? '1' : '0.35';
-    u.style.cursor  = canUndo ? 'pointer' : 'default';
-    u.title = canUndo ? '↩ Undo: ' + HISTORY.past[HISTORY.past.length-1].description + '  (Ctrl+Z)' : 'Nothing to undo';
-  }
-  if (r) {
-    const canRedo = HISTORY.future.length > 0;
-    r.disabled = !canRedo;
-    r.style.opacity = canRedo ? '1' : '0.35';
-    r.style.cursor  = canRedo ? 'pointer' : 'default';
-    r.title = canRedo ? '↪ Redo: ' + HISTORY.future[HISTORY.future.length-1].description + '  (Ctrl+Y)' : 'Nothing to redo';
-  }
-}
-
-document.addEventListener('keydown', function(ev) {
-  if (ev.target && ev.target.matches('input,textarea,select,[contenteditable]')) return;
-  if ((ev.ctrlKey || ev.metaKey) && ev.key === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); }
-  if ((ev.ctrlKey || ev.metaKey) && (ev.key === 'y' || (ev.key === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); }
-});
 
 // ============================================================
 // CLOUD SYNC (Google Sheets via Apps Script) — HTTPS version
@@ -1955,8 +1629,6 @@ var CLOUD = {
   pullTimer: null,
   pushTimer: null,
   applying: false,
-  _serverNow: 0,  // latest server timestamp from pull response (fixes clock skew)
-  _skewMs: 0,     // server_time - local_time at last pull (positive = local clock is behind)
 };
 
 function cloudSetUrl(u) { CLOUD.url = (u || '').trim(); lsSet('hom_cloud_url', CLOUD.url); }
@@ -1967,86 +1639,21 @@ function cloudEnable(on) {
   renderCloudStatus();
 }
 
-// Safe timestamp: compensates for device clock skew measured at last pull.
-// If this device's clock is N minutes behind the server, adds N to Date.now()
-// so this device's actions always get server-accurate timestamps.
-function _nowSafe() { return Date.now() + Math.max(0, CLOUD._skewMs || 0) + 1; }
-
-// Pastel row-tint per subbie — fixed map for known names, hash fallback for unknowns
-const _SUBBIE_FIXED = {
-  'SK_Mo':     { bg: 'rgba(191,219,254,0.42)', border: 'rgba(59,130,246,0.28)' },   // blue
-  'SK_Jacob':  { bg: 'rgba(187,247,208,0.42)', border: 'rgba(22,163,74,0.28)' },    // green
-  'SK_June':   { bg: 'rgba(254,215,170,0.42)', border: 'rgba(234,88,12,0.28)' },    // orange
-  'SK_Jay':    { bg: 'rgba(233,213,255,0.42)', border: 'rgba(147,51,234,0.28)' },   // purple
-  'Jake Lee':  { bg: 'rgba(153,246,228,0.42)', border: 'rgba(13,148,136,0.28)' },   // teal
-  'Sean Park': { bg: 'rgba(251,207,232,0.42)', border: 'rgba(219,39,119,0.28)' },   // pink
-  'Chris Choi':{ bg: 'rgba(254,240,138,0.42)', border: 'rgba(202,138,4,0.28)' },    // yellow
-};
-const _SUBBIE_PALETTES = [
-  { bg: 'rgba(191,219,254,0.42)', border: 'rgba(59,130,246,0.28)' },
-  { bg: 'rgba(187,247,208,0.42)', border: 'rgba(22,163,74,0.28)' },
-  { bg: 'rgba(254,215,170,0.42)', border: 'rgba(234,88,12,0.28)' },
-  { bg: 'rgba(233,213,255,0.42)', border: 'rgba(147,51,234,0.28)' },
-  { bg: 'rgba(254,240,138,0.42)', border: 'rgba(202,138,4,0.28)' },
-  { bg: 'rgba(251,207,232,0.42)', border: 'rgba(219,39,119,0.28)' },
-  { bg: 'rgba(153,246,228,0.42)', border: 'rgba(13,148,136,0.28)' },
-  { bg: 'rgba(254,202,202,0.42)', border: 'rgba(220,38,38,0.28)' },
-];
-const _subbieColorCache = {};
-function getSubbieStyle(name) {
-  if (!name) return '';
-  if (_subbieColorCache[name] === undefined) {
-    const p = _SUBBIE_FIXED[name] || (() => {
-      let hash = 0;
-      for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-      return _SUBBIE_PALETTES[hash % _SUBBIE_PALETTES.length];
-    })();
-    _subbieColorCache[name] = `background:${p.bg};border-left:3px solid ${p.border};`;
-  }
-  return _subbieColorCache[name];
-}
-
-async function cloudForcePush() {
-  if (!CLOUD.enabled || !CLOUD.url) { toast('Cloud Sync not enabled', 'error'); return; }
-  const ok = confirm('Force Push: your current data will overwrite everyone else\'s copy.\n\nAll 4 users will receive your version on their next sync.\n\nProceed?');
-  if (!ok) return;
-  // Stamp ALL records with a timestamp guaranteed to win any LWW merge:
-  // max(local clock, last server time) + 2 minutes
-  // +1000ms: just enough to beat anything currently on server, won't block future actions
-  const forcedAt = Math.max(Date.now(), (CLOUD._serverNow || 0)) + 1000;
-  const stamp = r => Object.assign({}, r, { updatedAt: forcedAt, statusChangedAt: forcedAt, formSavedAt: forcedAt });
-  DB.orders = DB.orders.map(stamp);
-  DB.claims = DB.claims.map(stamp);
-  lsSet('hom_orders', JSON.stringify(DB.orders));
-  lsSet('hom_claims', JSON.stringify(DB.claims));
-  // Advance _serverNow so our OWN subsequent actions also beat the forced timestamps
-  CLOUD._serverNow = forcedAt;
-  toast('Force pushing… all users will sync to your state', 'info');
-  await cloudPush();
-  await cloudPull(true);
-  toast('Force Push complete ✓ — others will update within 5 seconds', 'success');
-}
-
 function startCloudSync() {
   if (!CLOUD.url) return;
   stopCloudSync();
   cloudPull(true);
-  CLOUD.pullTimer = setInterval(() => cloudPull(false), 3000);  // every 3s
+  CLOUD.pullTimer = setInterval(() => cloudPull(false), 5000);  // every 5s
 }
 function stopCloudSync() { if (CLOUD.pullTimer) { clearInterval(CLOUD.pullTimer); CLOUD.pullTimer = null; } }
 
 function cloudPushDebounced() {
   if (typeof CLOUD === 'undefined') { console.log('[CLOUD DEBUG] cloudPushDebounced called before CLOUD exists yet (page still loading) — normal, ignore.'); return; }
   console.log('[CLOUD DEBUG] cloudPushDebounced() called. enabled=', CLOUD.enabled, 'url=', CLOUD.url, 'applying=', CLOUD.applying);
-  if (!CLOUD.enabled || !CLOUD.url) {
-    console.log('[CLOUD DEBUG] BLOCKED — cloud not enabled or no URL');
-    return;
-  }
-  if (CLOUD.applying) {
-    // Merge in progress — reschedule instead of dropping the push
-    console.log('[CLOUD DEBUG] applying in progress, rescheduling push in 300ms...');
-    if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
-    CLOUD.pushTimer = setTimeout(cloudPushDebounced, 300);
+  if (!CLOUD.enabled || !CLOUD.url || CLOUD.applying) {
+    console.log('[CLOUD DEBUG] BLOCKED — push will NOT be scheduled. Reason:',
+      !CLOUD.enabled ? 'CLOUD.enabled is false' :
+      !CLOUD.url ? 'CLOUD.url is empty' : 'CLOUD.applying is stuck true');
     return;
   }
   if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
@@ -2056,15 +1663,8 @@ function cloudPushDebounced() {
 
 async function cloudPush() {
   console.log('[CLOUD DEBUG] cloudPush() firing now. url=', CLOUD.url);
-  if (!CLOUD.enabled || !CLOUD.url) {
-    console.log('[CLOUD DEBUG] cloudPush aborted — not enabled or no URL');
-    return;
-  }
-  if (CLOUD.pushing) {
-    // Previous push still in-flight — reschedule instead of dropping
-    console.log('[CLOUD DEBUG] cloudPush: already pushing, rescheduling in 600ms...');
-    if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
-    CLOUD.pushTimer = setTimeout(cloudPush, 600);
+  if (!CLOUD.enabled || !CLOUD.url || CLOUD.pushing) {
+    console.log('[CLOUD DEBUG] cloudPush aborted at top guard. pushing=', CLOUD.pushing);
     return;
   }
   CLOUD.pushing = true;
@@ -2090,20 +1690,7 @@ async function cloudPush() {
       // Server merges per-record (newest updatedAt wins) and may hold edits from other
       // devices — pull immediately so this device reconciles instead of waiting up to 5s.
       await cloudPull(true);
-    } else if (out && out.error && out.error.toLowerCase().includes('busy')) {
-      // GAS script lock contention — another device is pushing right now.
-      // Retry after 2s so this change is not silently lost.
-      console.log('[CLOUD DEBUG] Server busy (lock conflict) — retrying push in 2s. error=', out.error);
-      renderCloudStatus('Retrying…');
-      if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
-      CLOUD.pushTimer = setTimeout(cloudPush, 2000);
-    } else {
-      console.log('[CLOUD DEBUG] Push failed. out=', out);
-      renderCloudStatus('Save failed — will retry');
-      // Generic failure — retry once after 3s
-      if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
-      CLOUD.pushTimer = setTimeout(cloudPush, 3000);
-    }
+    } else renderCloudStatus('Save failed');
   } catch (e) {
     console.log('[CLOUD DEBUG] cloudPush threw an exception:', e);
     renderCloudStatus('Offline');
@@ -2113,29 +1700,18 @@ async function cloudPush() {
 }
 
 async function cloudPull(initial) {
-  console.log('[PULL DEBUG] cloudPull() called. enabled=', CLOUD.enabled, 'hasUrl=', !!CLOUD.url, 'initial=', initial, 'pulling=', CLOUD.pulling, 'hidden=', document.hidden);
-  if (!CLOUD.enabled || !CLOUD.url) { console.log('[PULL DEBUG] aborted — not enabled or no url'); return; }
+  if (!CLOUD.enabled || !CLOUD.url) return;
   if (!initial && document.hidden) { renderCloudStatus('Paused (background)'); return; }
-  if (CLOUD.pulling) { console.log('[PULL DEBUG] skipped — already pulling'); return; }
+  if (CLOUD.pulling) return; // avoid overlapping pulls (e.g. the 5s timer firing while an immediate post-push pull is still in flight)
   CLOUD.pulling = true;
-  console.log('[PULL DEBUG] cloudPull() start. initial=', initial);
   try {
-    // Use POST for pull to avoid GAS GET redirect 404 issue
-    const res = await fetch(CLOUD.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'pull' }),
-    });
-    console.log('[PULL DEBUG] pull POST status=', res.status);
-    let out;
-    try { out = await res.json(); } catch(jsonErr) { console.log('[PULL DEBUG] res.json() PARSE ERROR:', jsonErr.message); throw jsonErr; }
-    console.log('[PULL DEBUG] pull response ok=', out?.ok, 'hasData=', !!out?.data, 'updatedAt=', out?.updatedAt);
-    if (!out || !out.ok) { console.log('[PULL DEBUG] pull failed. ok=', out?.ok, 'error=', out?.error); renderCloudStatus('Offline'); return; }
+    const res = await fetch(CLOUD.url, { method: 'GET' });
+    const out = await res.json();
+    if (!out || !out.ok) { renderCloudStatus('Offline'); return; }
     if (!out.data) { renderCloudStatus(initial ? 'Connected (empty)' : 'Synced ✓'); return; }
-    if (out.updatedAt && out.updatedAt === CLOUD.lastSeenAt) { console.log('[PULL DEBUG] same updatedAt — skipping merge'); renderCloudStatus('Synced ✓'); return; }
+    if (out.updatedAt && out.updatedAt === CLOUD.lastSeenAt) { renderCloudStatus('Synced ✓'); return; }
 
     const remote = JSON.parse(out.data);
-    console.log('[PULL DEBUG] remote orders=', remote.orders?.length, 'local orders=', DB.orders.length);
     if (!remote.orders) { renderCloudStatus('Synced ✓'); return; }
 
     CLOUD.applying = true;
@@ -2146,29 +1722,7 @@ async function cloudPull(initial) {
     DB.tombstones.supervisors = mergeTombstones(DB.tombstones.supervisors, remoteTomb.supervisors || {});
     DB.tombstones.calEvents   = mergeTombstones(DB.tombstones.calEvents, remoteTomb.calEvents || {});
 
-    const _statusBefore = {};
-    DB.orders.forEach(o => { _statusBefore[o.id] = { s: o.status, u: o.updatedAt, sc: o.statusChangedAt }; });
     DB.orders = mergeRecords(DB.orders, remote.orders, DB.tombstones.orders);
-    const _statusChanges = DB.orders.filter(o => _statusBefore[o.id] && _statusBefore[o.id].s !== o.status);
-    if (_statusChanges.length) {
-      console.log('[MERGE DEBUG] STATUS CHANGED in merge:', _statusChanges.map(o => o.orderNumber + ': ' + _statusBefore[o.id].s + '→' + o.status + ' (localUpdAt=' + _statusBefore[o.id].u + ' remoteUpdAt=' + o.updatedAt + ')'));
-    } else {
-      // Log one example record to see if remote has different status that's being rejected
-      const _sample = remote.orders.find(r => DB.orders.find(l => l.id === r.id && l.status !== r.status));
-      if (_sample) {
-        const _local = DB.orders.find(l => l.id === _sample.id);
-        console.log('[MERGE DEBUG] Remote has different status but was REJECTED:', _sample.orderNumber, 'remote.status=', _sample.status, 'remote.updatedAt=', _sample.updatedAt, 'local.status=', _local.status, 'local.updatedAt=', _local.updatedAt, 'local.statusChangedAt=', _local.statusChangedAt);
-      } else {
-        // Log max updatedAt from remote vs local — tells us if server got User B's push
-        const _maxRU = remote.orders.reduce((m,o) => Math.max(m, o.updatedAt||0), 0);
-        const _maxLU = DB.orders.reduce((m,o) => Math.max(m, o.updatedAt||0), 0);
-        console.log('[MERGE DEBUG] No status differences between remote and local');
-        console.log('[MERGE DEBUG] max remote updatedAt=', _maxRU ? new Date(_maxRU).toISOString() : 'n/a', '| max local updatedAt=', _maxLU ? new Date(_maxLU).toISOString() : 'n/a', '| remote newer?', _maxRU > _maxLU);
-        // Log the WOLUMBA / SCO-1324 order timestamps specifically
-        const _wolTest = remote.orders.find(o => o.orderNumber && o.orderNumber.includes('13245678'));
-        if (_wolTest) { const _wl = DB.orders.find(l => l.id === _wolTest.id); console.log('[MERGE DEBUG] WOLUMBA remote:', _wolTest.status, '@', _wolTest.updatedAt, '| local:', _wl?.status, '@', _wl?.updatedAt); }
-      }
-    }
     DB.claims = mergeRecords(DB.claims, remote.claims || [], DB.tombstones.claims);
     if (remote.subbies) DB.subbies = [...new Set([...DB.subbies, ...remote.subbies])];
     if (remote.sorCodes) DB.sorCodes = mergeRecordsBy(DB.sorCodes, remote.sorCodes, DB.tombstones.sorCodes, s => s.code);
@@ -2183,28 +1737,7 @@ async function cloudPull(initial) {
     lsSet('hom_cal_events', JSON.stringify(mergedCalEvents));
     lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
     CLOUD.lastSeenAt = out.updatedAt || '';
-    // If any local records beat remote (local has newer data not yet on server),
-    // push them so the server converges to the fully-merged state.
-    const _remoteMap = {};
-    (remote.orders || []).forEach(r => { _remoteMap[r.id] = r.updatedAt || 0; });
-    const _hasLocalAhead = DB.orders.some(lo => lo.updatedAt && (_remoteMap[lo.id] === undefined || lo.updatedAt > _remoteMap[lo.id]));
-    if (_hasLocalAhead && !CLOUD.pushing && !initial) {
-      console.log('[PULL DEBUG] local has records newer than remote — scheduling push to reconcile');
-      if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
-      CLOUD.pushTimer = setTimeout(cloudPush, 800);
-    }
-    // Measure clock skew: server_time - local_time. Positive = local clock is behind.
-    if (out.updatedAt) {
-      const _sNow = new Date(out.updatedAt).getTime();
-      if (_sNow > CLOUD._serverNow) CLOUD._serverNow = _sNow;
-      const _skew = _sNow - Date.now();
-      // Only update skew if it suggests local clock is behind (we only correct slow clocks)
-      if (_skew > 0) CLOUD._skewMs = _skew;
-      else if (CLOUD._skewMs > 0 && _skew > -1000) CLOUD._skewMs = 0; // clocks now in sync
-      console.log('[SYNC DEBUG] clock skew=', CLOUD._skewMs, 'ms (positive = local behind server)');
-    }
     CLOUD.applying = false;
-    console.log('[PULL DEBUG] merge done. DB.orders now=', DB.orders.length);
 
     const r = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims,
                 closed:renderClosed, issues:renderIssues, cancelled:renderCancelled,
@@ -2215,7 +1748,6 @@ async function cloudPull(initial) {
     updateSidebar();
     renderCloudStatus('Synced ✓');
   } catch (e) {
-    console.log('[PULL DEBUG] cloudPull CATCH:', e.message || e);
     renderCloudStatus('Offline');
   } finally {
     CLOUD.pulling = false;
@@ -2473,7 +2005,6 @@ function openOrderModal(id = null) {
   populateSORSelect();
 
   updateSubbiesDatalist();
-  updateSupervisorDatalist();
   if (id) {
     const o = DB.orders.find(x => x.id === id);
     document.getElementById('order-modal-title').textContent = 'Edit Order';
@@ -2493,7 +2024,6 @@ function openOrderModal(id = null) {
     document.getElementById('f-amount-display').textContent = '$' + Number(baseAmt).toFixed(2) + (baseQty !== 1 ? ' (' + baseQty + ' × $' + (baseAmt/baseQty).toFixed(2) + ')' : '');
     document.getElementById('f-detail').value = o.detail || '';
     document.getElementById('f-subbies').value = o.subbies || '';
-    document.getElementById('f-supervisor').value = o.supervisor || '';
     document.getElementById('f-comments').value = o.comments || '';
     document.getElementById('f-suiId').value = o.suiId || '';
     document.getElementById('f-extra-items').innerHTML = '';
@@ -2678,10 +2208,7 @@ function onSORSelect() {
 // ============================================================
 // SAVE ORDER
 // ============================================================
-function saveOrder(e) {
-  // Prevent HTML form GET submission (triggered when user presses Enter in a
-  // form field) — without this, the page would reload and cancel the push timer.
-  if (e && e.preventDefault) e.preventDefault();
+function saveOrder() {
   const orderNumber = document.getElementById('f-orderNumber').value.trim();
   const address = document.getElementById('f-address').value.trim();
   const orderDate = document.getElementById('f-orderDate').value;
@@ -2718,19 +2245,9 @@ function saveOrder(e) {
   // its status back to active, which is why it appeared to "jump back to Orders".
   const existing = editingOrderId ? DB.orders.find(x => x.id === editingOrderId) : null;
 
-  const now = Date.now();
-  // subbiesAt tracks WHEN subbies was last intentionally set on this device.
-  // The merge logic uses this for field-level conflict resolution: if Device B
-  // edits status (making B's record-level updatedAt newer), subbiesAt still
-  // lets Device A's subbies value win the merge for that specific field.
-  const prevSubbies = existing ? existing.subbies : undefined;
-  const subbiesAt   = subbiesVal !== prevSubbies
-    ? now
-    : (existing && existing.subbiesAt ? existing.subbiesAt : (existing ? existing.updatedAt || 0 : 0));
-
   const order = {
     ...(existing || {}),
-    id: editingOrderId || now.toString(),
+    id: editingOrderId || Date.now().toString(),
     orderDate,
     orderNumber,
     prn: document.getElementById('f-prn').value.trim(),
@@ -2743,63 +2260,34 @@ function saveOrder(e) {
     extraItems,
     amount: totalAmount,
     detail: document.getElementById('f-detail').value.trim(),
-    subbies: subbiesVal,
-    subbiesAt,
-    supervisor: document.getElementById('f-supervisor').value.trim(),
+    subbies: document.getElementById('f-subbies').value.trim(),
     comments: document.getElementById('f-comments').value.trim(),
     suiId: document.getElementById('f-suiId').value.trim(),
-    createdAt: existing?.createdAt || now,
-    updatedAt: now,
-    // formSavedAt stamps when the order FORM was last saved on this device.
-    // The merge logic uses this to protect all form-editable fields from being
-    // overwritten by a newer-but-unrelated status change on another device.
-    formSavedAt: now,
+    createdAt: existing?.createdAt || Date.now(),
+    updatedAt: Date.now(),
   };
 
   if (editingOrderId) {
-    const _prevOrder = DB.orders.find(x => x.id === editingOrderId);
-    const _prevClaim = DB.claims.find(c => c.orderNumber === _prevOrder?.orderNumber);
-    historyPush(`Order edited: ${_prevOrder?.orderNumber || editingOrderId}`,
-      _prevOrder ? [_hClone(_prevOrder)] : [],
-      _prevClaim  ? [_hClone(_prevClaim)]  : []);
     const idx = DB.orders.findIndex(x => x.id === editingOrderId);
     DB.orders[idx] = order;
     toast('Order updated successfully', 'success');
   } else {
     DB.orders.push(order);
-    historyPush(`New order: ${order.orderNumber}`, [{ id: order.id, _wasAbsent: true }], []);
     toast('Order saved successfully', 'success');
   }
 
-  // Keep the linked claim/payment record's claimed amount and supervisor in sync.
-  // amtPaid only follows automatically if it was already marked fully paid.
+  // Keep the linked claim/payment record's claimed amount in sync with the order total.
+  // amtPaid (cash actually received) only follows automatically if it was already marked
+  // fully paid — otherwise it's a real-world fact we shouldn't silently overwrite.
   const linkedClaim = DB.claims.find(c => c.orderNumber === order.orderNumber);
-  if (linkedClaim) {
-    let claimChanged = false;
-    if (linkedClaim.amount !== totalAmount) {
-      const wasFullyPaid = linkedClaim.paid === 'Y';
-      linkedClaim.amount = totalAmount;
-      if (wasFullyPaid) linkedClaim.amtPaid = totalAmount;
-      claimChanged = true;
-    }
-    // Sync supervisor — always keep claim in step with the order
-    if (linkedClaim.supervisor !== order.supervisor) {
-      linkedClaim.supervisor = order.supervisor;
-      claimChanged = true;
-    }
-    if (claimChanged) linkedClaim.updatedAt = now;
+  if (linkedClaim && linkedClaim.amount !== totalAmount) {
+    const wasFullyPaid = linkedClaim.paid === 'Y';
+    linkedClaim.amount = totalAmount;
+    if (wasFullyPaid) linkedClaim.amtPaid = totalAmount;
+    linkedClaim.updatedAt = Date.now();
   }
 
-  // Write to localStorage immediately, then push to the server RIGHT NOW
-  // (bypassing the normal 1.2s debounce). This minimises the window where
-  // a 5-second cloudPull could bring in another device's stale version of
-  // this order before our edit has landed on the server.
-  lsSet('hom_orders', JSON.stringify(DB.orders));
-  lsSet('hom_claims', JSON.stringify(DB.claims));
-  lsSet('hom_subbies', JSON.stringify(DB.subbies));
-  if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
-  cloudPush(); // immediate — don't wait for debounce
-
+  save();
   closeModal('order-modal');
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims,
                      closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
@@ -2826,18 +2314,15 @@ function saveClaim() {
     reason: document.getElementById('c-reason').value.trim(),
     notes: document.getElementById('c-notes').value.trim(),
     createdAt: editingClaimId ? (DB.claims.find(x => x.id === editingClaimId)?.createdAt || Date.now()) : Date.now(),
-    updatedAt: _nowSafe(),
+    updatedAt: Date.now(),
   };
 
   if (editingClaimId) {
-    const _prevClaim = DB.claims.find(x => x.id === editingClaimId);
-    historyPush(`Claim edited: ${_prevClaim?.orderNumber || editingClaimId}`, [], _prevClaim ? [_hClone(_prevClaim)] : []);
     const idx = DB.claims.findIndex(x => x.id === editingClaimId);
     DB.claims[idx] = claim;
     toast('Claim updated', 'success');
   } else {
     DB.claims.push(claim);
-    historyPush(`New claim: ${claim.orderNumber}`, [], [{ id: claim.id, _wasAbsent: true }]);
     toast('Claim added', 'success');
   }
 
@@ -2872,7 +2357,7 @@ function saveSOR() {
     type: document.getElementById('s-type').value,
     unit: document.getElementById('s-unit').value.trim(),
     price,
-    updatedAt: _nowSafe(),
+    updatedAt: Date.now(),
   };
 
   if (editingSORIdx !== null) {
@@ -2896,21 +2381,12 @@ function setOrderStatus(id, newStatus) {
   if (!o) return;
   const today = localDateStr();
   const prevStatus = o.status || 'active';
-  // Snapshot BEFORE mutation for undo
-  const _statusLabels = { active:'Active', completed:'Completed', claim:'Claimed', closed:'Closed', issue:'Issue', cancelled:'Cancelled' };
-  const _linkedClaim = DB.claims.find(c => c.orderNumber === o.orderNumber);
-  historyPush(
-    `Status: ${_statusLabels[prevStatus]||prevStatus} → ${_statusLabels[newStatus]||newStatus} (${o.orderNumber})`,
-    [_hClone(o)],
-    _linkedClaim ? [_hClone(_linkedClaim)] : []
-  );
 
   // Date history: preserve existing dates so going back restores them
   if (!o._dh) o._dh = {};
 
-  o.status           = newStatus;
-  o.statusChangedAt  = _nowSafe();
-  o.updatedAt        = _nowSafe();
+  o.status = newStatus;
+  o.updatedAt = Date.now();
 
   // FORWARD moves: stamp today, save old date to history
   if (newStatus === 'completed') {
@@ -2922,9 +2398,9 @@ function setOrderStatus(id, newStatus) {
     o.claimAt = today;
     let cRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
     if (!cRec) {
-      cRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: 0, paid: 'N', status: 'Payment Claim Submitted', claimDate: today, createdAt: today, updatedAt: _nowSafe() };
+      cRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: 0, paid: 'N', status: 'Payment Claim Submitted', claimDate: today, createdAt: today, updatedAt: Date.now() };
       DB.claims.push(cRec);
-    } else { cRec.status = 'Payment Claim Submitted'; if (!cRec.claimDate) cRec.claimDate = today; cRec.updatedAt = _nowSafe(); }
+    } else { cRec.status = 'Payment Claim Submitted'; if (!cRec.claimDate) cRec.claimDate = today; cRec.updatedAt = Date.now(); }
   }
   if (newStatus === 'closed') {
     if (!o._dh.closedAt) o._dh.closedAt = o.closedAt || null;
@@ -2933,14 +2409,13 @@ function setOrderStatus(id, newStatus) {
     // Payment received: record paid amount on the claim record
     let payRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
     if (!payRec) {
-      payRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: o.amount || 0, paid: 'Y', status: 'Closed', claimDate: o.claimAt, paidAt: today, createdAt: today, updatedAt: _nowSafe() };
+      payRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address, sorCode: o.sorCode, amount: o.amount, amtPaid: o.amount || 0, paid: 'Y', status: 'Closed', claimDate: o.claimAt, createdAt: today, updatedAt: Date.now() };
       DB.claims.push(payRec);
     } else {
       payRec.paid = 'Y';
       if (!payRec.amtPaid) payRec.amtPaid = o.amount || 0;
       payRec.status = 'Closed';
-      if (!payRec.paidAt) payRec.paidAt = today;
-      payRec.updatedAt = _nowSafe();
+      payRec.updatedAt = Date.now();
     }
   }
   if (newStatus === 'issue') {
@@ -2967,16 +2442,7 @@ function setOrderStatus(id, newStatus) {
     delete o.closedAt;
     o._dh.closedAt = undefined;
   }
-  // Save locally first
-  lsSet('hom_orders', JSON.stringify(DB.orders));
-  lsSet('hom_claims', JSON.stringify(DB.claims));
-  lsSet('hom_subbies', JSON.stringify(DB.subbies));
-  // Immediate push — bypass 1.2s debounce so a cloudPull in that window
-  // can't bring back the old status from the server before our push lands.
-  if (typeof CLOUD !== 'undefined' && CLOUD.enabled && CLOUD.url) {
-    if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
-    cloudPush();
-  }
+  save();
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
   (renders[currentPage] || renderAll)();
   updateSidebar();
@@ -3034,8 +2500,7 @@ function renderCompleted() {
   </tr>`;
   }).join('');
   renderTabSummary('completed');
-  mobApply('#page-completed .table-wrap', 'mob-cards-completed', orders);
-  updateMobNav('completed');
+  mobApply('#page-completed .table-wrap', 'mob-cards-completed', DB.orders.filter(o => o.status === 'completed'));
 }
 
 // ============================================================
@@ -3077,7 +2542,7 @@ function confirmIssueModal() {
   o.issueNote   = document.getElementById('iss-reason').value.trim();
   o.issueStatus = document.getElementById('iss-status').value;
   o.issueAt     = document.getElementById('iss-date').value;
-  o.updatedAt   = _nowSafe();
+  o.updatedAt   = Date.now();
   let cRec = DB.claims.find(c => c.orderNumber === o.orderNumber);
   if (!cRec) {
     cRec = { id: Date.now().toString(), orderNumber: o.orderNumber, address: o.address,
@@ -3086,7 +2551,7 @@ function confirmIssueModal() {
     DB.claims.push(cRec);
   } else if (o.issueStatus) {
     cRec.status = o.issueStatus;
-    cRec.updatedAt = _nowSafe();
+    cRec.updatedAt = Date.now();
   }
   o.status = 'issue';
   save();
@@ -3205,7 +2670,6 @@ function renderSupList() {
             </div>
             <div style="margin-top:6px;display:flex;gap:6px">
               <a href="mailto:${esc(s.email)}" style="flex:1;text-align:center;padding:5px 0;border-radius:6px;background:var(--gold);color:#fff;font-size:11px;font-weight:600;text-decoration:none">&#128231; Email</a>
-              <button class="btn btn-sm" style="font-size:11px;padding:5px 8px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer" onclick="openEditSupervisor(${s._idx})">&#9998;</button>
               <button class="btn btn-sm btn-danger" style="font-size:11px;padding:5px 8px" onclick="deleteSupervisor(${s._idx})">&#10005;</button>
             </div>
           </div>`).join('')}
@@ -3221,53 +2685,12 @@ function saveSupervisor() {
   const phone = document.getElementById('sup-phone')?.value.trim() || '';
   if (!name || !email) { toast('Name and email required', 'error'); return; }
   const list = loadSupervisors();
-  const groupSel = document.getElementById('sup-group');
-  const group = (groupSel && groupSel.value) ? groupSel.value
-              : (supActiveGroup !== 'All' ? supActiveGroup : 'Other');
+  const group = supActiveGroup !== 'All' ? supActiveGroup : 'Other';
   list.push({ id: 'sup_' + Math.random().toString(36).slice(2) + Date.now().toString(36), name, role, email, phone, group, updatedAt: Date.now() });
   saveSupervisors(list);
   ['sup-name','sup-role','sup-email','sup-phone'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-  if (groupSel) groupSel.value = '';
   renderSupList();
   toast('Contact saved', 'success');
-}
-
-function openEditSupervisor(i) {
-  const list = loadSupervisors();
-  const s = list[i];
-  if (!s) return;
-  document.getElementById('edit-sup-idx').value   = i;
-  document.getElementById('edit-sup-name').value  = s.name  || '';
-  document.getElementById('edit-sup-role').value  = s.role  || '';
-  document.getElementById('edit-sup-email').value = s.email || '';
-  document.getElementById('edit-sup-phone').value = s.phone || '';
-  const grpSel = document.getElementById('edit-sup-group');
-  grpSel.value = s.group || 'Other';
-  if (!grpSel.value) grpSel.value = 'Other'; // fallback if unknown group
-  const overlay = document.getElementById('sup-edit-overlay');
-  overlay.style.display = 'flex';
-}
-
-function closeEditSupervisor() {
-  document.getElementById('sup-edit-overlay').style.display = 'none';
-}
-
-function saveEditSupervisor() {
-  const i     = parseInt(document.getElementById('edit-sup-idx').value, 10);
-  const name  = document.getElementById('edit-sup-name').value.trim();
-  const role  = document.getElementById('edit-sup-role').value.trim();
-  const email = document.getElementById('edit-sup-email').value.trim();
-  const phone = document.getElementById('edit-sup-phone').value.trim();
-  const group = document.getElementById('edit-sup-group').value;
-  if (!name || !email) { toast('Name and email required', 'error'); return; }
-  const list = loadSupervisors();
-  if (!list[i]) { toast('Contact not found', 'error'); return; }
-  list[i] = { ...list[i], name, role, email, phone, group, updatedAt: _nowSafe() };
-  saveSupervisors(list);
-  closeEditSupervisor();
-  renderSupGroupTabs();
-  renderSupList();
-  toast('Contact updated', 'success');
 }
 
 function deleteSupervisor(i) {
@@ -3736,7 +3159,7 @@ function saveCalEvent() {
     reminder:  document.getElementById('ce-reminder').value,
     notes:     document.getElementById('ce-notes').value.trim(),
     createdAt: editingCalEventId ? (events.find(e=>e.id===editingCalEventId)?.createdAt||Date.now()) : Date.now(),
-    updatedAt: _nowSafe(),
+    updatedAt: Date.now(),
   };
   if (editingCalEventId) {
     const idx = events.findIndex(e => e.id === editingCalEventId);
@@ -3904,18 +3327,16 @@ function renderSubbiesPage() {
   const allNames = [...new Set([...TRACKED_SUBBIES, ...orders.map(o=>o.subbies).filter(Boolean)])].filter(n => !n.startsWith('SK_'));
   const names = subActivePerson !== 'All' ? [subActivePerson] : allNames;
 
-  // ── Summary cards — filter by selected subbie if not 'All' ──
-  const cardOrders = subActivePerson !== 'All' ? orders.filter(o => o.subbies === subActivePerson) : orders;
-  const cardLabel  = subActivePerson !== 'All' ? subActivePerson : 'all subbies';
-  const totalOrders = cardOrders.length;
+  // ── Summary cards ──
+  const totalOrders = orders.length;
   const sumSubbie = (arr) => arr.reduce((s,o)=> s + (getSubbiePrice(o) || 0), 0);
-  const totalAmt = sumSubbie(cardOrders);
-  const unpaidOrders = cardOrders.filter(o => o.subbiePaid !== 'Y');
+  const totalAmt = sumSubbie(orders);
+  const unpaidOrders = orders.filter(o => o.subbiePaid !== 'Y');
   const unpaidAmt = sumSubbie(unpaidOrders);
   const unpaidCount = unpaidOrders.length;
 
   document.getElementById('sub-summary-cards').innerHTML = `
-    <div class="stat-card"><div class="stat-label">Total Orders (Subbies)</div><div class="stat-value stat-blue">${totalOrders}</div><div class="stat-sub">across ${esc(cardLabel)}</div></div>
+    <div class="stat-card"><div class="stat-label">Total Orders (Subbies)</div><div class="stat-value stat-blue">${totalOrders}</div><div class="stat-sub">across all subbies</div></div>
     <div class="stat-card"><div class="stat-label">Total Subbie Value</div><div class="stat-value stat-blue">$${fmtNum(totalAmt)}</div><div class="stat-sub">at subbie rates</div></div>
     <div class="stat-card"><div class="stat-label">Outstanding to Subbies</div><div class="stat-value stat-yellow">${unpaidCount} orders</div><div class="stat-sub">$${fmtNum(unpaidAmt)} outstanding</div></div>
     <div class="stat-card"><div class="stat-label">Settled to Subbies</div><div class="stat-value stat-green">${totalOrders-unpaidCount} orders</div><div class="stat-sub">$${fmtNum(totalAmt-unpaidAmt)} settled</div></div>`;
@@ -4014,7 +3435,7 @@ function renderSubbiePerson(name, allOrders) {
 
 function bulkSubbiePaid(name) {
   if (!confirm(`Mark ALL unpaid orders for ${name} as paid?`)) return;
-  DB.orders.forEach(o => { if (o.subbies === name && o.subbiePaid !== 'Y') { o.subbiePaid = 'Y'; o.updatedAt = _nowSafe(); } });
+  DB.orders.forEach(o => { if (o.subbies === name && o.subbiePaid !== 'Y') { o.subbiePaid = 'Y'; o.updatedAt = Date.now(); } });
   save();
   renderSubbiesPage();
   toast(`All ${name} orders marked as paid`, 'success');
@@ -4025,7 +3446,7 @@ function markCheckedPaid(name) {
   if (!checked.length) { toast('No orders selected', 'error'); return; }
   checked.forEach(cb => {
     const o = DB.orders.find(x => x.id === cb.dataset.id);
-    if (o) { o.subbiePaid = 'Y'; o.updatedAt = _nowSafe(); }
+    if (o) { o.subbiePaid = 'Y'; o.updatedAt = Date.now(); }
   });
   save();
   renderSubbiesPage();
@@ -4155,7 +3576,7 @@ function toggleSubbiePaid(id) {
   o.subbiePaid = o.subbiePaid === 'Y' ? 'N' : 'Y';
   if (o.subbiePaid === 'Y') { o.subbiePaidAt = localDateStr(); }
   else { delete o.subbiePaidAt; }
-  o.updatedAt = _nowSafe();
+  o.updatedAt = Date.now();
   save();
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, subbies:renderSubbiesPage };
   (renders[currentPage] || renderAll)();
@@ -4273,11 +3694,6 @@ function renderCancelled() {
 // ============================================================
 function deleteOrder(id) {
   if (!confirm('Delete this order?')) return;
-  const _delOrder = DB.orders.find(x => x.id === id);
-  const _delClaim = DB.claims.find(c => c.orderNumber === _delOrder?.orderNumber);
-  historyPush(`Order deleted: ${_delOrder?.orderNumber || id}`,
-    _delOrder ? [_hClone(_delOrder)] : [],
-    _delClaim  ? [_hClone(_delClaim)]  : []);
   DB.tombstones.orders[id] = Date.now();
   DB.orders = DB.orders.filter(x => x.id !== id);
   save();
@@ -4289,8 +3705,6 @@ function deleteOrder(id) {
 
 function deleteClaim(id) {
   if (!confirm('Delete this claim?')) return;
-  const _delClaim = DB.claims.find(x => x.id === id);
-  historyPush(`Claim deleted: ${_delClaim?.orderNumber || id}`, [], _delClaim ? [_hClone(_delClaim)] : []);
   DB.tombstones.claims[id] = Date.now();
   DB.claims = DB.claims.filter(x => x.id !== id);
   save();
@@ -4407,8 +3821,7 @@ function renderOrders() {
       : `<span class="badge badge-yellow">Unpaid</span>`;
     const hasClaim2 = payment && payment.status && payment.status !== 'none';
 
-    const _subBg = o.subbies ? getSubbieStyle(o.subbies) : '';
-    return `<tr class="${hasClaim2 ? 'claim-row' : ''}" ${o.subbies ? `data-sub="${o.subbies}"` : ''} style="${_subBg}">
+    return `<tr class="${hasClaim2 ? 'claim-row' : ''}">
       <td style="white-space:nowrap">${fmtDate(o.orderDate)}</td>
       <td style="white-space:nowrap">${orderNumCell(o)}</td>
       <td><div class="addr-full">${esc(o.address)}</div></td>
@@ -4417,10 +3830,7 @@ function renderOrders() {
       <td><span class="area-tag">${esc(o.area)}</span></td>
       <td>${sorDisplay}</td>
       <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
-      <td style="font-size:12px">
-        ${esc(o.subbies)}
-        ${o.supervisor ? `<br>${supervisorLink(o.supervisor, o.area)}` : ''}
-      </td>
+      <td style="font-size:12px">${esc(o.subbies)}</td>
       <td><div class="truncate" title="${esc(o.comments)}" style="max-width:140px">${esc(o.comments)}</div></td>
       <td>
         <div class="row-actions">
@@ -4434,8 +3844,7 @@ function renderOrders() {
     </tr>`;
   }).join('');
   renderTabSummary('orders');
-  mobApply('#page-orders .table-wrap', 'mob-cards-orders', orders);
-  updateMobNav('orders');
+  mobApply('#page-orders .table-wrap', 'mob-cards-orders', DB.orders.filter(o => o.status === 'active' || !o.status));
 }
 
 // ============================================================
@@ -4506,8 +3915,7 @@ function renderClaims() {
     </tr>`;
   }).join('');
   renderTabSummary('claims');
-  mobApply('#page-claims .table-wrap', 'mob-cards-claims', orders);
-  updateMobNav('claims');
+  mobApply('#page-claims .table-wrap', 'mob-cards-claims', DB.orders.filter(o => o.status === 'claim'));
 }
 
 // ============================================================
@@ -4608,17 +4016,13 @@ function renderAll() {
       <td><span class="area-tag">${esc(o.area)}</span></td>
       <td style="font-size:11px;font-family:monospace">${esc(o.sorCode)}</td>
       <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
-      <td style="font-size:12px">
-        ${esc(o.subbies)}
-        ${o.supervisor ? `<br>${supervisorLink(o.supervisor, o.area)}` : ''}
-      </td>
+      <td style="font-size:12px">${esc(o.subbies)}</td>
       <td>${subbiePayBadge(o)}</td>
       <td><span class="badge ${stClass}" style="font-size:10px">${stLabel}</span></td>
       <td><div class="row-actions">${nextBtns[st] || ''}</div></td>
     </tr>`;
   }).join('');
-  mobApply('#page-all .table-wrap', 'mob-cards-all', orders);
-  updateMobNav('all');
+  mobApply('#page-all .table-wrap', 'mob-cards-all', DB.orders);
 }
 
 // ============================================================
@@ -4653,7 +4057,7 @@ function renderSOR() {
 // ============================================================
 // DASHBOARD
 // ============================================================
-let dashPeriod = 'month';
+let dashPeriod = 'day';
 let charts = {};
 
 function setPeriod(p, el) {
@@ -4778,379 +4182,103 @@ function pctDelta(cur, prev) {
   return `<span style="color:${col};font-size:12px;font-weight:700">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
 }
 
-// ── DASHBOARD LAYOUT ENGINE ──────────────────────────────────
-const DASH_WIDGETS_DEF = [
-  { id:'pipeline', label:'Order Status Pipeline',     defaultSize:'full' },
-  { id:'claims',   label:'Claims Financial Pipeline', defaultSize:'full' },
-  { id:'target',   label:'Monthly Progress',          defaultSize:'half' },
-  { id:'compare',  label:'Period Comparison',         defaultSize:'half' },
-  { id:'area',     label:'Orders by Area',            defaultSize:'full' },
-  { id:'revenue',  label:'Revenue Over Time',         defaultSize:'full' },
-  { id:'subbies',  label:'Subbie Payment Summary',    defaultSize:'full' },
-  { id:'calendar', label:'Upcoming Events',             defaultSize:'half' },
-];
-
-function loadDashLayout() {
-  const defaults = { order: DASH_WIDGETS_DEF.map(w=>w.id), sizes: Object.fromEntries(DASH_WIDGETS_DEF.map(w=>[w.id,w.defaultSize])) };
-  try {
-    const s = JSON.parse(lsGet('hom_dash_layout') || 'null');
-    if (s && s.order && s.sizes) {
-      // Add any new widgets not in the saved layout
-      DASH_WIDGETS_DEF.forEach(w => {
-        if (!s.order.includes(w.id)) s.order.push(w.id);
-        if (!s.sizes[w.id]) s.sizes[w.id] = w.defaultSize;
-      });
-      return s;
-    }
-  } catch(e) {}
-  return defaults;
-}
-function saveDashLayout(layout) { lsSet('hom_dash_layout', JSON.stringify(layout)); }
-function resetDashLayout()      { lsSet('hom_dash_layout', null); renderDashboard(); toast('Layout reset','success'); }
-function saveDashTarget(val)    { const n=parseInt(val,10); if(n>0){lsSet('hom_monthly_target',String(n));renderDashboard();} }
-function loadDashTarget()       { return parseInt(lsGet('hom_monthly_target')||'400',10)||400; }
-
-let _dashDragSrc = null;
-
-function renderDashWidgets() {
-  const layout = loadDashLayout();
-  const container = document.getElementById('dash-widgets');
-  if (!container) return;
-  const tInput = document.getElementById('dash-target-input');
-  // restore collapsed state after render
-  requestAnimationFrame(() => {
-    const layout = loadDashLayout();
-    if (layout.collapsed) {
-      Object.entries(layout.collapsed).forEach(([id, isCollapsed]) => {
-        if (!isCollapsed) return;
-        const body = document.getElementById('dash-w-' + id);
-        const btn  = document.getElementById('dash-collapse-btn-' + id);
-        if (body) body.style.display = 'none';
-        if (btn)  btn.textContent = '⌄';
-      });
-    }
-  });
-  if (tInput) tInput.value = loadDashTarget();
-
-  container.innerHTML = layout.order.map(id => {
-    const def = DASH_WIDGETS_DEF.find(w=>w.id===id);
-    if (!def) return '';
-    const size   = layout.sizes[id] || def.defaultSize;
-    const isFull = size === 'full';
-    const bodyContent = id==='revenue'
-      ? `<div class="chart-wrap" style="height:200px"><canvas id="chart-revenue"></canvas></div>`
-      : id==='area'
-      ? `<div id="dash-area-table"></div><div class="chart-wrap" style="height:140px;margin-top:6px"><canvas id="chart-area"></canvas></div>`
-      : '';
-    return `
-    <div class="dash-widget" id="dash-widget-${id}" data-id="${id}"
-      style="grid-column:span ${isFull?2:1};background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden"
-      draggable="true"
-      ondragstart="dashDragStart(event,this)" ondragover="dashDragOver(event,this)"
-      ondrop="dashDragDrop(event,this)"       ondragend="dashDragEnd(event)">
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--cream2);cursor:grab;user-select:none" title="Drag to reorder">
-        <span style="font-size:15px;color:var(--text3)">&#8942;</span>
-        <span style="font-size:12px;font-weight:700;color:var(--text);flex:1">${def.label}</span>
-        <button onclick="toggleWidgetSize('${id}')" title="${isFull?'Switch to half width':'Switch to full width'}"
-          style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px"
-          onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">
-          ${isFull?'&#8596; Half':'&#8596; Full'}
-        </button>
-        <button onclick="toggleWidgetCollapse('${id}')" id="dash-collapse-btn-${id}" title="Collapse/Expand"
-          style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px;margin-left:2px"
-          onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">&#8963;</button>
-      </div>
-      <div id="dash-w-${id}" style="padding:10px">${bodyContent}</div>
-    </div>`;
-  }).join('');
-}
-
-function toggleWidgetCollapse(id) {
-  const body = document.getElementById('dash-w-' + id);
-  const btn  = document.getElementById('dash-collapse-btn-' + id);
-  if (!body) return;
-  const collapsed = body.style.display === 'none';
-  body.style.display = collapsed ? '' : 'none';
-  if (btn) btn.textContent = collapsed ? '⌃' : '⌄';
-  // persist collapsed state
-  const layout = loadDashLayout();
-  if (!layout.collapsed) layout.collapsed = {};
-  layout.collapsed[id] = !collapsed;
-  saveDashLayout(layout);
-}
-
-function toggleWidgetSize(id) {
-  const layout = loadDashLayout();
-  layout.sizes[id] = (layout.sizes[id]||'full') === 'full' ? 'half' : 'full';
-  saveDashLayout(layout); renderDashboard();
-}
-function dashDragStart(e,el) {
-  _dashDragSrc = el.dataset.id; e.dataTransfer.effectAllowed='move';
-  setTimeout(()=>{ el.style.opacity='0.45'; },0);
-}
-function dashDragOver(e,el) {
-  e.preventDefault(); e.dataTransfer.dropEffect='move';
-  document.querySelectorAll('.dash-widget').forEach(w=>w.style.outline='');
-  if (el.dataset.id!==_dashDragSrc) el.style.outline='2px solid var(--accent)';
-}
-function dashDragDrop(e,el) {
-  e.preventDefault();
-  const to=el.dataset.id; if (!_dashDragSrc||_dashDragSrc===to) return;
-  const layout=loadDashLayout();
-  const fi=layout.order.indexOf(_dashDragSrc), ti=layout.order.indexOf(to);
-  if (fi<0||ti<0) return;
-  layout.order.splice(fi,1); layout.order.splice(ti,0,_dashDragSrc);
-  saveDashLayout(layout); renderDashboard();
-}
-function dashDragEnd(e) {
-  document.querySelectorAll('.dash-widget').forEach(w=>{w.style.opacity='';w.style.outline='';});
-  _dashDragSrc=null;
-}
-
-// ── NEW WIDGET BUILDERS ───────────────────────────────────────
-
-function buildStatusPipeline(base) {
-  const el = document.getElementById('dash-w-pipeline'); if (!el) return;
-  const sumAmt = arr => arr.reduce((s,o)=>s+(o.amount||0),0);
-  const stages = [
-    { label:'Active',     status:'active',    nav:'orders',    icon:'&#128203;', color:'#4f7ef8' },
-    { label:'Completed',  status:'completed', nav:'completed', icon:'&#9989;',   color:'#2ecc71' },
-    { label:'Claimed',    status:'claim',     nav:'claims',    icon:'&#128228;', color:'#f39c12' },
-    { label:'Closed',     status:'closed',    nav:'closed',    icon:'&#128274;', color:'#8b90a7' },
-    { label:'Issues',     status:'issue',     nav:'issues',    icon:'&#9888;',   color:'#e74c3c' },
-  ];
-  const cards = stages.map(s => {
-    const arr = s.status==='active'
-      ? base.filter(o=>!o.status||o.status==='active')
-      : base.filter(o=>o.status===s.status);
-    return `
-      <div onclick="showPage('${s.nav}')" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:8px;background:var(--cream2);border:2px solid ${s.color}22;transition:all 0.15s"
-        onmouseover="this.style.background='${s.color}18';this.style.borderColor='${s.color}'"
-        onmouseout="this.style.background='var(--cream2)';this.style.borderColor='${s.color}22'">
-        <div style="font-size:16px;margin-bottom:3px">${s.icon}</div>
-        <div style="font-size:22px;font-weight:800;color:${s.color};line-height:1">${arr.length}</div>
-        <div style="font-size:9px;font-weight:700;color:var(--text3);margin:2px 0;text-transform:uppercase;letter-spacing:0.5px">${s.label}</div>
-        <div style="font-size:10px;color:var(--text2);font-weight:600">$${fmtNum(sumAmt(arr))}</div>
-      </div>`;
-  }).join('');
-  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">${cards}</div>
-    <div style="margin-top:4px;text-align:right;font-size:9px;color:var(--text3)">Click to navigate · Excludes cancelled</div>`;
-}
-
-function buildClaimsPipeline(base) {
-  const el = document.getElementById('dash-w-claims'); if (!el) return;
-  // All 'completed' orders = work done, not yet moved to claim status
-  const unclaimed = base.filter(o => o.status === 'completed');
-  const unclaimedAmt = unclaimed.reduce((s,o)=>s+(o.amount||0),0);
-  const pending     = DB.claims.filter(c=>c.status!=='Closed'&&c.status!=='cancelled');
-  const pendingAmt  = pending.reduce((s,c)=>s+(c.amount||0),0);
-  const now=new Date();
-  const mS=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
-  const mE=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-31`;
-  // paidAt stamped from now on; fallback to updatedAt date for historical records
-  const paidMo  = DB.claims.filter(c=>c.status==='Closed'&&(
-    (c.paidAt&&c.paidAt>=mS&&c.paidAt<=mE) ||
-    (!c.paidAt&&c.closedAt&&c.closedAt>=mS&&c.closedAt<=mE)
-  ));
-  const paidAmt = paidMo.reduce((s,c)=>s+(c.amtPaid||c.amount||0),0);
-  const allOut    = DB.claims.filter(c=>c.status!=='Closed'&&c.status!=='cancelled');
-  const allOutAmt = allOut.reduce((s,c)=>s+(c.amount||0),0);
-  const cols = [
-    { label:'Work Done — Unclaimed', sub:'Completed, no claim yet',  count:unclaimed.length, amt:unclaimedAmt, color:'#4f7ef8', icon:'&#128296;' },
-    { label:'Submitted — Awaiting',  sub:'Claimed, payment pending', count:pending.length,   amt:pendingAmt,   color:'#f39c12', icon:'&#9203;'   },
-  ];
-  el.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px">
-      ${cols.map(c=>`
-        <div style="padding:8px 10px;border-radius:8px;background:var(--cream2);border-left:4px solid ${c.color}">
-          <div style="font-size:14px;margin-bottom:3px">${c.icon}</div>
-          <div style="font-size:22px;font-weight:800;color:${c.color};line-height:1">${c.count}</div>
-          <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin:2px 0">${c.label}</div>
-          <div style="font-size:9px;color:var(--text3)">${c.sub}</div>
-          <div style="font-size:13px;font-weight:700;color:var(--text);margin-top:5px">$${fmtNum(c.amt)}</div>
-        </div>`).join('')}
-    </div>
-    <div style="padding:10px 14px;border-radius:6px;background:rgba(231,76,60,0.07);border:1px solid rgba(231,76,60,0.18);display:flex;align-items:center;justify-content:space-between">
-      <span style="font-size:12px;color:var(--text3)">&#9889; Total Outstanding Claims</span>
-      <span style="font-size:15px;font-weight:800;color:#e74c3c">$${fmtNum(allOutAmt)} <span style="font-size:11px;font-weight:600;color:var(--text3)">(${allOut.length} claims)</span></span>
-    </div>`;
-}
-
-function buildMonthlyTarget(base) {
-  const el = document.getElementById('dash-w-target'); if (!el) return;
-  const target = loadDashTarget();
-  const now=new Date();
-  const mS=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
-  const mE=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-31`;
-  const count = base.filter(o=>o.orderDate&&o.orderDate>=mS&&o.orderDate<=mE).length;
-  const pct   = Math.min(Math.round(count/target*100),100);
-  const col   = pct>=100?'#2ecc71':pct>=70?'#f39c12':'#4f7ef8';
-  const daysInMonth = new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
-  const dayOf = now.getDate();
-  const expPct = Math.round(dayOf/daysInMonth*100);
-  const onTrack = pct >= expPct;
-  el.innerHTML = `
-    <div style="text-align:center;padding:2px 0 8px">
-      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">
-        ${now.toLocaleString('en-AU',{month:'long'})} ${now.getFullYear()}
-      </div>
-      <div style="font-size:38px;font-weight:800;color:${col};line-height:1">${count}</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">of <strong style="color:var(--text)">${target}</strong> target</div>
-    </div>
-    <div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:11px;color:var(--text3)">
-        <span>Progress</span><span style="font-weight:700;color:${col}">${pct}%</span>
-      </div>
-      <div style="background:var(--cream2);border-radius:6px;height:10px;overflow:hidden;position:relative">
-        <div style="height:100%;width:${pct}%;background:${col};border-radius:6px;transition:width 0.4s"></div>
-        <div style="position:absolute;top:0;bottom:0;left:${expPct}%;width:2px;background:rgba(255,255,255,0.45)" title="Expected pace"></div>
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:5px;text-align:center">
-        ${onTrack?'&#9989; On track':'&#9888; Behind pace'} &mdash; Day ${dayOf}/${daysInMonth} &mdash; Expected: ${Math.round(target*dayOf/daysInMonth)}
-      </div>
-    </div>`;
-}
-
-function buildCompareWidget(cur, prev, w) {
-  const el = document.getElementById('dash-w-compare'); if (!el) return;
-  el.innerHTML = `
-    <div style="display:grid;gap:8px">
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">&#128176; Revenue</div>
-        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-          <div style="font-size:22px;font-weight:800;color:var(--accent)">$${fmtNum(cur.rev)}</div>
-          <div style="font-size:11px;color:var(--text3)">vs $${fmtNum(prev.rev)}</div>
-          ${pctDelta(cur.rev,prev.rev)}
-        </div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">${w.label}</div>
-      </div>
-      <div style="border-top:1px solid var(--border);padding-top:8px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">&#128230; Orders</div>
-        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-          <div style="font-size:22px;font-weight:800;color:var(--text)">${cur.count}</div>
-          <div style="font-size:11px;color:var(--text3)">vs ${prev.count}</div>
-          ${pctDelta(cur.count,prev.count)}
-        </div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">${w.label} vs ${w.prevLabel}</div>
-      </div>
-    </div>`;
-}
-
-function buildAreaTableWidget(cur, prev, w) {
-  const el = document.getElementById('dash-area-table'); if (!el) return;
-  const groupOrder=['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
-  const extra=[...new Set([...Object.keys(cur.byArea),...Object.keys(prev.byArea)])].filter(a=>!groupOrder.includes(a)&&a!=='—');
-  const ordered=[...groupOrder,...extra];
-  const rows = ordered.map(a => {
-    const c=cur.byArea[a]||0, p=prev.byArea[a]||0, mx=Math.max(c,p,1);
-    return `<div style="display:grid;grid-template-columns:52px 1fr 44px 1fr 44px 60px;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(45,50,72,0.4)">
-      <span class="area-tag" style="text-align:center">${a}</span>
-      <div style="background:var(--cream2);border-radius:3px;height:14px;overflow:hidden"><div style="height:100%;width:${c/mx*100}%;background:var(--accent);border-radius:3px"></div></div>
-      <span style="font-size:12px;font-weight:700;color:var(--gold-dark);text-align:right">${c}</span>
-      <div style="background:var(--cream2);border-radius:3px;height:14px;overflow:hidden"><div style="height:100%;width:${p/mx*100}%;background:var(--text3);border-radius:3px"></div></div>
-      <span style="font-size:12px;font-weight:600;color:var(--text3);text-align:right">${p}</span>
-      <div style="text-align:right">${pctDelta(c,p)}</div>
-    </div>`;
-  }).join('');
-  el.innerHTML = `
-    <div style="display:flex;gap:16px;font-size:10px;color:var(--text3);margin-bottom:8px">
-      <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:2px;margin-right:4px"></span>${w.label}</span>
-      <span><span style="display:inline-block;width:8px;height:8px;background:var(--text3);border-radius:2px;margin-right:4px"></span>${w.prevLabel}</span>
-    </div>
-    ${rows||'<p style="color:var(--text3);font-size:12px">No data.</p>'}`;
-}
-
-
-function buildUpcomingCalWidget() {
-  const el = document.getElementById('dash-w-calendar');
-  if (!el) return;
-
-  try {
-    const todayD = new Date(); todayD.setHours(0,0,0,0);
-    const todayStr = calYMD(todayD);
-    const in30D = new Date(todayD); in30D.setDate(in30D.getDate() + 30);
-    const in30Str = calYMD(in30D);
-
-    // Expand recurring events for next 30 days
-    const events = getExpandedEvents(todayD, in30D)
-      .filter(e => e.startDate >= todayStr && e.startDate <= in30Str)
-      .sort((a,b) => a.startDate.localeCompare(b.startDate) || (a.startTime||'').localeCompare(b.startTime||''));
-
-    if (!events.length) {
-      el.innerHTML = `<div style="text-align:center;padding:28px 0;color:var(--text3);font-size:13px">
-        No upcoming events in the next 30 days
-        <br><button onclick="showPage('calendar')" class="btn btn-sm btn-secondary" style="margin-top:10px;font-size:12px">📅 Open Calendar</button>
-      </div>`;
-      return;
-    }
-
-    // Group by date (show max 10 dates)
-    const groups = {};
-    events.forEach(e => { if (!groups[e.startDate]) groups[e.startDate] = []; groups[e.startDate].push(e); });
-    const tomorrowStr = calYMD(new Date(todayD.getTime() + 86400000));
-
-    const rows = Object.keys(groups).slice(0,10).map(ds => {
-      const evs = groups[ds];
-      const d = new Date(ds + 'T00:00:00');
-      const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
-      const monthAb = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
-      const label = ds===todayStr ? 'Today' : ds===tomorrowStr ? 'Tmrw' : dayName;
-      const isToday = ds === todayStr;
-
-      const evHtml = evs.map(e => {
-        const cat = CAL_CATS[e.category] || CAL_CATS.general;
-        const t = e.startTime ? ` <span style="color:var(--text3);font-size:11px">${e.startTime}</span>` : '';
-        return `<div onclick="showPage('calendar')" style="display:flex;align-items:center;gap:8px;padding:5px 8px;margin-bottom:4px;border-radius:6px;border-left:3px solid ${cat.color};background:${cat.color}12;cursor:pointer">
-          <div style="flex:1;font-size:12px;font-weight:600">${esc(e.title)}${t}</div>
-          <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${cat.color}22;color:${cat.color};font-weight:600">${cat.label}</span>
-        </div>`;
-      }).join('');
-
-      return `<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="width:40px;text-align:center;flex-shrink:0">
-          <div style="font-size:10px;font-weight:700;color:${isToday?'var(--gold)':'var(--text3)'}">${label}</div>
-          <div style="font-size:22px;font-weight:800;line-height:1.1;color:${isToday?'var(--gold)':'var(--text)'}">${d.getDate()}</div>
-          <div style="font-size:10px;color:var(--text3)">${monthAb}</div>
-        </div>
-        <div style="flex:1;padding-top:2px">${evHtml}</div>
-      </div>`;
-    }).join('');
-
-    el.innerHTML = `<div style="margin:-14px;padding:0 14px">
-      ${rows}
-      <div style="padding:12px 0"><button onclick="showPage('calendar')" class="btn btn-sm btn-secondary" style="font-size:12px;width:100%">📅  Open Full Calendar →</button></div>
-    </div>`;
-  } catch(err) {
-    el.innerHTML = `<div style="color:var(--text3);font-size:12px;padding:12px">
-      Error loading events. <button onclick="showPage('calendar')" class="btn btn-sm btn-secondary" style="font-size:11px">Open Calendar</button>
-    </div>`;
-  }
-}
-
 function renderDashboard() {
   updateDashWindow();
   const base = DB.orders.filter(o => o.status !== 'cancelled');
-  const w    = periodWindow();
-  const cur  = periodStats(base, w.pStart, w.pEnd);
+  const w = periodWindow();
+
+  const cur = periodStats(base, w.pStart, w.pEnd);
   const prev = periodStats(base, w.prevStart, w.prevEnd);
-  const periodFiltered = base.filter(o => o.orderDate && o.orderDate >= w.pStart && o.orderDate <= w.pEnd);
 
-  renderDashWidgets();           // build widget shells (idempotent via innerHTML)
+  // ── Area comparison rows ──
+  const AREAS = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
+  // Always show all CA areas (even with 0 orders), plus any extra areas that have data
+  const extraAreas = [...new Set([...Object.keys(cur.byArea), ...Object.keys(prev.byArea)])]
+                     .filter(a => !AREAS.includes(a) && a !== '—');
+  const orderedAreas = [...AREAS, ...extraAreas];
 
-  buildStatusPipeline(base);     // ① Order Status Pipeline
-  buildClaimsPipeline(base);     // ② Claims Financial Pipeline
-  buildMonthlyTarget(base);      // ⑤ Monthly Target
-  buildCompareWidget(cur,prev,w);// Period Revenue/Orders comparison
-  buildAreaTableWidget(cur,prev,w,periodFiltered); // Area table
-  buildRevenueChart(periodFiltered);
-  buildAreaChart(periodFiltered);
+  const areaRows = orderedAreas.map(a => {
+    const c = cur.byArea[a] || 0, p = prev.byArea[a] || 0;
+    const maxV = Math.max(c, p, 1);
+    return `
+      <div style="display:grid;grid-template-columns:52px 1fr 60px 1fr 60px 70px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(45,50,72,0.5)">
+        <span class="area-tag" style="text-align:center">${a}</span>
+        <div style="background:var(--cream2);border-radius:4px;height:18px;overflow:hidden"><div style="height:100%;width:${c/maxV*100}%;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:5px;min-width:fit-content"><span style="font-size:10px;font-weight:700;color:#fff">${c||''}</span></div></div>
+        <span style="font-size:12px;font-weight:700;color:var(--gold-dark);text-align:right">${c}</span>
+        <div style="background:var(--cream2);border-radius:4px;height:18px;overflow:hidden"><div style="height:100%;width:${p/maxV*100}%;background:var(--text3);border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:5px;min-width:fit-content"><span style="font-size:10px;font-weight:700;color:#fff">${p||''}</span></div></div>
+        <span style="font-size:12px;font-weight:600;color:var(--text3);text-align:right">${p}</span>
+        <div style="text-align:right">${pctDelta(c, p)}</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('dash-compare').innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">
+      &#128197; ${w.label} (${fmtDate(w.pStart)} – ${fmtDate(w.pEnd)}) &nbsp;vs&nbsp; ${w.prevLabel}
+    </div>
+
+    <!-- Row 1: Revenue + Order count comparison -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="stat-card">
+        <div class="stat-label">&#128176; Revenue</div>
+        <div style="display:flex;align-items:baseline;gap:14px;margin-top:6px">
+          <div>
+            <div class="stat-value stat-blue" style="font-size:30px">$${fmtNum(cur.rev)}</div>
+            <div class="stat-sub">${w.label}</div>
+          </div>
+          <div style="font-size:18px;color:var(--text3)">vs</div>
+          <div>
+            <div style="font-size:22px;font-weight:700;color:var(--text3)">$${fmtNum(prev.rev)}</div>
+            <div class="stat-sub">${w.prevLabel}</div>
+          </div>
+          <div style="margin-left:auto;font-size:16px">${pctDelta(cur.rev, prev.rev)}</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">&#128230; Orders</div>
+        <div style="display:flex;align-items:baseline;gap:14px;margin-top:6px">
+          <div>
+            <div class="stat-value" style="font-size:30px">${cur.count}</div>
+            <div class="stat-sub">${w.label}</div>
+          </div>
+          <div style="font-size:18px;color:var(--text3)">vs</div>
+          <div>
+            <div style="font-size:22px;font-weight:700;color:var(--text3)">${prev.count}</div>
+            <div class="stat-sub">${w.prevLabel}</div>
+          </div>
+          <div style="margin-left:auto;font-size:16px">${pctDelta(cur.count, prev.count)}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: Area comparison -->
+    <div class="card" style="margin-bottom:24px">
+      <div class="card-header">
+        <h3>&#128205; Orders by Area</h3>
+        <div style="display:flex;gap:16px;font-size:11px;color:var(--text3)">
+          <span><span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:2px;margin-right:5px"></span>${w.label}</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:var(--text3);border-radius:2px;margin-right:5px"></span>${w.prevLabel}</span>
+        </div>
+      </div>
+      <div class="card-body" style="padding:10px 20px">
+        ${areaRows || '<p style="color:var(--text3);font-size:13px;padding:10px 0">No orders in this period.</p>'}
+      </div>
+    </div>`;
+
+  buildRevenueChart(base.filter(o => o.orderDate && o.orderDate >= w.pStart && o.orderDate <= w.pEnd));
+  buildAreaChart(base.filter(o => o.orderDate && o.orderDate >= w.pStart && o.orderDate <= w.pEnd));
+  buildIssuesChart(base);
   buildSubbiesDashSection(base);
-  buildUpcomingCalWidget();
 }
 
 function buildSubbiesDashSection(orders) {
-  const el = document.getElementById('dash-w-subbies'); if (!el) return;
+  const existing = document.getElementById('dash-subbies-section');
+  if (existing) existing.remove();
+
   const names = TRACKED_SUBBIES;
+  const section = document.createElement('div');
+  section.id = 'dash-subbies-section';
+  section.style.marginTop = '24px';
+
   const rows = names.map(name => {
     const mine = orders.filter(o => o.subbies === name && o.status !== 'cancelled');
     const unpaid = mine.filter(o => o.subbiePaid !== 'Y');
@@ -5159,8 +4287,8 @@ function buildSubbiesDashSection(orders) {
     const paidAmt   = paid.reduce((s,o)=> s + (getSubbiePrice(o) || 0), 0);
     const pct = mine.length ? Math.round(paid.length/mine.length*100) : 0;
     return `
-      <div style="display:flex;align-items:center;gap:12px;padding:7px 14px;border-bottom:1px solid var(--border)">
-        <div style="width:28px;height:28px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;flex-shrink:0">${esc(name[0])}</div>
+      <div style="display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--border)">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff;flex-shrink:0">${esc(name[0])}</div>
         <div style="flex:1">
           <div style="font-weight:700;font-size:13px;margin-bottom:4px">${esc(name)}</div>
           <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
@@ -5175,7 +4303,15 @@ function buildSubbiesDashSection(orders) {
         <button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="showPage('subbies')">View →</button>
       </div>`;
   }).join('');
-  el.innerHTML = `<div style="margin:-14px">${rows}</div>`;
+
+  section.innerHTML = `
+    <div class="card">
+      <div class="card-header"><h3>&#128104;&#8205;&#128292; Subbie Payment Summary</h3></div>
+      <div class="card-body" style="padding:0">${rows}</div>
+    </div>`;
+
+  const chartsGrid = document.querySelector('.charts-grid');
+  if (chartsGrid) chartsGrid.parentNode.insertBefore(section, chartsGrid);
 }
 
 function groupByPeriod(orders, period) {
@@ -5240,54 +4376,12 @@ function buildAreaChart(orders) {
   const groups = {};
   orders.forEach(o => { if (o.area) groups[o.area] = (groups[o.area] || 0) + (o.amount || 0); });
   const sorted = Object.entries(groups).sort((a, b) => b[1] - a[1]).slice(0, 10);
-
-  const barLabelsPlugin = {
-    id: 'barLabels',
-    afterDatasetsDraw(chart) {
-      const { ctx } = chart;
-      chart.data.datasets.forEach((ds, i) => {
-        chart.getDatasetMeta(i).data.forEach((bar, idx) => {
-          const val = ds.data[idx];
-          if (!val) return;
-          ctx.save();
-          ctx.font = 'bold 10px sans-serif';
-          ctx.fillStyle = 'rgba(255,255,255,0.92)';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText('$' + fmtNum(val), bar.x, bar.base - 5);
-          ctx.restore();
-        });
-      });
-    }
-  };
-
-  if (charts['chart-area']) { charts['chart-area'].destroy(); }
-  const ctx = document.getElementById('chart-area');
-  if (!ctx) return;
-  charts['chart-area'] = new Chart(ctx, {
-    type: 'bar',
-    plugins: [barLabelsPlugin],
-    data: {
-      labels: sorted.map(x => x[0]),
-      datasets: [{
-        label: 'Revenue by Area',
-        data: sorted.map(x => x[1]),
-        backgroundColor: 'rgba(124,92,191,0.72)',
-        borderRadius: 4,
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: '#8b90a7', font: { size: 11 } } },
-        tooltip: { callbacks: { label: c => ' $' + fmtNum(c.parsed.y) } }
-      },
-      scales: {
-        x: { ticks: { color: '#5a5f76', font: { size: 10 } }, grid: { color: '#2d3248' } },
-        y: { ticks: { color: '#5a5f76', font: { size: 10 }, callback: v => '$' + fmtNum(v) }, grid: { color: '#2d3248' } },
-      }
-    }
-  });
+  buildChart('chart-area', 'bar', sorted.map(x => x[0]), [{
+    label: 'Revenue by Area',
+    data: sorted.map(x => x[1]),
+    backgroundColor: 'rgba(124,92,191,0.6)',
+    borderRadius: 4,
+  }]);
 }
 
 function buildIssuesChart(orders) {
@@ -5315,48 +4409,10 @@ function updateAreaFilter() {
   sel.innerHTML = '<option value="">All Areas</option>' + areas.map(a => `<option ${a === cur ? 'selected' : ''}>${a}</option>`).join('');
 }
 
-// CA area → Homes NSW HP Central team email
-const CA_CC_EMAIL = {
-  CA1:  'HomesNSW-HP-Centralca1@homes.nsw.gov.au',
-  CA2:  'HomesNSW-HP-Centralca2@homes.nsw.gov.au',
-  CA3:  'HomesNSW-HP-Centralca3@homes.nsw.gov.au',
-  CA4:  'HomesNSW-HP-Centralca4@homes.nsw.gov.au',
-  CA9:  'HomesNSW-HP-Centralca9@homes.nsw.gov.au',
-  CA10: 'HomesNSW-HP-Centralca10@homes.nsw.gov.au',
-  CA11: 'HomesNSW-HP-Centralca11@homes.nsw.gov.au',
-};
-
-// Returns supervisor name as a mailto link.
-// CC is based on the supervisor's own group (from Supervisors page), not the order area.
-function supervisorLink(name, _unused) {
-  if (!name) return '';
-  const sups = loadSupervisors();
-  const sup = sups.find(s => s.name === name);
-  if (sup && sup.email) {
-    const ccEmail = CA_CC_EMAIL[sup.group] || '';
-    const cc     = ccEmail ? `?cc=${encodeURIComponent(ccEmail)}` : '';
-    const tipCc  = ccEmail ? ` | CC: ${ccEmail}` : '';
-    return `<a href="mailto:${esc(sup.email)}${cc}" title="Email ${esc(name)} (${esc(sup.email)}${tipCc})"
-      style="color:var(--text3);font-size:11px;text-decoration:none"
-      onmouseover="this.style.color='var(--accent)';this.style.textDecoration='underline'"
-      onmouseout="this.style.color='var(--text3)';this.style.textDecoration='none'">
-      👤 ${esc(name)}</a>`;
-  }
-  return `<span style="color:var(--text3);font-size:11px">👤 ${esc(name)}</span>`;
-}
-
 function updateSubbiesDatalist() {
   const dl = document.getElementById('subbies-datalist');
   if (!dl) return;
   dl.innerHTML = DB.subbies.map(n => `<option value="${esc(n)}">`).join('');
-}
-
-function updateSupervisorDatalist() {
-  const dl = document.getElementById('supervisor-datalist');
-  if (!dl) return;
-  const sups = loadSupervisors();
-  dl.innerHTML = sups.map(s => `<option value="${esc(s.name||'')}">`)
-    .join('');
 }
 
 function updateMonthFilter() {
@@ -5432,7 +4488,7 @@ function updateSidebar() {
   // Unpaid by HomesNSW: only orders still awaiting client payment
   // = Orders (active) + Completed + Claim. Excludes Closed, Issues, Cancelled.
   const homesUnpaid = DB.orders
-    .filter(o => o.status === 'claim')
+    .filter(o => ['active','completed','claim'].includes(o.status || 'active'))
     .reduce((s, o) => s + (o.amount || 0), 0);
 
   const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
@@ -5822,42 +4878,30 @@ function openEmailImport() {
   openModal('email-modal');
 }
 
-function initApp() {
-  applyUiLabels();
-  applyUiColors();
-  showPage('dashboard');
-  updateSidebar();
-  updateCalBadge();
-  renderCloudStatus();
-  if (CLOUD.enabled && CLOUD.url) startCloudSync();
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && CLOUD.enabled && CLOUD.url) cloudPull(true);
-  });
-}
 
 // ══════════════════════════════════════════════
 // MOBILE SUPPORT
 // ══════════════════════════════════════════════
+
 function isMob() { return window.innerWidth <= 768; }
 
 const _MOB_STATUS_COLOR = {
   active:'#4f7ef8', completed:'#2ecc71', claim:'#f39c12',
   closed:'#8b90a7', issue:'#e74c3c', cancelled:'#aaa'
 };
+const _MOB_STATUS_LABEL = {
+  active:'Active', completed:'Done', claim:'Claim',
+  closed:'Closed', issue:'Issue', cancelled:'Cancelled'
+};
 
 let _mobSearchVal = '';
 
 function mobSearch(val) {
-  _mobSearchVal = (val||'').toLowerCase().trim();
-  // sync to desktop search box too for the current page
-  const deskSearch = document.getElementById('search-orders') ||
-                     document.getElementById('search-all') ||
-                     document.getElementById('search-completed') ||
-                     document.getElementById('search-claims');
-  if (deskSearch) { deskSearch.value = val; }
-  // re-render current page
-  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted,
-    claims:renderClaims, closed:renderClosed, issues:renderIssues };
+  _mobSearchVal = (val || '').toLowerCase().trim();
+  const renders = {
+    all: renderAll, orders: renderOrders, completed: renderCompleted,
+    claims: renderClaims, closed: renderClosed, issues: renderIssues
+  };
   const fn = renders[currentPage];
   if (fn) fn();
 }
@@ -5865,38 +4909,35 @@ function mobSearch(val) {
 function renderMobCards(containerId, orders) {
   const el = document.getElementById(containerId);
   if (!el) return;
-  // apply mobile search filter
   let list = orders;
   if (_mobSearchVal) {
     list = orders.filter(o =>
-      (o.orderNumber||'').toLowerCase().includes(_mobSearchVal) ||
-      (o.address||'').toLowerCase().includes(_mobSearchVal) ||
-      (o.subbies||'').toLowerCase().includes(_mobSearchVal) ||
-      (o.area||'').toLowerCase().includes(_mobSearchVal) ||
-      (o.sorCode||'').toLowerCase().includes(_mobSearchVal) ||
-      (o.prn||'').toLowerCase().includes(_mobSearchVal)
+      (o.orderNumber || '').toLowerCase().includes(_mobSearchVal) ||
+      (o.address || '').toLowerCase().includes(_mobSearchVal) ||
+      (o.subbies || '').toLowerCase().includes(_mobSearchVal) ||
+      (o.area || '').toLowerCase().includes(_mobSearchVal) ||
+      (o.sorCode || '').toLowerCase().includes(_mobSearchVal)
     );
   }
   if (!list.length) {
-    el.innerHTML = '<div style="text-align:center;padding:32px 0;color:var(--text3);font-size:13px">' +
-      (_mobSearchVal ? 'No results for "' + esc(_mobSearchVal) + '"' : 'No orders') + '</div>';
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No orders found</div>';
     return;
   }
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   el.innerHTML = list.map(o => {
     const st = o.status || 'active';
     const col = _MOB_STATUS_COLOR[st] || '#4f7ef8';
-    const stLabel = st.charAt(0).toUpperCase() + st.slice(1);
-    const subBg = o.subbies ? getSubbieStyle(o.subbies) : '';
-    const meta = [o.subbies, o.area, o.sorCode].filter(Boolean).join(' · ');
-    return `<div class="mob-card" onclick="openOrderModal('${o.id}')" style="border-left-color:${col};${subBg}">
+    const stLabel = _MOB_STATUS_LABEL[st] || st;
+    const meta = [o.area, o.subbies].filter(Boolean).join(' · ');
+    return `<div class="mob-card" onclick="openOrderModal('${o.id}')" style="border-left-color:${col}">
       <div class="mob-card-top">
-        <span class="mob-card-no">${esc(o.orderNumber||'—')}</span>
+        <span class="mob-card-no">${esc(o.orderNumber || '—')}</span>
         <span class="mob-card-st" style="background:${col}22;color:${col}">${stLabel}</span>
       </div>
-      <div class="mob-card-addr">${esc(o.address||'—')}</div>
+      <div class="mob-card-addr">${esc(o.address || '—')}</div>
       <div class="mob-card-bot">
         <span class="mob-card-meta">${esc(meta)}</span>
-        <span class="mob-card-amt">$${Number(o.amount||0).toFixed(2)}</span>
+        <span class="mob-card-amt">$${Number(o.amount || 0).toFixed(2)}</span>
       </div>
     </div>`;
   }).join('');
@@ -5904,21 +4945,18 @@ function renderMobCards(containerId, orders) {
 
 function mobApply(tableWrapSelector, cardContainerId, orders) {
   if (!isMob()) return;
-  // hide desktop table, show mob cards
   const tw = document.querySelector(tableWrapSelector);
   if (tw) tw.classList.add('mob-hide');
   const mc = document.getElementById(cardContainerId);
-  if (mc) mc.style.display = 'block';
+  if (mc) { mc.style.display = 'block'; }
   renderMobCards(cardContainerId, orders);
 }
 
-// Mobile nav active state
 function updateMobNav(page) {
-  const map = { all:'all', orders:'orders', dashboard:'dashboard', claims:'claims' };
+  const direct = { all:'all', orders:'orders', dashboard:'dashboard', claims:'claims' };
+  const morePages = ['completed','closed','issues','cancelled','subbies','calendar','sor'];
   document.querySelectorAll('.mob-nav-item').forEach(b => b.classList.remove('active'));
-  const key = map[page] || (
-    ['completed','closed','issues','cancelled','subbies','calendar','sor'].includes(page) ? 'more' : null
-  );
+  const key = direct[page] || (morePages.includes(page) ? 'more' : null);
   if (key) {
     const btn = document.getElementById('mobnav-' + key);
     if (btn) btn.classList.add('active');
@@ -5926,14 +4964,15 @@ function updateMobNav(page) {
 }
 
 function mobMenuToggle() {
-  const drawer = document.getElementById('mob-menu-drawer');
+  const drawer  = document.getElementById('mob-menu-drawer');
   const overlay = document.getElementById('mob-menu-overlay');
-  const isOpen = drawer.style.display !== 'none';
-  drawer.style.display = isOpen ? 'none' : 'block';
+  const isOpen  = drawer.style.display !== 'none';
+  drawer.style.display  = isOpen ? 'none' : 'block';
   overlay.style.display = isOpen ? 'none' : 'block';
 }
+
 function mobMenuClose() {
-  document.getElementById('mob-menu-drawer').style.display = 'none';
+  document.getElementById('mob-menu-drawer').style.display  = 'none';
   document.getElementById('mob-menu-overlay').style.display = 'none';
 }
 
@@ -5942,13 +4981,27 @@ let _mobResizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(_mobResizeTimer);
   _mobResizeTimer = setTimeout(() => {
-    const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted,
-      claims:renderClaims, closed:renderClosed, issues:renderIssues };
+    const renders = {
+      all: renderAll, orders: renderOrders, completed: renderCompleted,
+      claims: renderClaims, closed: renderClosed, issues: renderIssues
+    };
     const fn = renders[currentPage];
     if (fn) fn();
   }, 200);
 });
 
+function initApp() {
+  applyUiLabels();
+  applyUiColors();
+  showPage('all');
+  updateSidebar();
+  updateCalBadge();
+  renderCloudStatus();
+  if (CLOUD.enabled && CLOUD.url) startCloudSync();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && CLOUD.enabled && CLOUD.url) cloudPull(true);
+  });
+}
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initApp);
 } else {
@@ -5957,3 +5010,4 @@ if (document.readyState === 'loading') {
 </script>
 </body>
 </html>
+                             
