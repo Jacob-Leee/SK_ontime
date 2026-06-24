@@ -798,7 +798,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           </div>
         </div>
         <!-- Draggable Widget Grid -->
-        <div id="dash-widgets" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start"></div>
+        <div id="dash-widgets" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start"></div>
       </div>
 
       <!-- SOR PAGE -->
@@ -4669,9 +4669,9 @@ function renderDashWidgets() {
     const size   = layout.sizes[id] || def.defaultSize;
     const isFull = size === 'full';
     const bodyContent = id==='revenue'
-      ? `<div class="chart-wrap" style="height:260px"><canvas id="chart-revenue"></canvas></div>`
+      ? `<div class="chart-wrap" style="height:200px"><canvas id="chart-revenue"></canvas></div>`
       : id==='area'
-      ? `<div id="dash-area-table"></div><div class="chart-wrap" style="height:180px;margin-top:10px"><canvas id="chart-area"></canvas></div>`
+      ? `<div id="dash-area-table"></div><div class="chart-wrap" style="height:140px;margin-top:6px"><canvas id="chart-area"></canvas></div>`
       : '';
     return `
     <div class="dash-widget" id="dash-widget-${id}" data-id="${id}"
@@ -4679,7 +4679,7 @@ function renderDashWidgets() {
       draggable="true"
       ondragstart="dashDragStart(event,this)" ondragover="dashDragOver(event,this)"
       ondrop="dashDragDrop(event,this)"       ondragend="dashDragEnd(event)">
-      <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--cream2);cursor:grab;user-select:none" title="Drag to reorder">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--cream2);cursor:grab;user-select:none" title="Drag to reorder">
         <span style="font-size:15px;color:var(--text3)">&#8942;</span>
         <span style="font-size:12px;font-weight:700;color:var(--text);flex:1">${def.label}</span>
         <button onclick="toggleWidgetSize('${id}')" title="${isFull?'Switch to half width':'Switch to full width'}"
@@ -4691,7 +4691,7 @@ function renderDashWidgets() {
           style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px;margin-left:2px"
           onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">&#8963;</button>
       </div>
-      <div id="dash-w-${id}" style="padding:14px">${bodyContent}</div>
+      <div id="dash-w-${id}" style="padding:10px">${bodyContent}</div>
     </div>`;
   }).join('');
 }
@@ -4755,17 +4755,17 @@ function buildStatusPipeline(base) {
       ? base.filter(o=>!o.status||o.status==='active')
       : base.filter(o=>o.status===s.status);
     return `
-      <div onclick="showPage('${s.nav}')" style="cursor:pointer;text-align:center;padding:14px 6px;border-radius:8px;background:var(--cream2);border:2px solid ${s.color}22;transition:all 0.15s"
+      <div onclick="showPage('${s.nav}')" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:8px;background:var(--cream2);border:2px solid ${s.color}22;transition:all 0.15s"
         onmouseover="this.style.background='${s.color}18';this.style.borderColor='${s.color}'"
         onmouseout="this.style.background='var(--cream2)';this.style.borderColor='${s.color}22'">
-        <div style="font-size:22px;margin-bottom:6px">${s.icon}</div>
-        <div style="font-size:24px;font-weight:800;color:${s.color}">${arr.length}</div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin:3px 0;text-transform:uppercase;letter-spacing:0.5px">${s.label}</div>
-        <div style="font-size:11px;color:var(--text2);font-weight:600">$${fmtNum(sumAmt(arr))}</div>
+        <div style="font-size:16px;margin-bottom:3px">${s.icon}</div>
+        <div style="font-size:22px;font-weight:800;color:${s.color};line-height:1">${arr.length}</div>
+        <div style="font-size:9px;font-weight:700;color:var(--text3);margin:2px 0;text-transform:uppercase;letter-spacing:0.5px">${s.label}</div>
+        <div style="font-size:10px;color:var(--text2);font-weight:600">$${fmtNum(sumAmt(arr))}</div>
       </div>`;
   }).join('');
   el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">${cards}</div>
-    <div style="margin-top:8px;text-align:right;font-size:10px;color:var(--text3)">Click to navigate &nbsp;&#183;&nbsp; Excludes cancelled</div>`;
+    <div style="margin-top:4px;text-align:right;font-size:9px;color:var(--text3)">Click to navigate · Excludes cancelled</div>`;
 }
 
 function buildClaimsPipeline(base) {
@@ -4791,14 +4791,14 @@ function buildClaimsPipeline(base) {
     { label:'Submitted — Awaiting',  sub:'Claimed, payment pending', count:pending.length,   amt:pendingAmt,   color:'#f39c12', icon:'&#9203;'   },
   ];
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:12px">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px">
       ${cols.map(c=>`
-        <div style="padding:14px;border-radius:8px;background:var(--cream2);border-left:4px solid ${c.color}">
-          <div style="font-size:20px;margin-bottom:6px">${c.icon}</div>
-          <div style="font-size:26px;font-weight:800;color:${c.color}">${c.count}</div>
-          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin:3px 0">${c.label}</div>
-          <div style="font-size:10px;color:var(--text3)">${c.sub}</div>
-          <div style="font-size:15px;font-weight:700;color:var(--text);margin-top:8px">$${fmtNum(c.amt)}</div>
+        <div style="padding:8px 10px;border-radius:8px;background:var(--cream2);border-left:4px solid ${c.color}">
+          <div style="font-size:14px;margin-bottom:3px">${c.icon}</div>
+          <div style="font-size:22px;font-weight:800;color:${c.color};line-height:1">${c.count}</div>
+          <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin:2px 0">${c.label}</div>
+          <div style="font-size:9px;color:var(--text3)">${c.sub}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-top:5px">$${fmtNum(c.amt)}</div>
         </div>`).join('')}
     </div>
     <div style="padding:10px 14px;border-radius:6px;background:rgba(231,76,60,0.07);border:1px solid rgba(231,76,60,0.18);display:flex;align-items:center;justify-content:space-between">
@@ -4821,12 +4821,12 @@ function buildMonthlyTarget(base) {
   const expPct = Math.round(dayOf/daysInMonth*100);
   const onTrack = pct >= expPct;
   el.innerHTML = `
-    <div style="text-align:center;padding:6px 0 14px">
+    <div style="text-align:center;padding:2px 0 8px">
       <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">
         ${now.toLocaleString('en-AU',{month:'long'})} ${now.getFullYear()}
       </div>
-      <div style="font-size:46px;font-weight:800;color:${col};line-height:1">${count}</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:4px">of <strong style="color:var(--text)">${target}</strong> target</div>
+      <div style="font-size:38px;font-weight:800;color:${col};line-height:1">${count}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">of <strong style="color:var(--text)">${target}</strong> target</div>
     </div>
     <div>
       <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:11px;color:var(--text3)">
@@ -4845,20 +4845,20 @@ function buildMonthlyTarget(base) {
 function buildCompareWidget(cur, prev, w) {
   const el = document.getElementById('dash-w-compare'); if (!el) return;
   el.innerHTML = `
-    <div style="display:grid;gap:14px">
+    <div style="display:grid;gap:8px">
       <div>
         <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">&#128176; Revenue</div>
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-          <div style="font-size:26px;font-weight:800;color:var(--accent)">$${fmtNum(cur.rev)}</div>
+          <div style="font-size:22px;font-weight:800;color:var(--accent)">$${fmtNum(cur.rev)}</div>
           <div style="font-size:11px;color:var(--text3)">vs $${fmtNum(prev.rev)}</div>
           ${pctDelta(cur.rev,prev.rev)}
         </div>
         <div style="font-size:10px;color:var(--text3);margin-top:2px">${w.label}</div>
       </div>
-      <div style="border-top:1px solid var(--border);padding-top:12px">
+      <div style="border-top:1px solid var(--border);padding-top:8px">
         <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">&#128230; Orders</div>
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-          <div style="font-size:26px;font-weight:800;color:var(--text)">${cur.count}</div>
+          <div style="font-size:22px;font-weight:800;color:var(--text)">${cur.count}</div>
           <div style="font-size:11px;color:var(--text3)">vs ${prev.count}</div>
           ${pctDelta(cur.count,prev.count)}
         </div>
@@ -4990,8 +4990,8 @@ function buildSubbiesDashSection(orders) {
     const paidAmt   = paid.reduce((s,o)=> s + (getSubbiePrice(o) || 0), 0);
     const pct = mine.length ? Math.round(paid.length/mine.length*100) : 0;
     return `
-      <div style="display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--border)">
-        <div style="width:34px;height:34px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff;flex-shrink:0">${esc(name[0])}</div>
+      <div style="display:flex;align-items:center;gap:12px;padding:7px 14px;border-bottom:1px solid var(--border)">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;flex-shrink:0">${esc(name[0])}</div>
         <div style="flex:1">
           <div style="font-weight:700;font-size:13px;margin-bottom:4px">${esc(name)}</div>
           <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
