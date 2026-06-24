@@ -300,21 +300,39 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 .mob-menu-link:hover { background: rgba(255,255,255,0.05); }
 .mob-menu-title { padding: 12px 20px 6px; font-size: 10px; color: #6b7280; font-weight: 700; letter-spacing: 1px; }
 
-.mob-cards { display: none; padding: 6px 8px 8px; }
+.mob-cards { display: none; padding: 4px 6px 6px; }
 .mob-card {
-  background: var(--surface); border-radius: 8px; padding: 9px 11px;
-  margin-bottom: 6px; border-left: 3px solid #4f7ef8; cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  background: var(--surface); border-radius: 7px; padding: 7px 10px;
+  margin-bottom: 4px; border-left: 3px solid #4f7ef8; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
 }
 .mob-card-top  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
-.mob-card-no   { font-size: 12px; font-weight: 700; color: var(--text); }
+.mob-card-no   { font-size: 11px; font-weight: 700; color: var(--text); }
 .mob-card-st   { font-size: 10px; padding: 1px 7px; border-radius: 8px; font-weight: 700; }
-.mob-card-addr { font-size: 11px; color: var(--text2); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mob-card-addr { font-size: 10px; color: var(--text2); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mob-card-bot  { display: flex; justify-content: space-between; align-items: center; }
 .mob-card-meta { font-size: 10px; color: var(--text3); }
-.mob-card-amt  { font-size: 12px; font-weight: 700; color: var(--gold-dark); }
+.mob-card-amt  { font-size: 10px; font-weight: 600; color: var(--gold-dark); }
+
+/* mobile view sheet */
+#mob-view-sheet {
+  display: none; position: fixed; bottom: 0; left: 0; right: 0;
+  z-index: 400; background: var(--surface);
+  border-radius: 14px 14px 0 0;
+  padding: 16px 16px 24px;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.3);
+  max-height: 70dvh; overflow-y: auto;
+}
+.mvs-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.mvs-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+.mvs-val   { font-size: 13px; color: var(--text); font-weight: 500; }
+.mvs-val.big { font-size: 16px; font-weight: 700; }
+.mvs-field { margin-bottom: 10px; }
+.mvs-divider { height: 1px; background: var(--border); margin: 10px 0; }
 
 @media (max-width: 768px) {
+  /* hide desktop top bar, keep DCJ portal in mob-header */
+  #header { display: none !important; }
   #mob-header { display: flex !important; }
   #mob-nav    { display: flex !important; }
   #sidebar    { display: none !important; }
@@ -340,6 +358,11 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 <!-- ══ MOBILE HEADER ══ -->
 <div id="mob-header">
   <div class="mob-logo">SK ONTIME</div>
+  <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" style="text-decoration:none;font-size:10px;color:var(--gold-dark);white-space:nowrap;padding:3px 7px;border:1px solid rgba(79,126,248,0.35);border-radius:10px;font-weight:600">DCJ</a>
+  <div onclick="openCloudModal()" style="display:flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border:1px solid rgba(255,255,255,0.1);border-radius:10px">
+    <span id="mob-cloud-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
+    <span style="font-size:10px;color:var(--text3);font-weight:600">Sync</span>
+  </div>
   <div id="mob-search-wrap">
     <span class="mob-search-icon">🔍</span>
     <input id="mob-search" type="text" placeholder="Order#, address, subbie..." oninput="mobSearch(this.value)" autocomplete="off" />
@@ -1779,6 +1802,8 @@ function renderCloudStatus(msg) {
   if (dot) dot.style.background = color;
   const dot2 = document.getElementById('cloud-dot-2');
   if (dot2) dot2.style.background = color;
+  const mobDot = document.getElementById('mob-cloud-dot');
+  if (mobDot) mobDot.style.background = color;
 }
 
 // ============================================================
@@ -4883,6 +4908,51 @@ function openEmailImport() {
 // MOBILE SUPPORT
 // ══════════════════════════════════════════════
 
+
+// ── Mobile view card (tap → view, not edit) ──
+let _mobViewId = null;
+const _MOB_STATUS_LABEL_FULL = {
+  active:'Active', completed:'Completed', claim:'Claim',
+  closed:'Closed', issue:'Issue', cancelled:'Cancelled'
+};
+function mobViewCard(id) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o) return;
+  _mobViewId = id;
+  const st  = o.status || 'active';
+  const col = _MOB_STATUS_COLOR[st] || '#4f7ef8';
+  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  document.getElementById('mvs-orderno').textContent = o.orderNumber || '—';
+  const badge = document.getElementById('mvs-badge');
+  badge.textContent = _MOB_STATUS_LABEL_FULL[st] || st;
+  badge.style.background = col + '22';
+  badge.style.color = col;
+  document.getElementById('mvs-addr').textContent  = o.address  || '—';
+  document.getElementById('mvs-area').textContent  = o.area     || '—';
+  document.getElementById('mvs-sor').textContent   = o.sorCode  || '—';
+  document.getElementById('mvs-amt').textContent   = '$' + Number(o.amount||0).toFixed(2);
+  document.getElementById('mvs-date').textContent  = o.orderDate || '—';
+  document.getElementById('mvs-sub').textContent   = o.subbies  || '—';
+  const notesWrap = document.getElementById('mvs-notes-wrap');
+  if (o.notes) {
+    document.getElementById('mvs-notes').textContent = o.notes;
+    notesWrap.style.display = 'block';
+  } else {
+    notesWrap.style.display = 'none';
+  }
+  document.getElementById('mob-view-overlay').style.display = 'block';
+  document.getElementById('mob-view-sheet').style.display   = 'block';
+}
+function mobViewClose() {
+  document.getElementById('mob-view-overlay').style.display = 'none';
+  document.getElementById('mob-view-sheet').style.display   = 'none';
+  _mobViewId = null;
+}
+function mobViewEdit() {
+  const id = _mobViewId;
+  mobViewClose();
+  if (id) openOrderModal(id);
+}
 function isMob() { return window.innerWidth <= 768; }
 
 const _MOB_STATUS_COLOR = {
@@ -4929,7 +4999,7 @@ function renderMobCards(containerId, orders) {
     const col = _MOB_STATUS_COLOR[st] || '#4f7ef8';
     const stLabel = _MOB_STATUS_LABEL[st] || st;
     const meta = [o.area, o.subbies].filter(Boolean).join(' · ');
-    return `<div class="mob-card" onclick="openOrderModal('${o.id}')" style="border-left-color:${col}">
+    return `<div class="mob-card" onclick="mobViewCard('${o.id}')" style="border-left-color:${col}">
       <div class="mob-card-top">
         <span class="mob-card-no">${esc(o.orderNumber || '—')}</span>
         <span class="mob-card-st" style="background:${col}22;color:${col}">${stLabel}</span>
@@ -5008,6 +5078,35 @@ if (document.readyState === 'loading') {
   initApp();
 }
 </script>
+
+<!-- ══ MOBILE VIEW SHEET ══ -->
+<div id="mob-view-overlay" onclick="mobViewClose()" style="display:none;position:fixed;inset:0;z-index:399;background:rgba(0,0,0,0.4)"></div>
+<div id="mob-view-sheet">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div>
+      <div class="mvs-label">Order</div>
+      <div class="mvs-val big" id="mvs-orderno">—</div>
+    </div>
+    <span id="mvs-badge" style="font-size:11px;padding:3px 10px;border-radius:10px;font-weight:700">—</span>
+  </div>
+  <div class="mvs-divider"></div>
+  <div class="mvs-field"><div class="mvs-label">Address</div><div class="mvs-val" id="mvs-addr">—</div></div>
+  <div style="display:flex;gap:16px">
+    <div class="mvs-field" style="flex:1"><div class="mvs-label">Area</div><div class="mvs-val" id="mvs-area">—</div></div>
+    <div class="mvs-field" style="flex:1"><div class="mvs-label">SOR Code</div><div class="mvs-val" id="mvs-sor">—</div></div>
+  </div>
+  <div style="display:flex;gap:16px">
+    <div class="mvs-field" style="flex:1"><div class="mvs-label">Amount</div><div class="mvs-val" id="mvs-amt">—</div></div>
+    <div class="mvs-field" style="flex:1"><div class="mvs-label">Order Date</div><div class="mvs-val" id="mvs-date">—</div></div>
+  </div>
+  <div class="mvs-field"><div class="mvs-label">Subbie</div><div class="mvs-val" id="mvs-sub">—</div></div>
+  <div class="mvs-field" id="mvs-notes-wrap" style="display:none"><div class="mvs-label">Notes</div><div class="mvs-val" id="mvs-notes" style="font-size:12px;color:var(--text2)">—</div></div>
+  <div class="mvs-divider"></div>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button onclick="mobViewClose()" style="flex:1;padding:10px;background:var(--cream2);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:13px;cursor:pointer">Close</button>
+    <button onclick="mobViewEdit()" style="flex:2;padding:10px;background:var(--gold);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">✏️ Edit</button>
+  </div>
+</div>
 </body>
 </html>
                              
