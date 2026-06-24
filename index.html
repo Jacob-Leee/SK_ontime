@@ -914,34 +914,30 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
       <!-- DASHBOARD PAGE -->
       <div id="page-dashboard" class="page">
+        <!-- Dashboard Header -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-          <div class="period-tabs">
-            <div class="period-tab active" onclick="setPeriod('day',this)">Daily</div>
-            <div class="period-tab" onclick="setPeriod('week',this)">Weekly</div>
-            <div class="period-tab" onclick="setPeriod('month',this)">Monthly</div>
-            <div class="period-tab" onclick="setPeriod('year',this)">Yearly (FY)</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div class="period-tabs">
+              <div class="period-tab" onclick="setPeriod('day',this)">Daily</div>
+              <div class="period-tab" onclick="setPeriod('week',this)">Weekly</div>
+              <div class="period-tab active" onclick="setPeriod('month',this)">Monthly</div>
+              <div class="period-tab" onclick="setPeriod('year',this)">Yearly (FY)</div>
+            </div>
+            <select class="filter-input" id="dash-window" onchange="renderDashboard()" title="Select specific week / month / financial year"></select>
           </div>
-          <select class="filter-input" id="dash-window" onchange="renderDashboard()" title="Select specific week / month / financial year"></select>
-        </div>
-
-        <!-- Comparison section: This period vs Last year same period -->
-        <div id="dash-compare"></div>
-
-        <!-- Revenue chart -->
-        <div class="charts-grid" style="grid-template-columns:1fr">
-          <div class="chart-card">
-            <div class="chart-title">Revenue Over Time</div>
-            <div class="chart-wrap" style="height:260px"><canvas id="chart-revenue"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-title">Revenue by Area</div>
-            <div class="chart-wrap" style="height:220px"><canvas id="chart-area"></canvas></div>
-          </div>
-          <div class="chart-card">
-            <div class="chart-title">&#9888;&#65039; Open Issues by Area</div>
-            <div class="chart-wrap" style="height:220px"><canvas id="chart-issues"></canvas></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--text3);font-weight:600">Monthly Target:</span>
+            <input id="dash-target-input" type="number" min="1" max="9999"
+              style="width:68px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--cream2);color:var(--text);font-size:12px;font-weight:700;text-align:center"
+              onchange="saveDashTarget(this.value)" title="Set monthly order target">
+            <span style="font-size:11px;color:var(--text3)">orders/mo</span>
+            <button onclick="resetDashLayout()" title="Reset widget layout"
+              style="margin-left:6px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--cream2);color:var(--text3);font-size:11px;cursor:pointer"
+              onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='var(--cream2)'">&#8635; Reset Layout</button>
           </div>
         </div>
+        <!-- Draggable Widget Grid -->
+        <div id="dash-widgets" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start"></div>
       </div>
 
       <!-- SOR PAGE -->
@@ -4083,7 +4079,7 @@ function renderSOR() {
 // ============================================================
 // DASHBOARD
 // ============================================================
-let dashPeriod = 'day';
+let dashPeriod = 'month';
 let charts = {};
 
 function setPeriod(p, el) {
@@ -4208,103 +4204,379 @@ function pctDelta(cur, prev) {
   return `<span style="color:${col};font-size:12px;font-weight:700">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
 }
 
+// ── DASHBOARD LAYOUT ENGINE ──────────────────────────────────
+const DASH_WIDGETS_DEF = [
+  { id:'pipeline', label:'Order Status Pipeline',     defaultSize:'full' },
+  { id:'claims',   label:'Claims Financial Pipeline', defaultSize:'full' },
+  { id:'target',   label:'Monthly Progress',          defaultSize:'half' },
+  { id:'compare',  label:'Period Comparison',         defaultSize:'half' },
+  { id:'area',     label:'Orders by Area',            defaultSize:'full' },
+  { id:'revenue',  label:'Revenue Over Time',         defaultSize:'full' },
+  { id:'subbies',  label:'Subbie Payment Summary',    defaultSize:'full' },
+  { id:'calendar', label:'Upcoming Events',             defaultSize:'half' },
+];
+
+function loadDashLayout() {
+  const defaults = { order: DASH_WIDGETS_DEF.map(w=>w.id), sizes: Object.fromEntries(DASH_WIDGETS_DEF.map(w=>[w.id,w.defaultSize])) };
+  try {
+    const s = JSON.parse(lsGet('hom_dash_layout') || 'null');
+    if (s && s.order && s.sizes) {
+      // Add any new widgets not in the saved layout
+      DASH_WIDGETS_DEF.forEach(w => {
+        if (!s.order.includes(w.id)) s.order.push(w.id);
+        if (!s.sizes[w.id]) s.sizes[w.id] = w.defaultSize;
+      });
+      return s;
+    }
+  } catch(e) {}
+  return defaults;
+}
+function saveDashLayout(layout) { lsSet('hom_dash_layout', JSON.stringify(layout)); }
+function resetDashLayout()      { lsSet('hom_dash_layout', null); renderDashboard(); toast('Layout reset','success'); }
+function saveDashTarget(val)    { const n=parseInt(val,10); if(n>0){lsSet('hom_monthly_target',String(n));renderDashboard();} }
+function loadDashTarget()       { return parseInt(lsGet('hom_monthly_target')||'400',10)||400; }
+
+let _dashDragSrc = null;
+
+function renderDashWidgets() {
+  const layout = loadDashLayout();
+  const container = document.getElementById('dash-widgets');
+  if (!container) return;
+  const tInput = document.getElementById('dash-target-input');
+  // restore collapsed state after render
+  requestAnimationFrame(() => {
+    const layout = loadDashLayout();
+    if (layout.collapsed) {
+      Object.entries(layout.collapsed).forEach(([id, isCollapsed]) => {
+        if (!isCollapsed) return;
+        const body = document.getElementById('dash-w-' + id);
+        const btn  = document.getElementById('dash-collapse-btn-' + id);
+        if (body) body.style.display = 'none';
+        if (btn)  btn.textContent = '⌄';
+      });
+    }
+  });
+  if (tInput) tInput.value = loadDashTarget();
+
+  container.innerHTML = layout.order.map(id => {
+    const def = DASH_WIDGETS_DEF.find(w=>w.id===id);
+    if (!def) return '';
+    const size   = layout.sizes[id] || def.defaultSize;
+    const isFull = size === 'full';
+    const bodyContent = id==='revenue'
+      ? `<div class="chart-wrap" style="height:200px"><canvas id="chart-revenue"></canvas></div>`
+      : id==='area'
+      ? `<div id="dash-area-table"></div><div class="chart-wrap" style="height:140px;margin-top:6px"><canvas id="chart-area"></canvas></div>`
+      : '';
+    return `
+    <div class="dash-widget" id="dash-widget-${id}" data-id="${id}"
+      style="grid-column:span ${isFull?2:1};background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden"
+      draggable="true"
+      ondragstart="dashDragStart(event,this)" ondragover="dashDragOver(event,this)"
+      ondrop="dashDragDrop(event,this)"       ondragend="dashDragEnd(event)">
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--cream2);cursor:grab;user-select:none" title="Drag to reorder">
+        <span style="font-size:15px;color:var(--text3)">&#8942;</span>
+        <span style="font-size:12px;font-weight:700;color:var(--text);flex:1">${def.label}</span>
+        <button onclick="toggleWidgetSize('${id}')" title="${isFull?'Switch to half width':'Switch to full width'}"
+          style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px"
+          onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">
+          ${isFull?'&#8596; Half':'&#8596; Full'}
+        </button>
+        <button onclick="toggleWidgetCollapse('${id}')" id="dash-collapse-btn-${id}" title="Collapse/Expand"
+          style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px;margin-left:2px"
+          onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">&#8963;</button>
+      </div>
+      <div id="dash-w-${id}" style="padding:10px">${bodyContent}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleWidgetCollapse(id) {
+  const body = document.getElementById('dash-w-' + id);
+  const btn  = document.getElementById('dash-collapse-btn-' + id);
+  if (!body) return;
+  const collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  if (btn) btn.textContent = collapsed ? '⌃' : '⌄';
+  // persist collapsed state
+  const layout = loadDashLayout();
+  if (!layout.collapsed) layout.collapsed = {};
+  layout.collapsed[id] = !collapsed;
+  saveDashLayout(layout);
+}
+
+function toggleWidgetSize(id) {
+  const layout = loadDashLayout();
+  layout.sizes[id] = (layout.sizes[id]||'full') === 'full' ? 'half' : 'full';
+  saveDashLayout(layout); renderDashboard();
+}
+function dashDragStart(e,el) {
+  _dashDragSrc = el.dataset.id; e.dataTransfer.effectAllowed='move';
+  setTimeout(()=>{ el.style.opacity='0.45'; },0);
+}
+function dashDragOver(e,el) {
+  e.preventDefault(); e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.dash-widget').forEach(w=>w.style.outline='');
+  if (el.dataset.id!==_dashDragSrc) el.style.outline='2px solid var(--accent)';
+}
+function dashDragDrop(e,el) {
+  e.preventDefault();
+  const to=el.dataset.id; if (!_dashDragSrc||_dashDragSrc===to) return;
+  const layout=loadDashLayout();
+  const fi=layout.order.indexOf(_dashDragSrc), ti=layout.order.indexOf(to);
+  if (fi<0||ti<0) return;
+  layout.order.splice(fi,1); layout.order.splice(ti,0,_dashDragSrc);
+  saveDashLayout(layout); renderDashboard();
+}
+function dashDragEnd(e) {
+  document.querySelectorAll('.dash-widget').forEach(w=>{w.style.opacity='';w.style.outline='';});
+  _dashDragSrc=null;
+}
+
+// ── NEW WIDGET BUILDERS ───────────────────────────────────────
+
+function buildStatusPipeline(base) {
+  const el = document.getElementById('dash-w-pipeline'); if (!el) return;
+  const sumAmt = arr => arr.reduce((s,o)=>s+(o.amount||0),0);
+  const stages = [
+    { label:'Active',     status:'active',    nav:'orders',    icon:'&#128203;', color:'#4f7ef8' },
+    { label:'Completed',  status:'completed', nav:'completed', icon:'&#9989;',   color:'#2ecc71' },
+    { label:'Claimed',    status:'claim',     nav:'claims',    icon:'&#128228;', color:'#f39c12' },
+    { label:'Closed',     status:'closed',    nav:'closed',    icon:'&#128274;', color:'#8b90a7' },
+    { label:'Issues',     status:'issue',     nav:'issues',    icon:'&#9888;',   color:'#e74c3c' },
+  ];
+  const cards = stages.map(s => {
+    const arr = s.status==='active'
+      ? base.filter(o=>!o.status||o.status==='active')
+      : base.filter(o=>o.status===s.status);
+    return `
+      <div onclick="showPage('${s.nav}')" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:8px;background:var(--cream2);border:2px solid ${s.color}22;transition:all 0.15s"
+        onmouseover="this.style.background='${s.color}18';this.style.borderColor='${s.color}'"
+        onmouseout="this.style.background='var(--cream2)';this.style.borderColor='${s.color}22'">
+        <div style="font-size:16px;margin-bottom:3px">${s.icon}</div>
+        <div style="font-size:22px;font-weight:800;color:${s.color};line-height:1">${arr.length}</div>
+        <div style="font-size:9px;font-weight:700;color:var(--text3);margin:2px 0;text-transform:uppercase;letter-spacing:0.5px">${s.label}</div>
+        <div style="font-size:10px;color:var(--text2);font-weight:600">$${fmtNum(sumAmt(arr))}</div>
+      </div>`;
+  }).join('');
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">${cards}</div>
+    <div style="margin-top:4px;text-align:right;font-size:9px;color:var(--text3)">Click to navigate · Excludes cancelled</div>`;
+}
+
+function buildClaimsPipeline(base) {
+  const el = document.getElementById('dash-w-claims'); if (!el) return;
+  // All 'completed' orders = work done, not yet moved to claim status
+  const unclaimed = base.filter(o => o.status === 'completed');
+  const unclaimedAmt = unclaimed.reduce((s,o)=>s+(o.amount||0),0);
+  const pending     = DB.claims.filter(c=>c.status!=='Closed'&&c.status!=='cancelled');
+  const pendingAmt  = pending.reduce((s,c)=>s+(c.amount||0),0);
+  const now=new Date();
+  const mS=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  const mE=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-31`;
+  // paidAt stamped from now on; fallback to updatedAt date for historical records
+  const paidMo  = DB.claims.filter(c=>c.status==='Closed'&&(
+    (c.paidAt&&c.paidAt>=mS&&c.paidAt<=mE) ||
+    (!c.paidAt&&c.closedAt&&c.closedAt>=mS&&c.closedAt<=mE)
+  ));
+  const paidAmt = paidMo.reduce((s,c)=>s+(c.amtPaid||c.amount||0),0);
+  const allOut    = DB.claims.filter(c=>c.status!=='Closed'&&c.status!=='cancelled');
+  const allOutAmt = allOut.reduce((s,c)=>s+(c.amount||0),0);
+  const cols = [
+    { label:'Work Done — Unclaimed', sub:'Completed, no claim yet',  count:unclaimed.length, amt:unclaimedAmt, color:'#4f7ef8', icon:'&#128296;' },
+    { label:'Submitted — Awaiting',  sub:'Claimed, payment pending', count:pending.length,   amt:pendingAmt,   color:'#f39c12', icon:'&#9203;'   },
+  ];
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px">
+      ${cols.map(c=>`
+        <div style="padding:8px 10px;border-radius:8px;background:var(--cream2);border-left:4px solid ${c.color}">
+          <div style="font-size:14px;margin-bottom:3px">${c.icon}</div>
+          <div style="font-size:22px;font-weight:800;color:${c.color};line-height:1">${c.count}</div>
+          <div style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin:2px 0">${c.label}</div>
+          <div style="font-size:9px;color:var(--text3)">${c.sub}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-top:5px">$${fmtNum(c.amt)}</div>
+        </div>`).join('')}
+    </div>
+    <div style="padding:10px 14px;border-radius:6px;background:rgba(231,76,60,0.07);border:1px solid rgba(231,76,60,0.18);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:12px;color:var(--text3)">&#9889; Total Outstanding Claims</span>
+      <span style="font-size:15px;font-weight:800;color:#e74c3c">$${fmtNum(allOutAmt)} <span style="font-size:11px;font-weight:600;color:var(--text3)">(${allOut.length} claims)</span></span>
+    </div>`;
+}
+
+function buildMonthlyTarget(base) {
+  const el = document.getElementById('dash-w-target'); if (!el) return;
+  const target = loadDashTarget();
+  const now=new Date();
+  const mS=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  const mE=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-31`;
+  const count = base.filter(o=>o.orderDate&&o.orderDate>=mS&&o.orderDate<=mE).length;
+  const pct   = Math.min(Math.round(count/target*100),100);
+  const col   = pct>=100?'#2ecc71':pct>=70?'#f39c12':'#4f7ef8';
+  const daysInMonth = new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const dayOf = now.getDate();
+  const expPct = Math.round(dayOf/daysInMonth*100);
+  const onTrack = pct >= expPct;
+  el.innerHTML = `
+    <div style="text-align:center;padding:2px 0 8px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">
+        ${now.toLocaleString('en-AU',{month:'long'})} ${now.getFullYear()}
+      </div>
+      <div style="font-size:38px;font-weight:800;color:${col};line-height:1">${count}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">of <strong style="color:var(--text)">${target}</strong> target</div>
+    </div>
+    <div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:11px;color:var(--text3)">
+        <span>Progress</span><span style="font-weight:700;color:${col}">${pct}%</span>
+      </div>
+      <div style="background:var(--cream2);border-radius:6px;height:10px;overflow:hidden;position:relative">
+        <div style="height:100%;width:${pct}%;background:${col};border-radius:6px;transition:width 0.4s"></div>
+        <div style="position:absolute;top:0;bottom:0;left:${expPct}%;width:2px;background:rgba(255,255,255,0.45)" title="Expected pace"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:5px;text-align:center">
+        ${onTrack?'&#9989; On track':'&#9888; Behind pace'} &mdash; Day ${dayOf}/${daysInMonth} &mdash; Expected: ${Math.round(target*dayOf/daysInMonth)}
+      </div>
+    </div>`;
+}
+
+function buildCompareWidget(cur, prev, w) {
+  const el = document.getElementById('dash-w-compare'); if (!el) return;
+  el.innerHTML = `
+    <div style="display:grid;gap:8px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">&#128176; Revenue</div>
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+          <div style="font-size:22px;font-weight:800;color:var(--accent)">$${fmtNum(cur.rev)}</div>
+          <div style="font-size:11px;color:var(--text3)">vs $${fmtNum(prev.rev)}</div>
+          ${pctDelta(cur.rev,prev.rev)}
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${w.label}</div>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:8px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:6px">&#128230; Orders</div>
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+          <div style="font-size:22px;font-weight:800;color:var(--text)">${cur.count}</div>
+          <div style="font-size:11px;color:var(--text3)">vs ${prev.count}</div>
+          ${pctDelta(cur.count,prev.count)}
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${w.label} vs ${w.prevLabel}</div>
+      </div>
+    </div>`;
+}
+
+function buildAreaTableWidget(cur, prev, w) {
+  const el = document.getElementById('dash-area-table'); if (!el) return;
+  const groupOrder=['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
+  const extra=[...new Set([...Object.keys(cur.byArea),...Object.keys(prev.byArea)])].filter(a=>!groupOrder.includes(a)&&a!=='—');
+  const ordered=[...groupOrder,...extra];
+  const rows = ordered.map(a => {
+    const c=cur.byArea[a]||0, p=prev.byArea[a]||0, mx=Math.max(c,p,1);
+    return `<div style="display:grid;grid-template-columns:52px 1fr 44px 1fr 44px 60px;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(45,50,72,0.4)">
+      <span class="area-tag" style="text-align:center">${a}</span>
+      <div style="background:var(--cream2);border-radius:3px;height:14px;overflow:hidden"><div style="height:100%;width:${c/mx*100}%;background:var(--accent);border-radius:3px"></div></div>
+      <span style="font-size:12px;font-weight:700;color:var(--gold-dark);text-align:right">${c}</span>
+      <div style="background:var(--cream2);border-radius:3px;height:14px;overflow:hidden"><div style="height:100%;width:${p/mx*100}%;background:var(--text3);border-radius:3px"></div></div>
+      <span style="font-size:12px;font-weight:600;color:var(--text3);text-align:right">${p}</span>
+      <div style="text-align:right">${pctDelta(c,p)}</div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div style="display:flex;gap:16px;font-size:10px;color:var(--text3);margin-bottom:8px">
+      <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:2px;margin-right:4px"></span>${w.label}</span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:var(--text3);border-radius:2px;margin-right:4px"></span>${w.prevLabel}</span>
+    </div>
+    ${rows||'<p style="color:var(--text3);font-size:12px">No data.</p>'}`;
+}
+
+
+function buildUpcomingCalWidget() {
+  const el = document.getElementById('dash-w-calendar');
+  if (!el) return;
+
+  try {
+    const todayD = new Date(); todayD.setHours(0,0,0,0);
+    const todayStr = calYMD(todayD);
+    const in30D = new Date(todayD); in30D.setDate(in30D.getDate() + 30);
+    const in30Str = calYMD(in30D);
+
+    // Expand recurring events for next 30 days
+    const events = getExpandedEvents(todayD, in30D)
+      .filter(e => e.startDate >= todayStr && e.startDate <= in30Str)
+      .sort((a,b) => a.startDate.localeCompare(b.startDate) || (a.startTime||'').localeCompare(b.startTime||''));
+
+    if (!events.length) {
+      el.innerHTML = `<div style="text-align:center;padding:28px 0;color:var(--text3);font-size:13px">
+        No upcoming events in the next 30 days
+        <br><button onclick="showPage('calendar')" class="btn btn-sm btn-secondary" style="margin-top:10px;font-size:12px">📅 Open Calendar</button>
+      </div>`;
+      return;
+    }
+
+    // Group by date (show max 10 dates)
+    const groups = {};
+    events.forEach(e => { if (!groups[e.startDate]) groups[e.startDate] = []; groups[e.startDate].push(e); });
+    const tomorrowStr = calYMD(new Date(todayD.getTime() + 86400000));
+
+    const rows = Object.keys(groups).slice(0,10).map(ds => {
+      const evs = groups[ds];
+      const d = new Date(ds + 'T00:00:00');
+      const dayName = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      const monthAb = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+      const label = ds===todayStr ? 'Today' : ds===tomorrowStr ? 'Tmrw' : dayName;
+      const isToday = ds === todayStr;
+
+      const evHtml = evs.map(e => {
+        const cat = CAL_CATS[e.category] || CAL_CATS.general;
+        const t = e.startTime ? ` <span style="color:var(--text3);font-size:11px">${e.startTime}</span>` : '';
+        return `<div onclick="showPage('calendar')" style="display:flex;align-items:center;gap:8px;padding:5px 8px;margin-bottom:4px;border-radius:6px;border-left:3px solid ${cat.color};background:${cat.color}12;cursor:pointer">
+          <div style="flex:1;font-size:12px;font-weight:600">${esc(e.title)}${t}</div>
+          <span style="font-size:10px;padding:1px 7px;border-radius:10px;background:${cat.color}22;color:${cat.color};font-weight:600">${cat.label}</span>
+        </div>`;
+      }).join('');
+
+      return `<div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="width:40px;text-align:center;flex-shrink:0">
+          <div style="font-size:10px;font-weight:700;color:${isToday?'var(--gold)':'var(--text3)'}">${label}</div>
+          <div style="font-size:22px;font-weight:800;line-height:1.1;color:${isToday?'var(--gold)':'var(--text)'}">${d.getDate()}</div>
+          <div style="font-size:10px;color:var(--text3)">${monthAb}</div>
+        </div>
+        <div style="flex:1;padding-top:2px">${evHtml}</div>
+      </div>`;
+    }).join('');
+
+    el.innerHTML = `<div style="margin:-14px;padding:0 14px">
+      ${rows}
+      <div style="padding:12px 0"><button onclick="showPage('calendar')" class="btn btn-sm btn-secondary" style="font-size:12px;width:100%">📅  Open Full Calendar →</button></div>
+    </div>`;
+  } catch(err) {
+    el.innerHTML = `<div style="color:var(--text3);font-size:12px;padding:12px">
+      Error loading events. <button onclick="showPage('calendar')" class="btn btn-sm btn-secondary" style="font-size:11px">Open Calendar</button>
+    </div>`;
+  }
+}
+
 function renderDashboard() {
   updateDashWindow();
   const base = DB.orders.filter(o => o.status !== 'cancelled');
-  const w = periodWindow();
-
-  const cur = periodStats(base, w.pStart, w.pEnd);
+  const w    = periodWindow();
+  const cur  = periodStats(base, w.pStart, w.pEnd);
   const prev = periodStats(base, w.prevStart, w.prevEnd);
+  const periodFiltered = base.filter(o => o.orderDate && o.orderDate >= w.pStart && o.orderDate <= w.pEnd);
 
-  // ── Area comparison rows ──
-  const AREAS = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
-  // Always show all CA areas (even with 0 orders), plus any extra areas that have data
-  const extraAreas = [...new Set([...Object.keys(cur.byArea), ...Object.keys(prev.byArea)])]
-                     .filter(a => !AREAS.includes(a) && a !== '—');
-  const orderedAreas = [...AREAS, ...extraAreas];
+  renderDashWidgets();           // build widget shells (idempotent via innerHTML)
 
-  const areaRows = orderedAreas.map(a => {
-    const c = cur.byArea[a] || 0, p = prev.byArea[a] || 0;
-    const maxV = Math.max(c, p, 1);
-    return `
-      <div style="display:grid;grid-template-columns:52px 1fr 60px 1fr 60px 70px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(45,50,72,0.5)">
-        <span class="area-tag" style="text-align:center">${a}</span>
-        <div style="background:var(--cream2);border-radius:4px;height:18px;overflow:hidden"><div style="height:100%;width:${c/maxV*100}%;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:5px;min-width:fit-content"><span style="font-size:10px;font-weight:700;color:#fff">${c||''}</span></div></div>
-        <span style="font-size:12px;font-weight:700;color:var(--gold-dark);text-align:right">${c}</span>
-        <div style="background:var(--cream2);border-radius:4px;height:18px;overflow:hidden"><div style="height:100%;width:${p/maxV*100}%;background:var(--text3);border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:5px;min-width:fit-content"><span style="font-size:10px;font-weight:700;color:#fff">${p||''}</span></div></div>
-        <span style="font-size:12px;font-weight:600;color:var(--text3);text-align:right">${p}</span>
-        <div style="text-align:right">${pctDelta(c, p)}</div>
-      </div>`;
-  }).join('');
-
-  document.getElementById('dash-compare').innerHTML = `
-    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">
-      &#128197; ${w.label} (${fmtDate(w.pStart)} – ${fmtDate(w.pEnd)}) &nbsp;vs&nbsp; ${w.prevLabel}
-    </div>
-
-    <!-- Row 1: Revenue + Order count comparison -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-      <div class="stat-card">
-        <div class="stat-label">&#128176; Revenue</div>
-        <div style="display:flex;align-items:baseline;gap:14px;margin-top:6px">
-          <div>
-            <div class="stat-value stat-blue" style="font-size:30px">$${fmtNum(cur.rev)}</div>
-            <div class="stat-sub">${w.label}</div>
-          </div>
-          <div style="font-size:18px;color:var(--text3)">vs</div>
-          <div>
-            <div style="font-size:22px;font-weight:700;color:var(--text3)">$${fmtNum(prev.rev)}</div>
-            <div class="stat-sub">${w.prevLabel}</div>
-          </div>
-          <div style="margin-left:auto;font-size:16px">${pctDelta(cur.rev, prev.rev)}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">&#128230; Orders</div>
-        <div style="display:flex;align-items:baseline;gap:14px;margin-top:6px">
-          <div>
-            <div class="stat-value" style="font-size:30px">${cur.count}</div>
-            <div class="stat-sub">${w.label}</div>
-          </div>
-          <div style="font-size:18px;color:var(--text3)">vs</div>
-          <div>
-            <div style="font-size:22px;font-weight:700;color:var(--text3)">${prev.count}</div>
-            <div class="stat-sub">${w.prevLabel}</div>
-          </div>
-          <div style="margin-left:auto;font-size:16px">${pctDelta(cur.count, prev.count)}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Row 2: Area comparison -->
-    <div class="card" style="margin-bottom:24px">
-      <div class="card-header">
-        <h3>&#128205; Orders by Area</h3>
-        <div style="display:flex;gap:16px;font-size:11px;color:var(--text3)">
-          <span><span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:2px;margin-right:5px"></span>${w.label}</span>
-          <span><span style="display:inline-block;width:10px;height:10px;background:var(--text3);border-radius:2px;margin-right:5px"></span>${w.prevLabel}</span>
-        </div>
-      </div>
-      <div class="card-body" style="padding:10px 20px">
-        ${areaRows || '<p style="color:var(--text3);font-size:13px;padding:10px 0">No orders in this period.</p>'}
-      </div>
-    </div>`;
-
-  buildRevenueChart(base.filter(o => o.orderDate && o.orderDate >= w.pStart && o.orderDate <= w.pEnd));
-  buildAreaChart(base.filter(o => o.orderDate && o.orderDate >= w.pStart && o.orderDate <= w.pEnd));
-  buildIssuesChart(base);
+  buildStatusPipeline(base);     // ① Order Status Pipeline
+  buildClaimsPipeline(base);     // ② Claims Financial Pipeline
+  buildMonthlyTarget(base);      // ⑤ Monthly Target
+  buildCompareWidget(cur,prev,w);// Period Revenue/Orders comparison
+  buildAreaTableWidget(cur,prev,w,periodFiltered); // Area table
+  buildRevenueChart(periodFiltered);
+  buildAreaChart(periodFiltered);
   buildSubbiesDashSection(base);
+  buildUpcomingCalWidget();
 }
 
 function buildSubbiesDashSection(orders) {
-  const existing = document.getElementById('dash-subbies-section');
-  if (existing) existing.remove();
-
+  const el = document.getElementById('dash-w-subbies'); if (!el) return;
   const names = TRACKED_SUBBIES;
-  const section = document.createElement('div');
-  section.id = 'dash-subbies-section';
-  section.style.marginTop = '24px';
-
   const rows = names.map(name => {
     const mine = orders.filter(o => o.subbies === name && o.status !== 'cancelled');
     const unpaid = mine.filter(o => o.subbiePaid !== 'Y');
@@ -4313,8 +4585,8 @@ function buildSubbiesDashSection(orders) {
     const paidAmt   = paid.reduce((s,o)=> s + (getSubbiePrice(o) || 0), 0);
     const pct = mine.length ? Math.round(paid.length/mine.length*100) : 0;
     return `
-      <div style="display:flex;align-items:center;gap:16px;padding:12px 20px;border-bottom:1px solid var(--border)">
-        <div style="width:34px;height:34px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff;flex-shrink:0">${esc(name[0])}</div>
+      <div style="display:flex;align-items:center;gap:12px;padding:7px 14px;border-bottom:1px solid var(--border)">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff;flex-shrink:0">${esc(name[0])}</div>
         <div style="flex:1">
           <div style="font-weight:700;font-size:13px;margin-bottom:4px">${esc(name)}</div>
           <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
@@ -4329,15 +4601,7 @@ function buildSubbiesDashSection(orders) {
         <button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="showPage('subbies')">View →</button>
       </div>`;
   }).join('');
-
-  section.innerHTML = `
-    <div class="card">
-      <div class="card-header"><h3>&#128104;&#8205;&#128292; Subbie Payment Summary</h3></div>
-      <div class="card-body" style="padding:0">${rows}</div>
-    </div>`;
-
-  const chartsGrid = document.querySelector('.charts-grid');
-  if (chartsGrid) chartsGrid.parentNode.insertBefore(section, chartsGrid);
+  el.innerHTML = `<div style="margin:-14px">${rows}</div>`;
 }
 
 function groupByPeriod(orders, period) {
