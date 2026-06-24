@@ -414,6 +414,11 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <div class="logo-sub">Holmes Order Manager</div>
     </div>
     <nav>
+      <div class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span id="navlabel-dashboard">Dashboard</span>
+      </div>
+      <div class="nav-divider"></div>
       <div class="nav-item active" onclick="showPage('all')" id="nav-all">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
         <span id="navlabel-all">All Orders</span>
@@ -459,10 +464,6 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span id="navlabel-subbies">Subbies</span>
         <span class="nav-badge" id="subbies-badge" style="background:var(--yellow);display:none">0</span>
-      </div>
-      <div class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        <span id="navlabel-dashboard">Dashboard</span>
       </div>
       <div class="nav-item" onclick="openSupModal()" id="nav-sup">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
