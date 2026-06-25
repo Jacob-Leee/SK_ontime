@@ -2978,7 +2978,7 @@ function renderCompleted() {
   const claimMap = {};
   DB.claims.forEach(c => { claimMap[c.orderNumber] = c; });
 
-  tbody.innerHTML = orders.map(o => {
+  try { tbody.innerHTML = orders.map(o => {
     const pc = claimMap[o.orderNumber];
     const payBadge = pc?.paid === 'Y'
       ? `<span class="badge badge-green">✓ Paid</span>`
@@ -3001,7 +3001,7 @@ function renderCompleted() {
       </div>
     </td>
   </tr>`;
-  }).join('');
+  }).join(''); } catch(e) { console.error('[renderCompleted table]', e); }
   renderTabSummary('completed');
   mobRender('completed', orders);
 }
@@ -4356,7 +4356,7 @@ function renderOrders() {
   empty.style.display = orders.length ? 'none' : 'block';
   tbody.style.display = orders.length ? '' : 'none';
 
-  tbody.innerHTML = orders.map(o => {
+  try { tbody.innerHTML = orders.map(o => {
     const hasClaim = o.hasClaim ? `<span class="claim-dot" title="Has Claim"></span> ` : '';
     const paidBadge = o.paid === 'Y'
       ? `<span class="badge badge-green">✓ Paid</span>`
@@ -4400,7 +4400,7 @@ function renderOrders() {
         </div>
       </td>
     </tr>`;
-  }).join('');
+  }).join(''); } catch(e) { console.error('[renderOrders table]', e); }
   renderTabSummary('orders');
   mobRender('orders', orders);
 }
@@ -4551,7 +4551,7 @@ function renderAll() {
   empty.style.display = orders.length ? 'none' : 'block';
   tbody.style.display = orders.length ? '' : 'none';
 
-  tbody.innerHTML = orders.map(o => {
+  try { tbody.innerHTML = orders.map(o => {
     const st = o.status || 'active';
     const stLabel = statusLabels[st] || st;
     const stClass = statusColors[st] || 'badge-blue';
@@ -4582,7 +4582,7 @@ function renderAll() {
       <td><span class="badge ${stClass}" style="font-size:10px">${stLabel}</span></td>
       <td><div class="row-actions">${nextBtns[st] || ''}</div></td>
     </tr>`;
-  }).join('');
+  }).join(''); } catch(e) { console.error('[renderAll table]', e); }
   mobRender('all', orders);
 }
 
