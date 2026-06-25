@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SK Ontime — Holmes Order Manager</title>
+<title>SK Ontime — Mobile</title>
 <script>
 /* Chart.js v4.4.0 — embedded for offline use (MIT License) */
 /*!
@@ -271,120 +271,195 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
 
 
-/* ══════════════════ MOBILE ══════════════════ */
+/* ══ MOBILE.HTML — always mobile layout ══ */
+* { box-sizing: border-box; }
+
+/* Hide desktop elements always */
+#sidebar { display: none !important; }
+#header  { display: none !important; }
+
+/* Full-width main, padded for mob chrome */
+#main {
+  width: 100% !important;
+  padding-top: 50px !important;
+  padding-bottom: 60px !important;
+  overflow-y: auto !important;
+}
+#app {
+  display: block !important;   /* not flex row */
+}
+
+/* Pages: no desktop padding */
+.page { padding: 0 !important; }
+.card { border-radius: 0 !important; margin: 0 !important; box-shadow: none !important; }
+.card-body { padding: 0 !important; }
+.filters {
+  flex-wrap: wrap; gap: 5px; padding: 6px 10px;
+  position: sticky; top: 50px; z-index: 10;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.filters .filter-input[id^="search"] {
+  width: 100% !important; font-size: 13px !important; padding: 6px 12px !important;
+}
+.filters select { font-size: 12px; padding: 5px 8px; }
+
+/* Always hide desktop tables, show cards */
+.table-wrap { display: none !important; }
+.mob-cards  { display: block !important; }
+
+/* Dashboard: single column */
+#dash-widgets { grid-template-columns: 1fr !important; gap: 8px !important; }
+#dash-widgets .dash-widget { grid-column: span 1 !important; }
+
+/* Modals: slide up */
+.modal { align-items: flex-end !important; padding: 0 !important; }
+.modal-content {
+  width: 100% !important; max-width: 100% !important;
+  max-height: 92dvh !important; border-radius: 16px 16px 0 0 !important;
+  margin: 0 !important; overflow-y: auto !important;
+}
+
+/* ══ MOB HEADER ══ */
 #mob-header {
-  display: none; background: var(--dark);
-  align-items: center; padding: 0 10px; height: 48px;
-  position: sticky; top: 0; z-index: 200; gap: 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  display: flex; align-items: center; gap: 8px;
+  background: var(--dark); height: 50px; padding: 0 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
 }
-.mob-logo { font-size: 13px; font-weight: 800; color: var(--gold); letter-spacing: 1px; white-space: nowrap; }
+.mob-logo { font-size: 14px; font-weight: 800; color: var(--gold); letter-spacing: 1px; white-space: nowrap; }
 #mob-search-wrap {
-  flex: 1; display: flex; align-items: center;
-  background: rgba(255,255,255,0.08); border-radius: 20px;
-  padding: 0 10px; gap: 6px; height: 32px;
+  flex: 1; display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.09); border-radius: 20px;
+  padding: 0 12px; height: 34px;
 }
-.mob-search-icon { font-size: 12px; opacity: 0.5; }
-#mob-search { background: none; border: none; outline: none; color: var(--text); font-size: 12px; width: 100%; }
+.mob-search-icon { font-size: 13px; opacity: 0.5; flex-shrink: 0; }
+#mob-search {
+  background: none; border: none; outline: none;
+  color: var(--text); font-size: 13px; width: 100%;
+}
 #mob-search::placeholder { color: var(--text3); }
-.mob-sync-btn {
-  display: flex; align-items: center; gap: 4px; cursor: pointer;
-  padding: 3px 8px; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
-  background: none; white-space: nowrap;
+.mob-icon-btn {
+  background: none; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px; color: var(--text2); cursor: pointer;
+  padding: 4px 9px; font-size: 11px; font-weight: 600;
+  white-space: nowrap; display: flex; align-items: center; gap: 4px;
 }
-#mob-sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); display: inline-block; }
-.mob-sync-label { font-size: 10px; color: var(--text3); font-weight: 600; }
-.mob-menu-btn { background: none; border: none; color: var(--text2); font-size: 20px; cursor: pointer; padding: 4px 6px; line-height: 1; }
+.mob-icon-btn .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text3); display: inline-block;
+}
+.mob-hamburger {
+  background: none; border: none; color: var(--text2);
+  font-size: 22px; cursor: pointer; padding: 2px 4px; line-height: 1;
+  flex-shrink: 0;
+}
 
+/* ══ BOTTOM NAV ══ */
 #mob-nav {
-  display: none; position: fixed; bottom: 0; left: 0; right: 0;
-  z-index: 200; background: var(--dark); height: 56px;
-  align-items: stretch; border-top: 1px solid rgba(255,255,255,0.07);
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+  display: flex; align-items: stretch;
+  background: var(--dark); height: 60px;
+  border-top: 1px solid rgba(255,255,255,0.08);
 }
-.mob-nav-btn {
-  flex: 1; background: none; border: none; color: var(--text3);
-  font-size: 9px; font-weight: 600; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 3px; padding: 4px 2px;
-  letter-spacing: 0.3px;
+.mob-tab {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); font-size: 9px; font-weight: 700;
+  padding: 4px 2px; letter-spacing: 0.3px; font-family: inherit;
 }
-.mob-nav-btn .mn-icon { font-size: 18px; line-height: 1; }
-.mob-nav-btn.active { color: var(--gold); }
+.mob-tab .ti { font-size: 19px; line-height: 1; }
+.mob-tab.active { color: var(--gold); }
 
-#mob-overlay { display: none; position: fixed; inset: 0; z-index: 299; background: rgba(0,0,0,0.45); }
+/* ══ DRAWER ══ */
+#mob-overlay {
+  display: none; position: fixed; inset: 0;
+  z-index: 299; background: rgba(0,0,0,0.5);
+}
 #mob-drawer {
   display: none; position: fixed; top: 0; right: 0; bottom: 0;
-  width: 230px; z-index: 300; background: var(--dark);
-  padding: 0; overflow-y: auto; box-shadow: -4px 0 20px rgba(0,0,0,0.4);
+  width: 240px; z-index: 300; background: var(--dark);
+  overflow-y: auto; box-shadow: -6px 0 24px rgba(0,0,0,0.4);
 }
-.mob-drawer-head { padding: 20px 16px 12px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.mob-drawer-top {
+  padding: 20px 16px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex; justify-content: space-between; align-items: center;
+}
 .mob-drawer-title { font-size: 11px; color: var(--text3); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+.mob-drawer-close { background: none; border: none; color: var(--text3); font-size: 20px; cursor: pointer; }
 .mob-drawer-link {
-  display: flex; align-items: center; gap: 10px;
-  padding: 11px 16px; color: var(--text); font-size: 13px; cursor: pointer;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; color: var(--text); font-size: 14px; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.1s;
 }
-.mob-drawer-link:hover { background: rgba(255,255,255,0.04); }
-.mob-drawer-link .dl-icon { font-size: 16px; width: 20px; text-align: center; }
+.mob-drawer-link:active { background: rgba(255,255,255,0.06); }
+.dl-icon { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+.mob-drawer-sep { height: 1px; background: rgba(255,255,255,0.08); margin: 6px 0; }
 
-.mob-cards { display: none; padding: 4px 6px 6px; }
+/* ══ ORDER CARDS ══ */
+.mob-cards { padding: 6px 8px 10px; }
 .mob-card {
-  background: var(--surface); border-radius: 8px; padding: 8px 10px;
-  margin-bottom: 4px; border-left: 3px solid #4f7ef8; cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  background: var(--surface);
+  border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
+  border-left: 4px solid #4f7ef8; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  transition: opacity 0.1s;
 }
-.mob-card-top  { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
-.mob-card-no   { font-size: 11px; font-weight: 700; color: var(--text); }
-.mob-card-badge { font-size: 9px; padding: 1px 7px; border-radius: 8px; font-weight: 700; }
-.mob-card-addr { font-size: 10px; color: var(--text2); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mob-card:active { opacity: 0.75; }
+.mob-card-top {
+  display: flex; justify-content: space-between;
+  align-items: center; margin-bottom: 4px;
+}
+.mob-card-no   { font-size: 12px; font-weight: 800; color: var(--text); }
+.mob-card-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+.mob-card-addr {
+  font-size: 11px; color: var(--text2); margin-bottom: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .mob-card-bot  { display: flex; justify-content: space-between; align-items: center; }
-.mob-card-meta { font-size: 9px; color: var(--text3); }
-.mob-card-amt  { font-size: 10px; font-weight: 700; color: var(--gold-dark); }
+.mob-card-meta { font-size: 10px; color: var(--text3); }
+.mob-card-amt  { font-size: 11px; font-weight: 700; color: var(--gold-dark); }
 
-/* View sheet */
-#mob-vsheet-overlay { display: none; position: fixed; inset: 0; z-index: 399; background: rgba(0,0,0,0.45); }
+/* ══ VIEW SHEET ══ */
+#mob-vsheet-bg {
+  display: none; position: fixed; inset: 0; z-index: 399; background: rgba(0,0,0,0.5);
+}
 #mob-vsheet {
   display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 400;
-  background: var(--surface); border-radius: 16px 16px 0 0;
-  padding: 20px 16px 28px; max-height: 72dvh; overflow-y: auto;
-  box-shadow: 0 -4px 24px rgba(0,0,0,0.3);
+  background: var(--surface); border-radius: 20px 20px 0 0;
+  padding: 16px 16px 32px; max-height: 75dvh; overflow-y: auto;
+  box-shadow: 0 -6px 30px rgba(0,0,0,0.35);
 }
-.mvs-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
-.mvs-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-.mvs-orderno { font-size: 18px; font-weight: 800; color: var(--text); }
-.mvs-st { font-size: 11px; padding: 3px 10px; border-radius: 10px; font-weight: 700; }
-.mvs-field { margin-bottom: 10px; }
-.mvs-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.7px; margin-bottom: 2px; font-weight: 700; }
-.mvs-val { font-size: 13px; color: var(--text); }
-.mvs-row2 { display: flex; gap: 16px; }
-.mvs-row2 .mvs-field { flex: 1; }
-.mvs-divider { height: 1px; background: var(--border); margin: 12px 0; }
-.mvs-btns { display: flex; gap: 8px; margin-top: 4px; }
-.mvs-btn-close { flex: 1; padding: 11px; background: var(--cream2); border: 1px solid var(--border); border-radius: 10px; color: var(--text2); font-size: 13px; cursor: pointer; font-family: inherit; }
-.mvs-btn-edit  { flex: 2; padding: 11px; background: var(--gold); border: none; border-radius: 10px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.mvs-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 14px; }
+.mvs-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.mvs-orderno { font-size: 20px; font-weight: 800; color: var(--text); line-height: 1.2; }
+.mvs-badge { font-size: 11px; padding: 3px 11px; border-radius: 12px; font-weight: 700; }
+.mvs-section { margin-bottom: 14px; }
+.mvs-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 3px; }
+.mvs-val { font-size: 14px; color: var(--text); font-weight: 500; }
+.mvs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.mvs-div { height: 1px; background: var(--border); margin: 14px 0 10px; }
+.mvs-btns { display: flex; gap: 10px; }
+.mvs-btn-close {
+  flex: 1; padding: 13px; background: var(--cream2);
+  border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text2); font-size: 14px; cursor: pointer; font-family: inherit;
+}
+.mvs-btn-edit {
+  flex: 2; padding: 13px; background: var(--gold);
+  border: none; border-radius: 12px; color: #fff;
+  font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
 
-@media (max-width: 768px) {
-  #mob-header { display: flex !important; }
-  #mob-nav    { display: flex !important; }
-  #sidebar    { display: none !important; }
-  #header     { display: none !important; }
-  #main { width: 100% !important; padding-top: 48px !important; padding-bottom: 56px !important; }
-  .mob-hide   { display: none !important; }
-  .mob-cards  { display: block; }
-  .filters    { flex-wrap: wrap; gap: 5px; padding: 6px 10px; }
-  .filters .filter-input[id^="search"] { width: 100% !important; font-size: 12px !important; }
-  .filters select { font-size: 11px; padding: 4px 6px; }
-  .page       { padding: 0 !important; }
-  .card       { border-radius: 0 !important; margin: 0 !important; box-shadow: none !important; }
-  .card-body  { padding: 0 !important; }
-  #dash-widgets { grid-template-columns: 1fr !important; gap: 8px !important; }
-  #dash-widgets .dash-widget { grid-column: span 1 !important; }
-  .modal      { align-items: flex-end !important; padding: 0 !important; }
-  .modal-content {
-    width: 100% !important; max-width: 100% !important;
-    max-height: 92dvh !important; border-radius: 16px 16px 0 0 !important;
-    margin: 0 !important; overflow-y: auto !important;
-  }
+/* New Order FAB */
+#mob-fab {
+  display: none; position: fixed; bottom: 72px; right: 16px; z-index: 190;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--gold); border: none; cursor: pointer;
+  font-size: 26px; color: #fff; box-shadow: 0 4px 14px rgba(201,168,76,0.5);
+  align-items: center; justify-content: center;
 }
 </style>
 </head>
@@ -394,88 +469,80 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
 <!-- ══ MOBILE HEADER ══ -->
 <div id="mob-header">
-  <div class="mob-logo">SK ONTIME</div>
+  <div class="mob-logo">SK</div>
   <div id="mob-search-wrap">
     <span class="mob-search-icon">🔍</span>
-    <input id="mob-search" type="text" placeholder="Order#, address, subbie..." oninput="mobSearch(this.value)" autocomplete="off"/>
+    <input id="mob-search" type="text" placeholder="Search orders, address, subbie…" oninput="mobSearch(this.value)" autocomplete="off"/>
   </div>
-  <button class="mob-sync-btn" onclick="openCloudModal()">
-    <span id="mob-sync-dot"></span>
-    <span class="mob-sync-label">Sync</span>
+  <button class="mob-icon-btn" onclick="openCloudModal()">
+    <span class="dot" id="mob-sync-dot"></span>Sync
   </button>
-  <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener"
-     style="text-decoration:none;font-size:10px;color:var(--gold-dark);padding:3px 7px;border:1px solid rgba(79,126,248,0.35);border-radius:10px;font-weight:600;white-space:nowrap">DCJ</a>
-  <button class="mob-menu-btn" onclick="mobDrawerOpen()">☰</button>
+  <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="mob-icon-btn" style="text-decoration:none;color:var(--gold-dark);border-color:rgba(79,126,248,0.4)">DCJ</a>
+  <button class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
 </div>
 
-<!-- ══ MOBILE BOTTOM NAV ══ -->
+<!-- ══ BOTTOM NAV ══ -->
 <div id="mob-nav">
-  <button class="mob-nav-btn active" id="mobnav-dashboard" onclick="showPage('dashboard')">
-    <span class="mn-icon">📊</span>Board
-  </button>
-  <button class="mob-nav-btn" id="mobnav-all" onclick="showPage('all')">
-    <span class="mn-icon">📋</span>All
-  </button>
-  <button class="mob-nav-btn" id="mobnav-orders" onclick="showPage('orders')">
-    <span class="mn-icon">⚡</span>Active
-  </button>
-  <button class="mob-nav-btn" id="mobnav-claims" onclick="showPage('claims')">
-    <span class="mn-icon">🛡️</span>Claims
-  </button>
-  <button class="mob-nav-btn" id="mobnav-more" onclick="mobDrawerOpen()">
-    <span class="mn-icon">⋯</span>More
-  </button>
+  <button class="mob-tab active" id="mobtab-dashboard" onclick="showPage('dashboard')"><span class="ti">📊</span>Board</button>
+  <button class="mob-tab" id="mobtab-all"       onclick="showPage('all')">      <span class="ti">📋</span>All</button>
+  <button class="mob-tab" id="mobtab-orders"    onclick="showPage('orders')">   <span class="ti">⚡</span>Active</button>
+  <button class="mob-tab" id="mobtab-claims"    onclick="showPage('claims')">   <span class="ti">🛡️</span>Claims</button>
+  <button class="mob-tab" id="mobtab-more"      onclick="mobDrawerOpen()">      <span class="ti">⋯</span>More</button>
 </div>
 
-<!-- ══ DRAWER OVERLAY + DRAWER ══ -->
+<!-- ══ FAB ══ -->
+<button id="mob-fab" onclick="openOrderModal()" title="New Order">＋</button>
+
+<!-- ══ OVERLAY + DRAWER ══ -->
 <div id="mob-overlay" onclick="mobDrawerClose()"></div>
 <div id="mob-drawer">
-  <div class="mob-drawer-head"><div class="mob-drawer-title">Navigation</div></div>
+  <div class="mob-drawer-top">
+    <span class="mob-drawer-title">Menu</span>
+    <button class="mob-drawer-close" onclick="mobDrawerClose()">✕</button>
+  </div>
   <div class="mob-drawer-link" onclick="showPage('dashboard');mobDrawerClose()"><span class="dl-icon">📊</span>Dashboard</div>
-  <div class="mob-drawer-link" onclick="showPage('all');mobDrawerClose()"><span class="dl-icon">📋</span>All Orders</div>
-  <div class="mob-drawer-link" onclick="showPage('orders');mobDrawerClose()"><span class="dl-icon">⚡</span>Active</div>
-  <div class="mob-drawer-link" onclick="showPage('completed');mobDrawerClose()"><span class="dl-icon">✅</span>Completed</div>
-  <div class="mob-drawer-link" onclick="showPage('claims');mobDrawerClose()"><span class="dl-icon">🛡️</span>Claims</div>
-  <div class="mob-drawer-link" onclick="showPage('closed');mobDrawerClose()"><span class="dl-icon">🔒</span>Closed</div>
-  <div class="mob-drawer-link" onclick="showPage('issues');mobDrawerClose()"><span class="dl-icon">⚠️</span>Issues</div>
-  <div class="mob-drawer-link" onclick="showPage('calendar');mobDrawerClose()"><span class="dl-icon">📅</span>Calendar</div>
-  <div class="mob-drawer-link" onclick="showPage('subbies');mobDrawerClose()"><span class="dl-icon">👷</span>Subbies</div>
-  <div class="mob-drawer-link" onclick="openSupModal();mobDrawerClose()"><span class="dl-icon">👤</span>Supervisors</div>
-  <div class="mob-drawer-link" onclick="showPage('sor');mobDrawerClose()"><span class="dl-icon">📄</span>SOR Codes</div>
-  <div style="height:1px;background:rgba(255,255,255,0.07);margin:8px 0"></div>
-  <div class="mob-drawer-link" onclick="openCloudModal();mobDrawerClose()"><span class="dl-icon">☁️</span>Cloud Sync</div>
-  <div class="mob-drawer-link" onclick="openSettingsModal();mobDrawerClose()"><span class="dl-icon">⚙️</span>Settings</div>
-  <div class="mob-drawer-link" onclick="openOrderModal();mobDrawerClose()"><span class="dl-icon">➕</span>New Order</div>
+  <div class="mob-drawer-link" onclick="showPage('all');mobDrawerClose()">       <span class="dl-icon">📋</span>All Orders</div>
+  <div class="mob-drawer-link" onclick="showPage('orders');mobDrawerClose()">    <span class="dl-icon">⚡</span>Active</div>
+  <div class="mob-drawer-link" onclick="showPage('completed');mobDrawerClose()"> <span class="dl-icon">✅</span>Completed</div>
+  <div class="mob-drawer-link" onclick="showPage('claims');mobDrawerClose()">    <span class="dl-icon">🛡️</span>Claims</div>
+  <div class="mob-drawer-link" onclick="showPage('closed');mobDrawerClose()">    <span class="dl-icon">🔒</span>Closed</div>
+  <div class="mob-drawer-link" onclick="showPage('issues');mobDrawerClose()">    <span class="dl-icon">⚠️</span>Issues</div>
+  <div class="mob-drawer-link" onclick="showPage('calendar');mobDrawerClose()">  <span class="dl-icon">📅</span>Calendar</div>
+  <div class="mob-drawer-link" onclick="showPage('subbies');mobDrawerClose()">   <span class="dl-icon">👷</span>Subbies</div>
+  <div class="mob-drawer-link" onclick="openSupModal();mobDrawerClose()">        <span class="dl-icon">👤</span>Supervisors</div>
+  <div class="mob-drawer-link" onclick="showPage('sor');mobDrawerClose()">       <span class="dl-icon">📄</span>SOR Codes</div>
+  <div class="mob-drawer-sep"></div>
+  <div class="mob-drawer-link" onclick="openCloudModal();mobDrawerClose()">      <span class="dl-icon">☁️</span>Cloud Sync</div>
+  <div class="mob-drawer-link" onclick="openSettingsModal();mobDrawerClose()">   <span class="dl-icon">⚙️</span>Settings</div>
+  <div class="mob-drawer-link" onclick="exportCSV();mobDrawerClose()">           <span class="dl-icon">📊</span>Export CSV</div>
 </div>
 
-<!-- ══ VIEW SHEET (tap card → view, Edit → edit modal) ══ -->
-<div id="mob-vsheet-overlay" onclick="mobVSheetClose()"></div>
+<!-- ══ VIEW SHEET ══ -->
+<div id="mob-vsheet-bg" onclick="mobVClose()"></div>
 <div id="mob-vsheet">
   <div class="mvs-handle"></div>
-  <div class="mvs-header">
+  <div class="mvs-head">
     <div>
       <div class="mvs-label">Order Number</div>
       <div class="mvs-orderno" id="mvs-no">—</div>
     </div>
-    <span class="mvs-st" id="mvs-st">—</span>
+    <span class="mvs-badge" id="mvs-st">—</span>
   </div>
-  <div class="mvs-field"><div class="mvs-label">Address</div><div class="mvs-val" id="mvs-addr">—</div></div>
-  <div class="mvs-row2">
-    <div class="mvs-field"><div class="mvs-label">Area</div><div class="mvs-val" id="mvs-area">—</div></div>
-    <div class="mvs-field"><div class="mvs-label">SOR Code</div><div class="mvs-val" id="mvs-sor">—</div></div>
+  <div class="mvs-section"><div class="mvs-label">Address</div><div class="mvs-val" id="mvs-addr">—</div></div>
+  <div class="mvs-grid">
+    <div><div class="mvs-label">Area</div><div class="mvs-val" id="mvs-area">—</div></div>
+    <div><div class="mvs-label">SOR Code</div><div class="mvs-val" id="mvs-sor">—</div></div>
   </div>
-  <div class="mvs-row2">
-    <div class="mvs-field"><div class="mvs-label">Amount</div><div class="mvs-val" id="mvs-amt">—</div></div>
-    <div class="mvs-field"><div class="mvs-label">Date</div><div class="mvs-val" id="mvs-date">—</div></div>
+  <div class="mvs-grid">
+    <div><div class="mvs-label">Amount</div><div class="mvs-val" id="mvs-amt">—</div></div>
+    <div><div class="mvs-label">Date</div><div class="mvs-val" id="mvs-date">—</div></div>
   </div>
-  <div class="mvs-field"><div class="mvs-label">Subbie</div><div class="mvs-val" id="mvs-sub">—</div></div>
-  <div class="mvs-field" id="mvs-notes-wrap" style="display:none">
-    <div class="mvs-label">Notes</div><div class="mvs-val" id="mvs-notes" style="font-size:12px;color:var(--text2)">—</div>
-  </div>
-  <div class="mvs-divider"></div>
+  <div class="mvs-section"><div class="mvs-label">Subbie</div><div class="mvs-val" id="mvs-sub">—</div></div>
+  <div id="mvs-notes-wrap" style="display:none" class="mvs-section"><div class="mvs-label">Notes</div><div class="mvs-val" id="mvs-notes" style="font-size:13px;color:var(--text2)">—</div></div>
+  <div class="mvs-div"></div>
   <div class="mvs-btns">
-    <button class="mvs-btn-close" onclick="mobVSheetClose()">Close</button>
-    <button class="mvs-btn-edit"  onclick="mobVSheetEdit()">✏️ Edit</button>
+    <button class="mvs-btn-close" onclick="mobVClose()">Close</button>
+    <button class="mvs-btn-edit"  onclick="mobVEdit()">✏️ Edit Order</button>
   </div>
 </div>
 
@@ -633,7 +700,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
-            <div class="table-wrap mob-hide">
+            <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -686,7 +753,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
-            <div class="table-wrap mob-hide">
+            <div class="table-wrap">
               <table id="orders-table">
                 <thead>
                   <tr>
@@ -733,7 +800,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
-            <div class="table-wrap mob-hide">
+            <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -774,7 +841,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
-            <div class="table-wrap mob-hide">
+            <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -2310,7 +2377,7 @@ function renderCloudStatus(msg) {
   if (dot) dot.style.background = color;
   const dot2 = document.getElementById('cloud-dot-2');
   if (dot2) dot2.style.background = color;
-  const msd=document.getElementById('mob-sync-dot'); if(msd) msd.style.background=color;
+  const sd=document.getElementById('mob-sync-dot'); if(sd) sd.style.background=color;
 }
 
 // ============================================================
@@ -2481,7 +2548,7 @@ let currentPage = 'all';
 const PAGE_TITLES = { all:'All Orders', orders:'Orders', completed:'Completed', claims:'Claim', closed:'Closed', issues:'Issues', cancelled:'Cancelled', calendar:'Calendar', subbies:'Subbie Management', dashboard:'Dashboard', sor:'SOR Codes' };
 
 function showPage(page) {
-  mobNavUpdate(page);
+  mobTabUpdate(page);
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
@@ -5884,36 +5951,37 @@ function openEmailImport() {
 
 
 // ══════════════════════════════════════════════
-// MOBILE  (mobile.html only — desktop untouched)
+// MOBILE.HTML — mobile-only JS
 // ══════════════════════════════════════════════
-function isMob() { return window.innerWidth <= 768; }
+const MOB_COL = {active:'#4f7ef8',completed:'#2ecc71',claim:'#f39c12',closed:'#8b90a7',issue:'#e74c3c',cancelled:'#aaa'};
+const MOB_LBL = {active:'Active',completed:'Done',claim:'Claim',closed:'Closed',issue:'Issue',cancelled:'Cancelled'};
 
-const MOB_COL = { active:'#4f7ef8', completed:'#2ecc71', claim:'#f39c12', closed:'#8b90a7', issue:'#e74c3c', cancelled:'#aaa' };
-const MOB_LBL = { active:'Active', completed:'Done', claim:'Claim', closed:'Closed', issue:'Issue', cancelled:'Cancelled' };
-
-let _mobQ = '';
-function mobSearch(v) {
-  _mobQ = (v||'').toLowerCase().trim();
-  const m = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues };
-  const fn = m[currentPage]; if (fn) fn();
+let _mQ='';
+function mobSearch(v){
+  _mQ=(v||'').toLowerCase().trim();
+  const m={all:renderAll,orders:renderOrders,completed:renderCompleted,claims:renderClaims,closed:renderClosed,issues:renderIssues};
+  const fn=m[currentPage]; if(fn) fn();
 }
 
-function renderMobCards(id, orders) {
-  const el = document.getElementById(id); if (!el) return;
-  let list = orders;
-  if (_mobQ) list = orders.filter(o =>
-    (o.orderNumber||'').toLowerCase().includes(_mobQ) ||
-    (o.address||'').toLowerCase().includes(_mobQ) ||
-    (o.subbies||'').toLowerCase().includes(_mobQ) ||
-    (o.area||'').toLowerCase().includes(_mobQ) ||
-    (o.sorCode||'').toLowerCase().includes(_mobQ)
+function mobRender(page, orders){
+  const el=document.getElementById('mob-cards-'+page); if(!el) return;
+  let list=orders;
+  if(_mQ) list=orders.filter(o=>
+    (o.orderNumber||'').toLowerCase().includes(_mQ)||
+    (o.address||'').toLowerCase().includes(_mQ)||
+    (o.subbies||'').toLowerCase().includes(_mQ)||
+    (o.area||'').toLowerCase().includes(_mQ)||
+    (o.sorCode||'').toLowerCase().includes(_mQ)
   );
-  if (!list.length) { el.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No orders found</div>'; return; }
-  const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  el.innerHTML = list.map(o => {
-    const st=o.status||'active', col=MOB_COL[st]||'#4f7ef8', lbl=MOB_LBL[st]||st;
+  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if(!list.length){
+    el.innerHTML='<div style="padding:32px;text-align:center;color:var(--text3);font-size:14px">No orders found</div>';
+    return;
+  }
+  el.innerHTML=list.map(o=>{
+    const st=o.status||'active',col=MOB_COL[st]||'#4f7ef8',lbl=MOB_LBL[st]||st;
     const meta=[o.area,o.subbies].filter(Boolean).join(' · ');
-    return `<div class="mob-card" onclick="mobVSheetOpen('${o.id}')" style="border-left-color:${col}">
+    return `<div class="mob-card" onclick="mobVOpen('${o.id}')" style="border-left-color:${col}">
       <div class="mob-card-top">
         <span class="mob-card-no">${esc(o.orderNumber||'—')}</span>
         <span class="mob-card-badge" style="background:${col}22;color:${col}">${lbl}</span>
@@ -5927,61 +5995,51 @@ function renderMobCards(id, orders) {
   }).join('');
 }
 
-function mobApply(twSel, cardId, orders) {
-  if (!isMob()) return;
-  const tw = document.querySelector(twSel); if (tw) tw.classList.add('mob-hide');
-  const mc = document.getElementById(cardId); if (mc) mc.style.display='block';
-  renderMobCards(cardId, orders);
+function mobTabUpdate(page){
+  const map={all:'all',orders:'orders',dashboard:'dashboard',claims:'claims'};
+  const more=['completed','closed','issues','cancelled','subbies','calendar','sor'];
+  document.querySelectorAll('.mob-tab').forEach(b=>b.classList.remove('active'));
+  const key=map[page]||(more.includes(page)?'more':null);
+  if(key){const b=document.getElementById('mobtab-'+key);if(b)b.classList.add('active');}
 }
 
-function mobNavUpdate(page) {
-  const direct = { all:'all', orders:'orders', dashboard:'dashboard', claims:'claims' };
-  const more = ['completed','closed','issues','cancelled','subbies','calendar','sor'];
-  document.querySelectorAll('.mob-nav-btn').forEach(b=>b.classList.remove('active'));
-  const key = direct[page] || (more.includes(page)?'more':null);
-  if (key) { const b=document.getElementById('mobnav-'+key); if(b) b.classList.add('active'); }
+function mobDrawerOpen(){
+  document.getElementById('mob-drawer').style.display='block';
+  document.getElementById('mob-overlay').style.display='block';
 }
-
-function mobDrawerOpen()  { document.getElementById('mob-drawer').style.display='block'; document.getElementById('mob-overlay').style.display='block'; }
-function mobDrawerClose() { document.getElementById('mob-drawer').style.display='none';  document.getElementById('mob-overlay').style.display='none'; }
+function mobDrawerClose(){
+  document.getElementById('mob-drawer').style.display='none';
+  document.getElementById('mob-overlay').style.display='none';
+}
 
 // View sheet
-let _mobVId=null;
-function mobVSheetOpen(id) {
+let _mvId=null;
+function mobVOpen(id){
   const o=DB.orders.find(x=>x.id===id); if(!o) return;
-  _mobVId=id;
-  const st=o.status||'active', col=MOB_COL[st]||'#4f7ef8';
+  _mvId=id;
+  const st=o.status||'active',col=MOB_COL[st]||'#4f7ef8';
   const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  document.getElementById('mvs-no').textContent   = o.orderNumber||'—';
+  document.getElementById('mvs-no').textContent=o.orderNumber||'—';
   const stEl=document.getElementById('mvs-st');
   stEl.textContent=MOB_LBL[st]||st; stEl.style.background=col+'22'; stEl.style.color=col;
-  document.getElementById('mvs-addr').textContent = o.address||'—';
-  document.getElementById('mvs-area').textContent = o.area||'—';
-  document.getElementById('mvs-sor').textContent  = o.sorCode||'—';
-  document.getElementById('mvs-amt').textContent  = '$'+Number(o.amount||0).toFixed(2);
-  document.getElementById('mvs-date').textContent = o.orderDate||'—';
-  document.getElementById('mvs-sub').textContent  = o.subbies||'—';
+  document.getElementById('mvs-addr').textContent=o.address||'—';
+  document.getElementById('mvs-area').textContent=o.area||'—';
+  document.getElementById('mvs-sor').textContent=o.sorCode||'—';
+  document.getElementById('mvs-amt').textContent='$'+Number(o.amount||0).toFixed(2);
+  document.getElementById('mvs-date').textContent=o.orderDate||'—';
+  document.getElementById('mvs-sub').textContent=o.subbies||'—';
   const nw=document.getElementById('mvs-notes-wrap');
-  if(o.notes){document.getElementById('mvs-notes').textContent=o.notes;nw.style.display='block';}else{nw.style.display='none';}
-  document.getElementById('mob-vsheet-overlay').style.display='block';
+  if(o.notes){document.getElementById('mvs-notes').textContent=o.notes;nw.style.display='block';}
+  else{nw.style.display='none';}
+  document.getElementById('mob-vsheet-bg').style.display='block';
   document.getElementById('mob-vsheet').style.display='block';
 }
-function mobVSheetClose() {
-  document.getElementById('mob-vsheet-overlay').style.display='none';
+function mobVClose(){
+  document.getElementById('mob-vsheet-bg').style.display='none';
   document.getElementById('mob-vsheet').style.display='none';
-  _mobVId=null;
+  _mvId=null;
 }
-function mobVSheetEdit() { const id=_mobVId; mobVSheetClose(); if(id) openOrderModal(id); }
-
-// Resize re-render
-let _mobRT;
-window.addEventListener('resize',()=>{
-  clearTimeout(_mobRT);
-  _mobRT=setTimeout(()=>{
-    const m={all:renderAll,orders:renderOrders,completed:renderCompleted,claims:renderClaims,closed:renderClosed,issues:renderIssues};
-    const fn=m[currentPage]; if(fn) fn();
-  },200);
-});
+function mobVEdit(){const id=_mvId;mobVClose();if(id)openOrderModal(id);}
 
 function initApp() {
   applyUiLabels();
