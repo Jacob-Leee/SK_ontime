@@ -2993,6 +2993,7 @@ function renderCompleted() {
   </tr>`;
   }).join('');
   renderTabSummary('completed');
+  mobRender('completed', orders);
   updateMobNav('completed');
 }
 
@@ -4392,6 +4393,7 @@ function renderOrders() {
     </tr>`;
   }).join('');
   renderTabSummary('orders');
+  mobRender('orders', orders);
   updateMobNav('orders');
 }
 
@@ -4463,6 +4465,7 @@ function renderClaims() {
     </tr>`;
   }).join('');
   renderTabSummary('claims');
+  mobRender('claims', orders);
   updateMobNav('claims');
 }
 
@@ -4573,6 +4576,7 @@ function renderAll() {
       <td><div class="row-actions">${nextBtns[st] || ''}</div></td>
     </tr>`;
   }).join('');
+  mobRender('all', orders);
   updateMobNav('all');
 }
 
