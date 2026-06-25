@@ -435,10 +435,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
 
 <!-- ══ BOTTOM NAV ══ -->
 <div id="mob-nav">
-  <button class="mob-tab active" id="mobtab-dashboard" onclick="showPage('dashboard')"><span class="ti">📊</span>Board</button>
-  <button class="mob-tab" id="mobtab-all"    onclick="showPage('all')">   <span class="ti">📋</span>All</button>
-  <button class="mob-tab" id="mobtab-orders" onclick="showPage('orders')"><span class="ti">⚡</span>Active</button>
-  <button class="mob-tab" id="mobtab-claims" onclick="showPage('claims')"><span class="ti">🛡️</span>Claims</button>
+  <button class="mob-tab active" id="mobtab-dashboard" onclick="mobNav('dashboard')"><span class="ti">📊</span>Board</button>
+  <button class="mob-tab" id="mobtab-all"    onclick="mobNav('all')">   <span class="ti">📋</span>All</button>
+  <button class="mob-tab" id="mobtab-orders" onclick="mobNav('orders')"><span class="ti">⚡</span>Active</button>
+  <button class="mob-tab" id="mobtab-claims" onclick="mobNav('claims')"><span class="ti">🛡️</span>Claims</button>
   <button class="mob-tab" id="mobtab-more"   onclick="mobDrawerOpen()">   <span class="ti">⋯</span>More</button>
 </div>
 
@@ -452,17 +452,17 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
     <span class="mob-drawer-title">Navigation</span>
     <button class="mob-drawer-close" onclick="mobDrawerClose()">✕</button>
   </div>
-  <div class="mob-dl" onclick="showPage('dashboard');mobDrawerClose()"><span class="dl-i">📊</span>Dashboard</div>
-  <div class="mob-dl" onclick="showPage('all');mobDrawerClose()">       <span class="dl-i">📋</span>All Orders</div>
-  <div class="mob-dl" onclick="showPage('orders');mobDrawerClose()">    <span class="dl-i">⚡</span>Active</div>
-  <div class="mob-dl" onclick="showPage('completed');mobDrawerClose()"> <span class="dl-i">✅</span>Completed</div>
-  <div class="mob-dl" onclick="showPage('claims');mobDrawerClose()">    <span class="dl-i">🛡️</span>Claims</div>
-  <div class="mob-dl" onclick="showPage('closed');mobDrawerClose()">    <span class="dl-i">🔒</span>Closed</div>
-  <div class="mob-dl" onclick="showPage('issues');mobDrawerClose()">    <span class="dl-i">⚠️</span>Issues</div>
-  <div class="mob-dl" onclick="showPage('calendar');mobDrawerClose()">  <span class="dl-i">📅</span>Calendar</div>
-  <div class="mob-dl" onclick="showPage('subbies');mobDrawerClose()">   <span class="dl-i">👷</span>Subbies</div>
+  <div class="mob-dl" onclick="mobNav('dashboard');mobDrawerClose()"><span class="dl-i">📊</span>Dashboard</div>
+  <div class="mob-dl" onclick="mobNav('all');mobDrawerClose()">       <span class="dl-i">📋</span>All Orders</div>
+  <div class="mob-dl" onclick="mobNav('orders');mobDrawerClose()">    <span class="dl-i">⚡</span>Active</div>
+  <div class="mob-dl" onclick="mobNav('completed');mobDrawerClose()"> <span class="dl-i">✅</span>Completed</div>
+  <div class="mob-dl" onclick="mobNav('claims');mobDrawerClose()">    <span class="dl-i">🛡️</span>Claims</div>
+  <div class="mob-dl" onclick="mobNav('closed');mobDrawerClose()">    <span class="dl-i">🔒</span>Closed</div>
+  <div class="mob-dl" onclick="mobNav('issues');mobDrawerClose()">    <span class="dl-i">⚠️</span>Issues</div>
+  <div class="mob-dl" onclick="mobNav('calendar');mobDrawerClose()">  <span class="dl-i">📅</span>Calendar</div>
+  <div class="mob-dl" onclick="mobNav('subbies');mobDrawerClose()">   <span class="dl-i">👷</span>Subbies</div>
   <div class="mob-dl" onclick="openSupModal();mobDrawerClose()">        <span class="dl-i">👤</span>Supervisors</div>
-  <div class="mob-dl" onclick="showPage('sor');mobDrawerClose()">       <span class="dl-i">📄</span>SOR Codes</div>
+  <div class="mob-dl" onclick="mobNav('sor');mobDrawerClose()">       <span class="dl-i">📄</span>SOR Codes</div>
   <div class="mob-drawer-sep"></div>
   <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()">     <span class="dl-i">☁️</span>Cloud Sync</div>
   <div class="mob-dl" onclick="openSettingsModal();mobDrawerClose()">  <span class="dl-i">⚙️</span>Settings</div>
@@ -5863,12 +5863,62 @@ function mobVClose(){
   _mvId=null;
 }
 function mobVEdit(){const id=_mvId;mobVClose();if(id)openOrderModal(id);}
+
+// ── SIMPLE MOBILE NAV ── directly renders cards without going through desktop render chain
+function mobNav(page) {
+  // 1. Switch page
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const pg = document.getElementById('page-' + page);
+  if (pg) pg.classList.add('active');
+
+  // 2. Update tab highlight
+  document.querySelectorAll('.mob-tab').forEach(b => b.classList.remove('active'));
+  const tabMap = {all:'all', orders:'orders', dashboard:'dashboard', claims:'claims',
+    completed:'more', closed:'more', issues:'more', cancelled:'more', subbies:'more', calendar:'more', sor:'more'};
+  const tabId = 'mobtab-' + (tabMap[page] || 'more');
+  const tb = document.getElementById(tabId);
+  if (tb) tb.classList.add('active');
+
+  // 3. Render cards directly
+  const statusMap = {
+    all: null,            // all statuses
+    orders: 'active',
+    completed: 'completed',
+    claims: 'claim',
+    closed: 'closed',
+    issues: 'issue',
+    cancelled: 'cancelled'
+  };
+
+  if (page in statusMap) {
+    const wantStatus = statusMap[page];
+    const orders = DB.orders.filter(o => {
+      if (wantStatus === null) return true;       // "all" — show everything
+      const st = o.status || 'active';
+      return st === wantStatus;
+    });
+    mobRender(page === 'orders' ? 'orders' : page, orders);
+    renderTabSummary(page);
+  }
+
+  // 4. Let desktop render functions run too (for dashboard etc)
+  currentPage = page;
+  try {
+    if (page === 'dashboard') renderDashboard();
+    else if (page === 'subbies') renderSubbiesPage();
+    else if (page === 'calendar') renderCalendar();
+    else if (page === 'sor') renderSOR();
+  } catch(e) { console.error('[mobNav render]', e); }
+
+  updateSidebar();
+}
+
 function initApp() {
   // Move modals to body level — fixes iOS Safari clipping fixed elements inside overflow:auto
   document.querySelectorAll('.modal-overlay').forEach(m => document.body.appendChild(m));
   applyUiLabels();
   applyUiColors();
-  showPage('dashboard');
+  mobNav('orders');  // default to orders on mobile
   updateSidebar();
   updateCalBadge();
   renderCloudStatus();
