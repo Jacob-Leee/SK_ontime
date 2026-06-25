@@ -320,9 +320,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .mob-tab {
   flex: 1; background: transparent; border: none; color: rgba(255,255,255,0.45);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; font-size: 10px; cursor: pointer; transition: color 0.15s;
+  gap: 1px; font-size: 9px; cursor: pointer; transition: color 0.15s; padding: 0 2px;
 }
-.mob-tab .ti { font-size: 20px; line-height: 1; }
+.mob-tab .ti { font-size: 17px; line-height: 1; }
 .mob-tab.active { color: var(--gold); }
 
 /* ── FAB ── */
@@ -432,17 +432,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     <button class="mob-tab" id="mt-dashboard" onclick="mobNav('dashboard')">
       <span class="ti">📊</span>Board
     </button>
-    <button class="mob-tab active" id="mt-all" onclick="mobNav('all')">
-      <span class="ti">📋</span>All
-    </button>
-    <button class="mob-tab" id="mt-orders" onclick="mobNav('orders')">
+    <button class="mob-tab active" id="mt-orders" onclick="mobNav('orders')">
       <span class="ti">⚡</span>Active
     </button>
-    <button class="mob-tab" id="mt-claims" onclick="mobNav('claims')">
-      <span class="ti">🛡️</span>Claims
+    <button class="mob-tab" id="mt-completed" onclick="mobNav('completed')">
+      <span class="ti">✅</span>Done
     </button>
-    <button class="mob-tab" id="mt-more" onclick="mobDrawerOpen()">
-      <span class="ti">···</span>More
+    <button class="mob-tab" id="mt-issues" onclick="mobNav('issues')">
+      <span class="ti">⚠️</span>Issues
+    </button>
+    <button class="mob-tab" id="mt-all" onclick="mobNav('all')">
+      <span class="ti">📋</span>Orders
     </button>
   </div>
 
@@ -5918,7 +5918,7 @@ const _MOB_FILTERS = {
   issues:    o => o.status === 'issue',
 };
 
-let _mobPage = 'all';
+let _mobPage = 'orders';
 let _mobSearchQ = '';
 let _mobViewId = null;
 
@@ -5926,7 +5926,7 @@ function mobNav(page) {
   _mobPage = page;
   // tab highlight
   document.querySelectorAll('.mob-tab').forEach(b => b.classList.remove('active'));
-  const validTabs = ['dashboard','orders','all','completed','claims'];
+  const validTabs = ['dashboard','orders','all','completed','claims','issues'];
   const tabKey = validTabs.includes(page) ? page : 'more';
   const tb = document.getElementById('mt-' + tabKey);
   if (tb) tb.classList.add('active');
@@ -5945,51 +5945,74 @@ function mobDashboard() {
   if (!el) return;
 
   const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
   const thisMonth = now.toISOString().slice(0, 7);
 
   const active    = DB.orders.filter(o => !o.status || o.status === 'active');
   const completed = DB.orders.filter(o => o.status === 'completed');
   const claims    = DB.orders.filter(o => o.status === 'claim');
   const closed    = DB.orders.filter(o => o.status === 'closed');
+  const issues    = DB.orders.filter(o => o.status === 'issue');
   const thisMonthOrders = DB.orders.filter(o => o.orderDate && o.orderDate.startsWith(thisMonth) && o.status !== 'cancelled');
-
   const sum = arr => arr.reduce((s,o) => s + (o.amount||0), 0);
   const fmt = n => '$' + Math.round(n).toLocaleString('en-AU');
 
   const statCard = (label, count, amount, color, page) =>
-    `<div onclick="mobNav('${page}')" style="background:var(--surface);border-radius:12px;padding:14px 16px;border-left:4px solid ${color};cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:8px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">${label}</div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline">
-        <span style="font-size:28px;font-weight:800;color:${color}">${count}</span>
-        <span style="font-size:14px;font-weight:700;color:var(--gold-dark)">${amount}</span>
+    `<div onclick="mobNav('${page}')" style="background:var(--surface);border-radius:12px;padding:12px 16px;border-left:4px solid ${color};cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">${label}</div>
+        <div style="font-size:26px;font-weight:800;color:${color};line-height:1.1">${count}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:15px;font-weight:700;color:var(--gold-dark)">${amount}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">tap to view →</div>
       </div>
     </div>`;
 
-  // Area breakdown for active orders
-  const byArea = {};
-  active.forEach(o => { const a = o.area||'—'; if(!byArea[a]) byArea[a]={c:0,amt:0}; byArea[a].c++; byArea[a].amt+=o.amount||0; });
-  const areaRows = Object.entries(byArea).sort((a,b)=>b[1].c-a[1].c)
-    .map(([a,v]) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:13px;font-weight:700;color:var(--text)">${a}</span>
-      <span style="font-size:12px;color:var(--text2)">${v.c} orders</span>
-      <span style="font-size:13px;font-weight:700;color:var(--gold-dark)">${fmt(v.amt)}</span>
-    </div>`).join('');
+  // Upcoming events (next 14 days)
+  const calEvents = loadCalEvents ? loadCalEvents() : [];
+  const upcoming = calEvents
+    .filter(e => e.date >= todayStr)
+    .sort((a,b) => a.date > b.date ? 1 : -1)
+    .slice(0, 5);
+
+  const evtHtml = upcoming.length ? upcoming.map(e => {
+    const daysAway = Math.round((new Date(e.date) - now) / 86400000);
+    const dayLabel = daysAway === 0 ? 'Today' : daysAway === 1 ? 'Tomorrow' : e.date;
+    const isUrgent = daysAway <= 2;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="min-width:70px;text-align:center;background:${isUrgent?'#e74c3c22':'var(--gold-bg)'};border-radius:8px;padding:4px 6px">
+        <div style="font-size:10px;font-weight:700;color:${isUrgent?'#e74c3c':'var(--gold-dark)'}">${dayLabel}</div>
+      </div>
+      <div style="flex:1;font-size:13px;color:var(--text);font-weight:600">${(e.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>
+      ${e.startTime ? `<div style="font-size:11px;color:var(--text3)">${e.startTime}</div>` : ''}
+    </div>`;
+  }).join('') : '<div style="font-size:13px;color:var(--text3);padding:8px 0">No upcoming events</div>';
 
   el.innerHTML =
-    `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">THIS MONTH</div>` +
-    `<div style="background:var(--surface);border-radius:12px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Revenue</div>
-      <div style="font-size:28px;font-weight:800;color:var(--gold-dark)">${fmt(sum(thisMonthOrders))}</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:2px">${thisMonthOrders.length} orders</div>
+    `<div style="background:var(--surface);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">This Month Revenue</div>
+      <div style="font-size:30px;font-weight:800;color:var(--gold-dark);margin:4px 0">${fmt(sum(thisMonthOrders))}</div>
+      <div style="font-size:12px;color:var(--text3)">${thisMonthOrders.length} orders</div>
     </div>` +
-    `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">STATUS</div>` +
     statCard('Active Orders', active.length, fmt(sum(active)), '#4f7ef8', 'orders') +
     statCard('Completed', completed.length, fmt(sum(completed)), '#2ecc71', 'completed') +
     statCard('Claims', claims.length, fmt(sum(claims)), '#f39c12', 'claims') +
+    (issues.length ? statCard('Issues', issues.length, fmt(sum(issues)), '#e74c3c', 'issues') : '') +
     statCard('Closed', closed.length, fmt(sum(closed)), '#8b90a7', 'closed') +
-    (byArea && Object.keys(byArea).length ?
-      `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px">ACTIVE BY AREA</div>
-       <div style="background:var(--surface);border-radius:12px;padding:4px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">${areaRows}</div>` : '');
+    `<div style="background:var(--surface);border-radius:12px;padding:14px 16px;margin-top:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">📅 Upcoming Events</div>
+      ${evtHtml}
+    </div>`;
+}
+
+// Hash-based color per subbie name (consistent across renders)
+function _subbieColor(name) {
+  if (!name) return null;
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue},60%,45%)`;
 }
 
 function mobRefresh() {
@@ -6024,15 +6047,20 @@ function mobRefresh() {
     const st = o.status || 'active';
     const col = _MOB_COL[st] || '#4f7ef8';
     const lbl = _MOB_LBL[st] || st;
+    // For active orders: color the card by subbie name
+    const subCol = (_mobPage === 'orders' && o.subbies) ? _subbieColor(o.subbies) : null;
+    const borderCol = subCol || col;
     const meta = [o.area, o.subbies].filter(Boolean).join(' · ');
-    return `<div class="mc" onclick="mobVOpen('${o.id}')" style="border-left-color:${col}">
+    const subTag = subCol ? `<span style="font-size:9px;padding:1px 7px;border-radius:8px;font-weight:700;background:${subCol}22;color:${subCol}">${_esc(o.subbies)}</span>` : '';
+    return `<div class="mc" onclick="mobVOpen('${o.id}')" style="border-left-color:${borderCol}${subCol?';border-left-width:5px':''}">
       <div class="mc-top">
         <span class="mc-no">${_esc(o.orderNumber||'—')}</span>
         <span class="mc-badge" style="background:${col}22;color:${col}">${lbl}</span>
       </div>
       <div class="mc-addr">${_esc(o.address||'—')}</div>
       <div class="mc-bot">
-        <span class="mc-meta">${_esc(meta)}</span>
+        <span class="mc-meta">${_esc(o.area||'')}${subCol?'':' · '+_esc(o.subbies||'')}</span>
+        ${subTag}
         <span class="mc-amt">$${Number(o.amount||0).toFixed(2)}</span>
       </div>
     </div>`;
@@ -6118,7 +6146,7 @@ function mobSyncDot(color) {
 function mobInit() {
   // Move modals to body level (fixes iOS overflow clipping)
   document.querySelectorAll('.modal-overlay').forEach(m => document.body.appendChild(m));
-  mobNav('all');
+  mobNav('orders');
 }
 
 
