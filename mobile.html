@@ -429,14 +429,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
   <!-- Bottom nav -->
   <div id="mob-nav">
-    <button class="mob-tab active" id="mt-orders" onclick="mobNav('orders')">
-      <span class="ti">⚡</span>Active
+    <button class="mob-tab" id="mt-dashboard" onclick="mobNav('dashboard')">
+      <span class="ti">📊</span>Board
     </button>
-    <button class="mob-tab" id="mt-all" onclick="mobNav('all')">
+    <button class="mob-tab active" id="mt-all" onclick="mobNav('all')">
       <span class="ti">📋</span>All
     </button>
-    <button class="mob-tab" id="mt-completed" onclick="mobNav('completed')">
-      <span class="ti">✅</span>Done
+    <button class="mob-tab" id="mt-orders" onclick="mobNav('orders')">
+      <span class="ti">⚡</span>Active
     </button>
     <button class="mob-tab" id="mt-claims" onclick="mobNav('claims')">
       <span class="ti">🛡️</span>Claims
@@ -5887,7 +5887,7 @@ function initApp() {
   applyUiLabels();
   applyUiColors();
   updateSidebar();
-  setTimeout(mobInit, 50);  // mobile init after data loads
+  setTimeout(function(){ mobInit(); }, 50);  // mobile init after data loads
   updateCalBadge();
   renderCloudStatus();
   if (CLOUD.enabled && CLOUD.url) startCloudSync();
@@ -5918,7 +5918,7 @@ const _MOB_FILTERS = {
   issues:    o => o.status === 'issue',
 };
 
-let _mobPage = 'orders';
+let _mobPage = 'all';
 let _mobSearchQ = '';
 let _mobViewId = null;
 
@@ -5926,7 +5926,7 @@ function mobNav(page) {
   _mobPage = page;
   // tab highlight
   document.querySelectorAll('.mob-tab').forEach(b => b.classList.remove('active'));
-  const validTabs = ['orders','all','completed','claims'];
+  const validTabs = ['dashboard','orders','all','completed','claims'];
   const tabKey = validTabs.includes(page) ? page : 'more';
   const tb = document.getElementById('mt-' + tabKey);
   if (tb) tb.classList.add('active');
@@ -5938,7 +5938,62 @@ function mobSearch(v) {
   mobRefresh();
 }
 
+function mobDashboard() {
+  const el = document.getElementById('mob-card-list');
+  const bar = document.getElementById('mob-summary');
+  if (bar) bar.style.display = 'none';
+  if (!el) return;
+
+  const now = new Date();
+  const thisMonth = now.toISOString().slice(0, 7);
+
+  const active    = DB.orders.filter(o => !o.status || o.status === 'active');
+  const completed = DB.orders.filter(o => o.status === 'completed');
+  const claims    = DB.orders.filter(o => o.status === 'claim');
+  const closed    = DB.orders.filter(o => o.status === 'closed');
+  const thisMonthOrders = DB.orders.filter(o => o.orderDate && o.orderDate.startsWith(thisMonth) && o.status !== 'cancelled');
+
+  const sum = arr => arr.reduce((s,o) => s + (o.amount||0), 0);
+  const fmt = n => '$' + Math.round(n).toLocaleString('en-AU');
+
+  const statCard = (label, count, amount, color, page) =>
+    `<div onclick="mobNav('${page}')" style="background:var(--surface);border-radius:12px;padding:14px 16px;border-left:4px solid ${color};cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">${label}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-size:28px;font-weight:800;color:${color}">${count}</span>
+        <span style="font-size:14px;font-weight:700;color:var(--gold-dark)">${amount}</span>
+      </div>
+    </div>`;
+
+  // Area breakdown for active orders
+  const byArea = {};
+  active.forEach(o => { const a = o.area||'—'; if(!byArea[a]) byArea[a]={c:0,amt:0}; byArea[a].c++; byArea[a].amt+=o.amount||0; });
+  const areaRows = Object.entries(byArea).sort((a,b)=>b[1].c-a[1].c)
+    .map(([a,v]) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;font-weight:700;color:var(--text)">${a}</span>
+      <span style="font-size:12px;color:var(--text2)">${v.c} orders</span>
+      <span style="font-size:13px;font-weight:700;color:var(--gold-dark)">${fmt(v.amt)}</span>
+    </div>`).join('');
+
+  el.innerHTML =
+    `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">THIS MONTH</div>` +
+    `<div style="background:var(--surface);border-radius:12px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Revenue</div>
+      <div style="font-size:28px;font-weight:800;color:var(--gold-dark)">${fmt(sum(thisMonthOrders))}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">${thisMonthOrders.length} orders</div>
+    </div>` +
+    `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">STATUS</div>` +
+    statCard('Active Orders', active.length, fmt(sum(active)), '#4f7ef8', 'orders') +
+    statCard('Completed', completed.length, fmt(sum(completed)), '#2ecc71', 'completed') +
+    statCard('Claims', claims.length, fmt(sum(claims)), '#f39c12', 'claims') +
+    statCard('Closed', closed.length, fmt(sum(closed)), '#8b90a7', 'closed') +
+    (byArea && Object.keys(byArea).length ?
+      `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px">ACTIVE BY AREA</div>
+       <div style="background:var(--surface);border-radius:12px;padding:4px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">${areaRows}</div>` : '');
+}
+
 function mobRefresh() {
+  if (_mobPage === 'dashboard') { mobDashboard(); return; }
   const filterFn = _MOB_FILTERS[_mobPage] || _MOB_FILTERS.all;
   let list = DB.orders.filter(filterFn);
 
@@ -6063,7 +6118,7 @@ function mobSyncDot(color) {
 function mobInit() {
   // Move modals to body level (fixes iOS overflow clipping)
   document.querySelectorAll('.modal-overlay').forEach(m => document.body.appendChild(m));
-  mobNav('orders');
+  mobNav('all');
 }
 
 
