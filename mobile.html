@@ -5857,6 +5857,8 @@ function mobVClose(){
 }
 function mobVEdit(){const id=_mvId;mobVClose();if(id)openOrderModal(id);}
 function initApp() {
+  // Move modals to body level — fixes iOS Safari clipping fixed elements inside overflow:auto
+  document.querySelectorAll('.modal-overlay').forEach(m => document.body.appendChild(m));
   applyUiLabels();
   applyUiColors();
   showPage('dashboard');
