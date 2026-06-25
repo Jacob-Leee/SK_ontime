@@ -5969,25 +5969,34 @@ function mobDashboard() {
       </div>
     </div>`;
 
-  // Upcoming events (next 14 days)
-  const calEvents = loadCalEvents ? loadCalEvents() : [];
-  const upcoming = calEvents
-    .filter(e => e.date >= todayStr)
-    .sort((a,b) => a.date > b.date ? 1 : -1)
-    .slice(0, 5);
+  // Upcoming events (next 21 days) — uses same expanded engine as desktop calendar
+  const _evFrom = new Date(now); _evFrom.setHours(0,0,0,0);
+  const _evTo   = calAddDays(_evFrom, 21);
+  const upcoming = (typeof getExpandedEvents === 'function')
+    ? getExpandedEvents(_evFrom, _evTo)
+        .filter(e => e.startDate >= todayStr)
+        .sort((a,b) => a.startDate > b.startDate ? 1 : (a.startTime||'') > (b.startTime||'') ? 1 : -1)
+        .slice(0, 8)
+    : [];
 
   const evtHtml = upcoming.length ? upcoming.map(e => {
-    const daysAway = Math.round((new Date(e.date) - now) / 86400000);
-    const dayLabel = daysAway === 0 ? 'Today' : daysAway === 1 ? 'Tomorrow' : e.date;
-    const isUrgent = daysAway <= 2;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="min-width:70px;text-align:center;background:${isUrgent?'#e74c3c22':'var(--gold-bg)'};border-radius:8px;padding:4px 6px">
-        <div style="font-size:10px;font-weight:700;color:${isUrgent?'#e74c3c':'var(--gold-dark)'}">${dayLabel}</div>
+    const daysAway = Math.round((new Date(e.startDate+'T00:00:00') - _evFrom) / 86400000);
+    const dayLabel = daysAway === 0 ? 'Today' : daysAway === 1 ? 'Tomorrow' : e.startDate;
+    const isUrgent = daysAway <= 1;
+    const cat = (typeof CAL_CATS !== 'undefined' && e.category) ? (CAL_CATS[e.category]||CAL_CATS.general) : {color:'#4f7ef8',label:e.category||''};
+    const _e = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="min-width:72px;text-align:center;background:${isUrgent?'#e74c3c22':cat.color+'18'};border-radius:8px;padding:4px 6px;border:1px solid ${isUrgent?'#e74c3c44':cat.color+'33'}">
+        <div style="font-size:10px;font-weight:700;color:${isUrgent?'#e74c3c':cat.color}">${dayLabel}</div>
+        ${e.startTime ? `<div style="font-size:9px;color:var(--text3)">${e.startTime}</div>` : ''}
       </div>
-      <div style="flex:1;font-size:13px;color:var(--text);font-weight:600">${(e.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>
-      ${e.startTime ? `<div style="font-size:11px;color:var(--text3)">${e.startTime}</div>` : ''}
+      <div style="flex:1">
+        <div style="font-size:13px;color:var(--text);font-weight:600">${_e(e.title)}</div>
+        ${e.notes ? `<div style="font-size:11px;color:var(--text3);margin-top:1px">${_e(e.notes)}</div>` : ''}
+      </div>
+      <span style="font-size:9px;padding:2px 6px;border-radius:8px;background:${cat.color}22;color:${cat.color};font-weight:700;flex-shrink:0">${cat.label||''}</span>
     </div>`;
-  }).join('') : '<div style="font-size:13px;color:var(--text3);padding:8px 0">No upcoming events</div>';
+  }).join('') : '<div style="font-size:13px;color:var(--text3);padding:8px 0">No upcoming events in the next 21 days</div>';
 
   el.innerHTML =
     `<div style="background:var(--surface);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
@@ -6030,8 +6039,18 @@ function mobRefresh() {
     );
   }
 
-  // sort newest first
-  list.sort((a, b) => ((b.orderDate||'') > (a.orderDate||'') ? 1 : -1));
+  // For active orders: sort by subbie name, then by date within each subbie
+  if (_mobPage === 'orders') {
+    list.sort((a, b) => {
+      const sa = (a.subbies||'').toLowerCase();
+      const sb = (b.subbies||'').toLowerCase();
+      if (sa < sb) return -1;
+      if (sa > sb) return 1;
+      return (b.orderDate||'') > (a.orderDate||'') ? 1 : -1;
+    });
+  } else {
+    list.sort((a, b) => ((b.orderDate||'') > (a.orderDate||'') ? 1 : -1));
+  }
 
   const el = document.getElementById('mob-card-list');
   if (!el) return;
@@ -6051,16 +6070,18 @@ function mobRefresh() {
     const subCol = (_mobPage === 'orders' && o.subbies) ? _subbieColor(o.subbies) : null;
     const borderCol = subCol || col;
     const meta = [o.area, o.subbies].filter(Boolean).join(' · ');
-    const subTag = subCol ? `<span style="font-size:9px;padding:1px 7px;border-radius:8px;font-weight:700;background:${subCol}22;color:${subCol}">${_esc(o.subbies)}</span>` : '';
-    return `<div class="mc" onclick="mobVOpen('${o.id}')" style="border-left-color:${borderCol}${subCol?';border-left-width:5px':''}">
+    const subTag = subCol
+      ? `<div style="font-size:12px;font-weight:800;color:${subCol};margin-bottom:3px">${_esc(o.subbies)}</div>`
+      : '';
+    return `<div class="mc" onclick="mobVOpen('${o.id}')" style="border-left-color:${borderCol};border-left-width:${subCol?'5':'4'}px">
+      ${subTag}
       <div class="mc-top">
         <span class="mc-no">${_esc(o.orderNumber||'—')}</span>
         <span class="mc-badge" style="background:${col}22;color:${col}">${lbl}</span>
       </div>
       <div class="mc-addr">${_esc(o.address||'—')}</div>
       <div class="mc-bot">
-        <span class="mc-meta">${_esc(o.area||'')}${subCol?'':' · '+_esc(o.subbies||'')}</span>
-        ${subTag}
+        <span class="mc-meta">${_esc(o.area||'')}</span>
         <span class="mc-amt">$${Number(o.amount||0).toFixed(2)}</span>
       </div>
     </div>`;
