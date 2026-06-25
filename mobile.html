@@ -3004,7 +3004,6 @@ function renderCompleted() {
   }).join('');
   renderTabSummary('completed');
   mobRender('completed', orders);
-  updateMobNav('completed');
 }
 
 // ============================================================
@@ -4404,7 +4403,6 @@ function renderOrders() {
   }).join('');
   renderTabSummary('orders');
   mobRender('orders', orders);
-  updateMobNav('orders');
 }
 
 // ============================================================
@@ -4476,7 +4474,6 @@ function renderClaims() {
   }).join('');
   renderTabSummary('claims');
   mobRender('claims', orders);
-  updateMobNav('claims');
 }
 
 // ============================================================
@@ -4587,7 +4584,6 @@ function renderAll() {
     </tr>`;
   }).join('');
   mobRender('all', orders);
-  updateMobNav('all');
 }
 
 // ============================================================
@@ -5798,6 +5794,7 @@ function openEmailImport() {
 const MOB_COL={active:'#4f7ef8',completed:'#2ecc71',claim:'#f39c12',closed:'#8b90a7',issue:'#e74c3c',cancelled:'#aaa'};
 const MOB_LBL={active:'Active',completed:'Done',claim:'Claim',closed:'Closed',issue:'Issue',cancelled:'Cancelled'};
 
+function updateMobNav(p){} // stub — tab highlighting done by mobTabUpdate
 let _mQ='';
 function mobSearch(v){
   _mQ=(v||'').toLowerCase().trim();
