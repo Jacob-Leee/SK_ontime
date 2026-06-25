@@ -2376,27 +2376,30 @@ function showPage(page) {
   mobTabUpdate(page);
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
-  document.getElementById('nav-' + page).classList.add('active');
+  const pageEl = document.getElementById('page-' + page);
+  if (pageEl) pageEl.classList.add('active');
+  const navEl = document.getElementById('nav-' + page);
+  if (navEl) navEl.classList.add('active');
   currentPage = page;
-  document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
+  const titleEl = document.getElementById('page-title');
+  if (titleEl) titleEl.textContent = PAGE_TITLES[page] || page;
 
   const actions = document.getElementById('header-actions');
   const newBtn = `<button class="btn btn-primary" onclick="openOrderModal()">${DB.uiLabels.btnNewOrder}</button>`;
   const csvBtn = `<button class="btn btn-secondary" onclick="exportCSV()">📊 ${DB.uiLabels.btnExportCsv}</button>`;
   const importBtn = `<button class="btn btn-secondary" onclick="openEmailImport()">📧 ${DB.uiLabels.btnImportEmail}</button>`;
 
-  if (page === 'all')       { actions.innerHTML = csvBtn + importBtn + newBtn; renderAll(); }
-  else if (page === 'orders')    { actions.innerHTML = csvBtn + importBtn + newBtn; renderOrders(); }
-  else if (page === 'completed') { actions.innerHTML = csvBtn; renderCompleted(); }
-  else if (page === 'claims')    { actions.innerHTML = csvBtn; renderClaims(); }
-  else if (page === 'closed')    { actions.innerHTML = csvBtn; renderClosed(); }
-  else if (page === 'issues')    { actions.innerHTML = csvBtn; renderIssues(); }
-  else if (page === 'cancelled') { actions.innerHTML = csvBtn; renderCancelled(); }
-  else if (page === 'subbies')   { actions.innerHTML = ''; subActivePerson = 'All'; renderSubbiesPage(); }
-  else if (page === 'calendar')  { actions.innerHTML = `<button class="btn btn-primary" onclick="openCalEventModal()">+ New Event</button>`; renderCalendar(); }
-  else if (page === 'dashboard') { actions.innerHTML = ''; renderDashboard(); }
-  else if (page === 'sor')       { actions.innerHTML = `<button class="btn btn-primary" onclick="openSORModal()">+ Add SOR Code</button>`; renderSOR(); }
+  if (page === 'all')       { if(actions) actions.innerHTML = csvBtn + importBtn + newBtn; renderAll(); }
+  else if (page === 'orders')    { if(actions) actions.innerHTML = csvBtn + importBtn + newBtn; renderOrders(); }
+  else if (page === 'completed') { if(actions) actions.innerHTML = csvBtn; renderCompleted(); }
+  else if (page === 'claims')    { if(actions) actions.innerHTML = csvBtn; renderClaims(); }
+  else if (page === 'closed')    { if(actions) actions.innerHTML = csvBtn; renderClosed(); }
+  else if (page === 'issues')    { if(actions) actions.innerHTML = csvBtn; renderIssues(); }
+  else if (page === 'cancelled') { if(actions) actions.innerHTML = csvBtn; renderCancelled(); }
+  else if (page === 'subbies')   { if(actions) actions.innerHTML = ''; subActivePerson = 'All'; renderSubbiesPage(); }
+  else if (page === 'calendar')  { if(actions) actions.innerHTML = `<button class="btn btn-primary" onclick="openCalEventModal()">+ New Event</button>`; renderCalendar(); }
+  else if (page === 'dashboard') { if(actions) actions.innerHTML = ''; renderDashboard(); }
+  else if (page === 'sor')       { if(actions) actions.innerHTML = `<button class="btn btn-primary" onclick="openSORModal()">+ Add SOR Code</button>`; renderSOR(); }
   renderTabSummary(page);
   updateSidebar();
 }
