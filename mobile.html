@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SK Ontime — Mobile</title>
+<title>SK Ontime — Holmes Order Manager</title>
 <script>
 /* Chart.js v4.4.0 — embedded for offline use (MIT License) */
 /*!
@@ -243,13 +243,13 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 .ts-wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .ts-total { display: flex; align-items: baseline; gap: 8px; padding-right: 20px; border-right: 1px solid var(--border); }
 .ts-total-label { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
-.ts-total-val { font-size: 15px; font-weight: 800; color: var(--gold-dark); font-variant-numeric: tabular-nums; }
+.ts-total-val { font-size: 20px; font-weight: 800; color: var(--gold-dark); font-variant-numeric: tabular-nums; }
 .ts-total-cnt { font-size: 12px; color: var(--text3); }
 .ts-areas { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
-.ts-area { display: flex; flex-direction: column; align-items: center; background: var(--gold-bg); border: 1px solid var(--gold-border); border-radius: 4px; padding: 2px 6px; min-width: 36px; }
-.ts-area-name { font-size: 8px; font-weight: 700; color: var(--gold-dark); }
-.ts-area-cnt { font-size: 11px; font-weight: 800; color: var(--text); }
-.ts-area-amt { font-size: 8px; color: var(--text3); }
+.ts-area { display: flex; flex-direction: column; align-items: center; background: var(--gold-bg); border: 1px solid var(--gold-border); border-radius: 6px; padding: 4px 10px; min-width: 58px; }
+.ts-area-name { font-size: 10px; font-weight: 700; color: var(--gold-dark); }
+.ts-area-cnt { font-size: 13px; font-weight: 800; color: var(--text); }
+.ts-area-amt { font-size: 9px; color: var(--text3); }
 
 /* ── Toast ── */
 .toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; }
@@ -270,237 +270,345 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 ══════════════════════════════════════════════ */
 
 
+</style>
 
-/* ══ MOBILE.HTML ONLY ══ */
-
-/* Kill desktop structure */
-#app, #sidebar, #main, #header, #content { all: unset; display: block; }
+<style id="mob-css">
+/* ── HIDE DESKTOP ── */
 #app { display: none !important; }
 
-/* Viewport */
-html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
-#mob-main {
-  position: fixed; top: 50px; bottom: 60px; left: 0; right: 0;
-  overflow-y: auto; -webkit-overflow-scrolling: touch;
+/* ── RESET ── */
+*, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); font-family: var(--font); }
+
+/* ── LAYOUT ── */
+#mob-wrap {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
   background: var(--bg);
 }
 
-/* Pages */
-.page { display: none; padding: 0; }
-.page.active { display: block; }
-
-/* Modals use .modal-overlay — no override needed */
-
-/* Filters */
-.filters {
-  display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 10px;
-  background: var(--bg); border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; z-index: 5;
+/* ── HEADER ── */
+#mob-hdr {
+  flex: 0 0 50px; height: 50px;
+  background: var(--dark); display: flex; align-items: center; gap: 6px; padding: 0 10px;
+  z-index: 100;
 }
-.filter-input[id^="search"] { width: 100% !important; font-size: 13px !important; padding: 7px 12px !important; }
-.filters select { font-size: 12px; padding: 5px 8px; }
-
-/* Hide desktop tables always */
-.table-wrap, .tab-summary { display: none !important; }
-
-/* Dashboard */
-#dash-widgets { grid-template-columns: 1fr !important; gap: 8px !important; padding: 8px !important; }
-#dash-widgets .dash-widget { grid-column: span 1 !important; }
-#page-dashboard { padding: 8px !important; }
-#page-dashboard .filters { position: relative; top: auto; }
-#page-subbies, #page-calendar, #page-sor, #page-issues, #page-closed, #page-cancelled { padding: 8px; }
-
-/* ── MOBILE HEADER ── */
-#mob-header {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-  display: flex; align-items: center; gap: 6px;
-  background: var(--dark); height: 50px; padding: 0 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+.mob-logo { font-size: 15px; font-weight: 800; color: var(--gold); letter-spacing: 0.5px; flex-shrink: 0; }
+#mob-search-box {
+  flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px; padding: 5px 12px; font-size: 12px; color: #fff; outline: none;
 }
-.mob-logo { font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 0.5px; white-space: nowrap; }
-#mob-search-wrap {
-  flex: 1; display: flex; align-items: center; gap: 6px;
-  background: rgba(255,255,255,0.1); border-radius: 20px; padding: 0 12px; height: 34px;
+#mob-search-box::placeholder { color: rgba(255,255,255,0.4); }
+.mob-hdr-btn {
+  flex-shrink: 0; background: transparent; border: 1px solid rgba(201,168,76,0.4);
+  color: var(--gold-dark); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;
 }
-.mob-search-icon { font-size: 13px; opacity: 0.5; flex-shrink: 0; }
-#mob-search { background: none; border: none; outline: none; color: var(--text); font-size: 13px; width: 100%; }
-#mob-search::placeholder { color: var(--text3); }
-.mob-icon-btn {
-  display: flex; align-items: center; gap: 4px;
-  background: none; border: 1px solid rgba(255,255,255,0.13);
-  border-radius: 10px; color: var(--text2); cursor: pointer;
-  padding: 4px 8px; font-size: 10px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
+.mob-hamburger { flex-shrink: 0; background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 4px; }
+
+/* ── BODY (scrollable) ── */
+#mob-body {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 8px 8px 4px;
 }
-.mob-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); display: inline-block; }
-.mob-sync-lbl { font-size: 10px; }
-.mob-hamburger { background: none; border: none; color: var(--text2); font-size: 22px; cursor: pointer; padding: 2px 4px; line-height: 1; flex-shrink: 0; }
 
 /* ── BOTTOM NAV ── */
 #mob-nav {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+  flex: 0 0 60px; height: 60px;
+  background: var(--dark); border-top: 1px solid rgba(255,255,255,0.08);
   display: flex; align-items: stretch;
-  background: var(--dark); height: 60px;
-  border-top: 1px solid rgba(255,255,255,0.08);
 }
 .mob-tab {
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 3px; background: none; border: none; cursor: pointer;
-  color: var(--text3); font-size: 9px; font-weight: 700;
-  padding: 4px 2px; font-family: inherit; letter-spacing: 0.2px;
+  flex: 1; background: transparent; border: none; color: rgba(255,255,255,0.45);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; font-size: 10px; cursor: pointer; transition: color 0.15s;
 }
 .mob-tab .ti { font-size: 20px; line-height: 1; }
 .mob-tab.active { color: var(--gold); }
 
 /* ── FAB ── */
 #mob-fab {
-  position: fixed; bottom: 72px; right: 16px; z-index: 190;
+  position: fixed; right: 16px; bottom: 72px;
   width: 52px; height: 52px; border-radius: 50%;
-  background: var(--gold); border: none; cursor: pointer;
-  font-size: 28px; color: #fff;
-  box-shadow: 0 4px 16px rgba(201,168,76,0.5);
+  background: var(--gold); border: none; color: #1a1000;
+  font-size: 28px; line-height: 1; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(201,168,76,0.4); z-index: 150;
   display: flex; align-items: center; justify-content: center;
 }
 
-/* ── DRAWER ── */
-#mob-overlay { display: none; position: fixed; inset: 0; z-index: 299; background: rgba(0,0,0,0.5); }
-#mob-drawer  {
-  display: none; position: fixed; top: 0; right: 0; bottom: 0;
-  width: 245px; z-index: 300; background: var(--dark);
-  overflow-y: auto; box-shadow: -6px 0 24px rgba(0,0,0,0.4);
+/* ── CARDS ── */
+.mc {
+  background: var(--surface); border-radius: 10px; padding: 10px 12px;
+  margin-bottom: 6px; border-left: 4px solid #4f7ef8; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: opacity 0.12s;
+  display: block;
 }
-.mob-drawer-top {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 20px 16px 14px; border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-.mob-drawer-title { font-size: 11px; color: var(--text3); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-.mob-drawer-close { background: none; border: none; color: var(--text3); font-size: 20px; cursor: pointer; }
-.mob-dl {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px; color: var(--text); font-size: 14px; cursor: pointer;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-.mob-dl:active { background: rgba(255,255,255,0.06); }
-.dl-i { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
-.mob-drawer-sep { height: 1px; background: rgba(255,255,255,0.08); margin: 6px 0; }
+.mc:active { opacity: 0.7; }
+.mc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.mc-no { font-size: 13px; font-weight: 800; color: var(--text); font-family: monospace; }
+.mc-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
+.mc-addr { font-size: 12px; color: var(--text2); margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mc-bot { display: flex; justify-content: space-between; align-items: center; }
+.mc-meta { font-size: 11px; color: var(--text3); }
+.mc-amt { font-size: 12px; font-weight: 700; color: var(--gold-dark); }
 
-/* ── ORDER CARDS ── */
-.mob-cards { padding: 6px 8px 12px; }
-.mob-card {
-  background: var(--surface); border-radius: 8px; padding: 7px 10px;
-  margin-bottom: 4px; border-left: 3px solid #4f7ef8; cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: opacity 0.1s;
+/* ── EMPTY STATE ── */
+.mob-empty { padding: 48px 24px; text-align: center; color: var(--text3); font-size: 14px; }
+
+/* ── SYNC DOT ── */
+.mob-dot { width: 7px; height: 7px; border-radius: 50%; background: #888; display: inline-block; margin-right: 3px; vertical-align: middle; }
+
+/* ── DRAWER ── */
+#mob-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; }
+#mob-drawer {
+  display: none; position: fixed; top: 0; left: 0; bottom: 0; width: 260px;
+  background: var(--surface); z-index: 210; padding: 20px 0; overflow-y: auto;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.3);
 }
-.mob-card:active { opacity: 0.7; }
-.mob-card-top   { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.mob-card-no    { font-size: 12px; font-weight: 800; color: var(--text); }
-.mob-card-badge { font-size: 10px; padding: 2px 9px; border-radius: 10px; font-weight: 700; }
-.mob-card-addr  { font-size: 11px; color: var(--text2); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mob-card-bot   { display: flex; justify-content: space-between; align-items: center; }
-.mob-card-meta  { font-size: 10px; color: var(--text3); }
-.mob-card-amt   { font-size: 11px; font-weight: 700; color: var(--gold-dark); }
+.mob-dl {
+  padding: 13px 20px; font-size: 14px; color: var(--text); cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+}
+.mob-dl:active { background: var(--bg); }
+.dl-i { font-size: 18px; }
+.mob-drawer-title { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase;
+  letter-spacing: 1px; padding: 12px 20px 6px; margin-top: 8px; border-top: 1px solid var(--border); }
 
 /* ── VIEW SHEET ── */
-#mob-vbg { display: none; position: fixed; inset: 0; z-index: 399; background: rgba(0,0,0,0.5); }
+#mob-vbg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; }
 #mob-vsheet {
-  display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 400;
-  background: var(--surface); border-radius: 20px 20px 0 0;
-  padding: 14px 16px 32px; max-height: 78dvh; overflow-y: auto;
-  box-shadow: 0 -6px 30px rgba(0,0,0,0.35);
+  display: none; position: fixed; left: 0; right: 0; bottom: 0;
+  max-height: 80vh; background: var(--surface); border-radius: 20px 20px 0 0;
+  z-index: 310; overflow-y: auto; padding: 20px;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.2);
 }
-.mvs-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 14px; }
-.mvs-head   { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-.mvs-lbl    { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 3px; }
-.mvs-val    { font-size: 14px; color: var(--text); font-weight: 500; }
-.mvs-orderno { font-size: 20px; font-weight: 800; color: var(--text); }
-.mvs-badge  { font-size: 11px; padding: 3px 11px; border-radius: 12px; font-weight: 700; flex-shrink: 0; margin-top: 4px; }
-.mvs-field  { margin-bottom: 12px; }
+.mvs-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.mvs-lbl { font-size: 11px; color: var(--text3); font-weight: 600; min-width: 70px; text-transform: uppercase; }
+.mvs-val { font-size: 13px; color: var(--text); flex: 1; word-break: break-word; }
+.mvs-actions { display: flex; gap: 10px; margin-top: 16px; }
+.mvs-btn { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; }
+.mvs-btn-edit { background: var(--gold); color: #1a1000; }
+.mvs-btn-close { background: var(--bg); color: var(--text2); border: 1px solid var(--border); }
+
+/* ── MODAL FIX (iOS) ── modals are moved to body, ensure they show ── */
+.modal-overlay { z-index: 400 !important; }
+
+/* ── SUMMARY BAR ── */
+#mob-summary {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.mob-sum-total { font-size: 18px; font-weight: 800; color: var(--gold-dark); }
+.mob-sum-cnt { font-size: 12px; color: var(--text3); }
+.mob-sum-area { background: var(--gold-bg); border: 1px solid var(--gold-border); border-radius: 4px;
+  padding: 2px 7px; font-size: 11px; color: var(--gold-dark); font-weight: 700; }
 </style>
 </head>
 <body>
 
-<!-- ══ MOBILE HEADER ══ -->
-<div id="mob-header">
-  <div class="mob-logo">SK<span style="color:var(--text2);font-weight:400"> ONTIME</span></div>
-  <div id="mob-search-wrap">
-    <span class="mob-search-icon">🔍</span>
-    <input id="mob-search" type="text" placeholder="Order#, address, subbie…" oninput="mobSearch(this.value)" autocomplete="off"/>
+<!-- ══ MOBILE SHELL ══ -->
+<div id="mob-wrap">
+
+  <!-- Header -->
+  <div id="mob-hdr">
+    <div class="mob-logo">SK ONTIME</div>
+    <input id="mob-search-box" type="search" placeholder="Order#, address…" oninput="mobSearch(this.value)" autocomplete="off"/>
+    <button class="mob-hdr-btn" onclick="openCloudModal()">
+      <span id="mob-sync-dot" class="mob-dot"></span>Sync
+    </button>
+    <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener"
+       class="mob-hdr-btn" style="text-decoration:none">DCJ</a>
+    <button class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
   </div>
-  <button class="mob-icon-btn" onclick="openCloudModal()">
-    <span id="mob-sync-dot" class="mob-dot"></span><span class="mob-sync-lbl">Sync</span>
-  </button>
-  <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener"
-     class="mob-icon-btn" style="text-decoration:none;color:var(--gold-dark);border-color:rgba(79,126,248,0.4)">DCJ</a>
-  <button class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
+
+  <!-- Scrollable body -->
+  <div id="mob-body">
+    <div id="mob-summary" style="display:none"></div>
+    <div id="mob-card-list"></div>
+  </div>
+
+  <!-- Bottom nav -->
+  <div id="mob-nav">
+    <button class="mob-tab active" id="mt-orders" onclick="mobNav('orders')">
+      <span class="ti">⚡</span>Active
+    </button>
+    <button class="mob-tab" id="mt-all" onclick="mobNav('all')">
+      <span class="ti">📋</span>All
+    </button>
+    <button class="mob-tab" id="mt-completed" onclick="mobNav('completed')">
+      <span class="ti">✅</span>Done
+    </button>
+    <button class="mob-tab" id="mt-claims" onclick="mobNav('claims')">
+      <span class="ti">🛡️</span>Claims
+    </button>
+    <button class="mob-tab" id="mt-more" onclick="mobDrawerOpen()">
+      <span class="ti">···</span>More
+    </button>
+  </div>
+
 </div>
 
-<!-- ══ BOTTOM NAV ══ -->
-<div id="mob-nav">
-  <button class="mob-tab active" id="mobtab-dashboard" onclick="mobNav('dashboard')"><span class="ti">📊</span>Board</button>
-  <button class="mob-tab" id="mobtab-all"    onclick="mobNav('all')">   <span class="ti">📋</span>All</button>
-  <button class="mob-tab" id="mobtab-orders" onclick="mobNav('orders')"><span class="ti">⚡</span>Active</button>
-  <button class="mob-tab" id="mobtab-claims" onclick="mobNav('claims')"><span class="ti">🛡️</span>Claims</button>
-  <button class="mob-tab" id="mobtab-more"   onclick="mobDrawerOpen()">   <span class="ti">⋯</span>More</button>
-</div>
+<!-- FAB -->
+<button id="mob-fab" onclick="openOrderModal()">+</button>
 
-<!-- ══ NEW ORDER FAB ══ -->
-<button id="mob-fab" onclick="openOrderModal()">＋</button>
-
-<!-- ══ OVERLAY + DRAWER ══ -->
+<!-- Drawer overlay -->
 <div id="mob-overlay" onclick="mobDrawerClose()"></div>
 <div id="mob-drawer">
-  <div class="mob-drawer-top">
-    <span class="mob-drawer-title">Navigation</span>
-    <button class="mob-drawer-close" onclick="mobDrawerClose()">✕</button>
-  </div>
-  <div class="mob-dl" onclick="mobNav('dashboard');mobDrawerClose()"><span class="dl-i">📊</span>Dashboard</div>
-  <div class="mob-dl" onclick="mobNav('all');mobDrawerClose()">       <span class="dl-i">📋</span>All Orders</div>
-  <div class="mob-dl" onclick="mobNav('orders');mobDrawerClose()">    <span class="dl-i">⚡</span>Active</div>
-  <div class="mob-dl" onclick="mobNav('completed');mobDrawerClose()"> <span class="dl-i">✅</span>Completed</div>
-  <div class="mob-dl" onclick="mobNav('claims');mobDrawerClose()">    <span class="dl-i">🛡️</span>Claims</div>
-  <div class="mob-dl" onclick="mobNav('closed');mobDrawerClose()">    <span class="dl-i">🔒</span>Closed</div>
-  <div class="mob-dl" onclick="mobNav('issues');mobDrawerClose()">    <span class="dl-i">⚠️</span>Issues</div>
-  <div class="mob-dl" onclick="mobNav('calendar');mobDrawerClose()">  <span class="dl-i">📅</span>Calendar</div>
-  <div class="mob-dl" onclick="mobNav('subbies');mobDrawerClose()">   <span class="dl-i">👷</span>Subbies</div>
-  <div class="mob-dl" onclick="openSupModal();mobDrawerClose()">        <span class="dl-i">👤</span>Supervisors</div>
-  <div class="mob-dl" onclick="mobNav('sor');mobDrawerClose()">       <span class="dl-i">📄</span>SOR Codes</div>
-  <div class="mob-drawer-sep"></div>
-  <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()">     <span class="dl-i">☁️</span>Cloud Sync</div>
-  <div class="mob-dl" onclick="openSettingsModal();mobDrawerClose()">  <span class="dl-i">⚙️</span>Settings</div>
-  <div class="mob-dl" onclick="exportCSV();mobDrawerClose()">          <span class="dl-i">📊</span>Export CSV</div>
-  <div class="mob-dl" onclick="openOrderModal();mobDrawerClose()">     <span class="dl-i">➕</span>New Order</div>
+  <div style="padding:16px 20px 8px;font-size:16px;font-weight:800;color:var(--gold)">SK ONTIME</div>
+  <div class="mob-dl" onclick="mobNav('orders');mobDrawerClose()"><span class="dl-i">⚡</span>Active Orders</div>
+  <div class="mob-dl" onclick="mobNav('all');mobDrawerClose()"><span class="dl-i">📋</span>All Orders</div>
+  <div class="mob-dl" onclick="mobNav('completed');mobDrawerClose()"><span class="dl-i">✅</span>Completed</div>
+  <div class="mob-dl" onclick="mobNav('claims');mobDrawerClose()"><span class="dl-i">🛡️</span>Claims</div>
+  <div class="mob-dl" onclick="mobNav('closed');mobDrawerClose()"><span class="dl-i">🔒</span>Closed</div>
+  <div class="mob-dl" onclick="mobNav('issues');mobDrawerClose()"><span class="dl-i">⚠️</span>Issues</div>
+  <div class="mob-drawer-title">Tools</div>
+  <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()"><span class="dl-i">☁️</span>Cloud Sync</div>
+  <div class="mob-dl" onclick="openOrderModal();mobDrawerClose()"><span class="dl-i">➕</span>New Order</div>
 </div>
 
-<!-- ══ VIEW SHEET ══ -->
+<!-- View Sheet -->
 <div id="mob-vbg" onclick="mobVClose()"></div>
 <div id="mob-vsheet">
-  <div class="mvs-handle"></div>
-  <div class="mvs-head">
-    <div>
-      <div class="mvs-lbl">Order Number</div>
-      <div class="mvs-orderno" id="mvs-no">—</div>
-    </div>
-    <span class="mvs-badge" id="mvs-st">—</span>
-  </div>
-  <div class="mvs-field"><div class="mvs-lbl">Address</div><div class="mvs-val" id="mvs-addr">—</div></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-    <div><div class="mvs-lbl">Area</div><div class="mvs-val" id="mvs-area">—</div></div>
-    <div><div class="mvs-lbl">SOR Code</div><div class="mvs-val" id="mvs-sor">—</div></div>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-    <div><div class="mvs-lbl">Amount</div><div class="mvs-val" style="color:var(--gold-dark);font-weight:700" id="mvs-amt">—</div></div>
-    <div><div class="mvs-lbl">Date</div><div class="mvs-val" id="mvs-date">—</div></div>
-  </div>
-  <div class="mvs-field"><div class="mvs-lbl">Subbie</div><div class="mvs-val" id="mvs-sub">—</div></div>
-  <div id="mvs-notes-row" style="display:none" class="mvs-field"><div class="mvs-lbl">Notes</div><div class="mvs-val" id="mvs-notes" style="color:var(--text2);font-size:13px">—</div></div>
-  <div style="height:1px;background:var(--border);margin:14px 0 10px"></div>
-  <div style="display:flex;gap:10px">
-    <button style="flex:1;padding:13px;background:var(--cream2);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-size:14px;cursor:pointer;font-family:inherit" onclick="mobVClose()">Close</button>
-    <button style="flex:2;padding:13px;background:var(--gold);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit" onclick="mobVEdit()">✏️ Edit Order</button>
+  <div id="mob-vsheet-inner"></div>
+  <div class="mvs-actions">
+    <button class="mvs-btn mvs-btn-close" onclick="mobVClose()">Close</button>
+    <button class="mvs-btn mvs-btn-edit" onclick="mobVEdit()">✏️ Edit</button>
   </div>
 </div>
 
-<!-- ══ MOBILE CONTENT WRAPPER ══ -->
-<div id="mob-main">
+
+
+
+<div id="app">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div class="logo">
+      <div class="logo-mark"><span class="logo-sk">SK</span>&nbsp;<span class="logo-on">ON</span><span class="logo-time">TIME</span></div>
+      <div class="logo-sub">Holmes Order Manager</div>
+    </div>
+    <nav>
+      <div class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span id="navlabel-dashboard">Dashboard</span>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-item active" onclick="showPage('all')" id="nav-all">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        <span id="navlabel-all">All Orders</span>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-item" onclick="showPage('orders')" id="nav-orders">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span id="navlabel-orders">Orders</span>
+        <span class="nav-badge" id="orders-badge" style="background:var(--gold-light)">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('completed')" id="nav-completed">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <span id="navlabel-completed">Completed</span>
+        <span class="nav-badge" id="completed-badge" style="background:#FACC15;color:#422006">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('claims')" id="nav-claims">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span id="navlabel-claims">Claim</span>
+        <span class="nav-badge" id="claims-badge" style="background:#F97316">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('closed')" id="nav-closed">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span id="navlabel-closed">Closed</span>
+        <span class="nav-badge-plain" id="closed-badge">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('issues')" id="nav-issues">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span id="navlabel-issues">Issues</span>
+        <span class="nav-badge" id="issues-badge" style="background:var(--red)">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('cancelled')" id="nav-cancelled">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span id="navlabel-cancelled">Cancelled</span>
+        <span class="nav-badge-plain" id="cancelled-badge">0</span>
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-item" onclick="showPage('calendar')" id="nav-calendar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="16" cy="15" r="1" fill="currentColor"/></svg>
+        <span id="navlabel-calendar">Calendar</span>
+        <span class="nav-badge" id="cal-badge" style="background:var(--accent2);display:none">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('subbies')" id="nav-subbies">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span id="navlabel-subbies">Subbies</span>
+        <span class="nav-badge" id="subbies-badge" style="background:var(--yellow);display:none">0</span>
+      </div>
+      <div class="nav-item" onclick="openSupModal()" id="nav-sup">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span id="navlabel-sup">Supervisors</span>
+      </div>
+      <div class="nav-item" onclick="showPage('sor')" id="nav-sor">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span id="navlabel-sor">SOR Codes</span>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="stats-mini" id="sidebar-stats">
+        <div class="stat-mini-row"><span>This Month Revenue</span><span id="mini-month">$0</span></div>
+        <div class="stat-mini-row"><span>This Month Orders</span><span id="mini-month-count">0</span></div>
+        <div style="height:1px;background:rgba(255,255,255,0.08);margin:7px 0"></div>
+        <div class="stat-mini-row"><span>Unpaid by HomesNSW</span><span id="mini-homes-unpaid" style="color:var(--red);font-weight:700;font-variant-numeric:tabular-nums">$0</span></div>
+        <div class="stat-mini-row"><span>Owed to Subbies</span><span id="mini-subbie-owed" style="color:var(--yellow);font-weight:700;font-variant-numeric:tabular-nums">$0</span></div>
+        <div style="height:1px;background:rgba(255,255,255,0.08);margin:7px 0"></div>
+        <div class="stat-mini-row"><span>Total Orders</span><span id="mini-total">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <div id="header">
+      <h1 id="page-title">Orders</h1>
+      <div style="display:flex;gap:10px;align-items:center">
+        <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="btn btn-secondary" style="text-decoration:none;font-size:12.5px;border-color:rgba(79,126,248,0.4);color:var(--gold-dark)">
+          &#127974; <span id="navlabel-dcj">DCJ Portal</span>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+        <div class="header-actions" id="header-actions"></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div onclick="openCloudModal()" title="Click to open Cloud Sync settings" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 2px">
+            <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
+            Cloud Sync &middot; <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
+          </div>
+          <button id="undo-btn" onclick="undo()" disabled title="Nothing to undo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+          </button>
+          <button id="redo-btn" onclick="redo()" disabled title="Nothing to redo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)" style="transform:scaleX(-1)"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.5"/></svg>
+          </button>
+          <button onclick="cloudForcePush()" title="Force Push — overwrite everyone's data with your current state" style="display:flex;align-items:center;gap:5px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:0 10px;height:34px;cursor:pointer;font-size:12px;font-family:inherit;color:var(--text2);white-space:nowrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--orange)"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            Force Push
+          </button>
+          <button onclick="openSettingsModal()" title="App Settings — rename menu/button labels" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:pointer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <div style="position:relative">
+            <button onclick="toggleDataMenu(event)" title="Import / Export" style="display:flex;align-items:center;gap:6px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;cursor:pointer;font-family:inherit">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text3)"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div id="data-menu" style="display:none;position:absolute;right:0;top:40px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);width:200px;z-index:100;overflow:hidden">
+              <div onclick="document.getElementById('import-file-input').click(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--blue)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Import Data Backup
+              </div>
+              <div onclick="exportData(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--gold-dark)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export Data Backup
+              </div>
+              <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importDataFile(this.files[0])">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div id="content">
 
       <!-- ALL ORDERS PAGE -->
@@ -544,7 +652,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
                 <tbody id="all-tbody"></tbody>
               </table>
             </div>
-            <div id="mob-cards-all" class="mob-cards"></div>
             <div id="all-empty" class="empty-state" style="display:none">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
               <p>No orders yet. Click <strong>+ New Order</strong> to get started.</p>
@@ -598,7 +705,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
                 <tbody id="orders-tbody"></tbody>
               </table>
             </div>
-            <div id="mob-cards-orders" class="mob-cards"></div>
             <div id="orders-empty" class="empty-state" style="display:none">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
               <p>No orders yet. Click <strong>+ New Order</strong> to get started.</p>
@@ -644,7 +750,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
                 <tbody id="completed-tbody"></tbody>
               </table>
             </div>
-            <div id="mob-cards-completed" class="mob-cards"></div>
             <div id="completed-empty" class="empty-state" style="display:none">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
               <p>No completed orders yet. Mark orders as ✅ complete from the Orders tab.</p>
@@ -685,7 +790,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
                 <tbody id="claims-tbody"></tbody>
               </table>
             </div>
-            <div id="mob-cards-claims" class="mob-cards"></div>
             <div id="claims-empty" class="empty-state" style="display:none">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
               <p>No claim orders. Move orders here from Completed.</p>
@@ -943,6 +1047,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
 
     </div>
     <div id="tab-summary"></div>
+  </div>
+</div>
 
 <!-- ORDER MODAL -->
 <div class="modal-overlay" id="order-modal">
@@ -1518,8 +1624,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg);
   </div>
 </div>
 
-
-</div><!-- /mob-main -->
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -2194,7 +2298,7 @@ async function cloudPushInitial() {
   toast('Upload complete. Check the DATA sheet — A1 should be filled.', 'success');
 }
 
-function renderCloudStatus(msg) {
+function renderCloudStatus_desktop(msg) {
   const el = document.getElementById('cloud-status');
   if (el) el.textContent = msg || (CLOUD.enabled ? 'Sync on' : 'off');
   const color = CLOUD.enabled ? 'var(--green)' : 'var(--text3)';
@@ -2202,7 +2306,6 @@ function renderCloudStatus(msg) {
   if (dot) dot.style.background = color;
   const dot2 = document.getElementById('cloud-dot-2');
   if (dot2) dot2.style.background = color;
-  const sd=document.getElementById('mob-sync-dot');if(sd)sd.style.background=color;
 }
 
 // ============================================================
@@ -2220,6 +2323,12 @@ const SETTINGS_PAGE_TITLE_KEY = {
   navClosed: 'closed', navIssues: 'issues', navCancelled: 'cancelled', navCalendar: 'calendar',
   navSubbies: 'subbies', navDashboard: 'dashboard', navSor: 'sor',
 };
+
+function renderCloudStatus() {
+  renderCloudStatus_desktop();
+  const s = CLOUD.enabled ? (CLOUD.pulling||CLOUD.pushing ? '#f39c12' : (CLOUD.url ? '#2ecc71' : '#888')) : '#888';
+  mobSyncDot(s);
+}
 
 function applyUiLabels() {
   const L = DB.uiLabels;
@@ -2373,45 +2482,31 @@ let currentPage = 'all';
 const PAGE_TITLES = { all:'All Orders', orders:'Orders', completed:'Completed', claims:'Claim', closed:'Closed', issues:'Issues', cancelled:'Cancelled', calendar:'Calendar', subbies:'Subbie Management', dashboard:'Dashboard', sor:'SOR Codes' };
 
 function showPage(page) {
-  mobTabUpdate(page);
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  const pageEl = document.getElementById('page-' + page);
-  if (pageEl) pageEl.classList.add('active');
-  const navEl = document.getElementById('nav-' + page);
-  if (navEl) navEl.classList.add('active');
+  document.getElementById('page-' + page).classList.add('active');
+  document.getElementById('nav-' + page).classList.add('active');
   currentPage = page;
-  const titleEl = document.getElementById('page-title');
-  if (titleEl) titleEl.textContent = PAGE_TITLES[page] || page;
+  document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
 
   const actions = document.getElementById('header-actions');
   const newBtn = `<button class="btn btn-primary" onclick="openOrderModal()">${DB.uiLabels.btnNewOrder}</button>`;
   const csvBtn = `<button class="btn btn-secondary" onclick="exportCSV()">📊 ${DB.uiLabels.btnExportCsv}</button>`;
   const importBtn = `<button class="btn btn-secondary" onclick="openEmailImport()">📧 ${DB.uiLabels.btnImportEmail}</button>`;
 
-  if (page === 'all')       { if(actions) actions.innerHTML = csvBtn + importBtn + newBtn; renderAll(); }
-  else if (page === 'orders')    { if(actions) actions.innerHTML = csvBtn + importBtn + newBtn; renderOrders(); }
-  else if (page === 'completed') { if(actions) actions.innerHTML = csvBtn; renderCompleted(); }
-  else if (page === 'claims')    { if(actions) actions.innerHTML = csvBtn; renderClaims(); }
-  else if (page === 'closed')    { if(actions) actions.innerHTML = csvBtn; renderClosed(); }
-  else if (page === 'issues')    { if(actions) actions.innerHTML = csvBtn; renderIssues(); }
-  else if (page === 'cancelled') { if(actions) actions.innerHTML = csvBtn; renderCancelled(); }
-  else if (page === 'subbies')   { if(actions) actions.innerHTML = ''; subActivePerson = 'All'; renderSubbiesPage(); }
-  else if (page === 'calendar')  { if(actions) actions.innerHTML = `<button class="btn btn-primary" onclick="openCalEventModal()">+ New Event</button>`; renderCalendar(); }
-  else if (page === 'dashboard') { if(actions) actions.innerHTML = ''; renderDashboard(); }
-  else if (page === 'sor')       { if(actions) actions.innerHTML = `<button class="btn btn-primary" onclick="openSORModal()">+ Add SOR Code</button>`; renderSOR(); }
+  if (page === 'all')       { actions.innerHTML = csvBtn + importBtn + newBtn; renderAll(); }
+  else if (page === 'orders')    { actions.innerHTML = csvBtn + importBtn + newBtn; renderOrders(); }
+  else if (page === 'completed') { actions.innerHTML = csvBtn; renderCompleted(); }
+  else if (page === 'claims')    { actions.innerHTML = csvBtn; renderClaims(); }
+  else if (page === 'closed')    { actions.innerHTML = csvBtn; renderClosed(); }
+  else if (page === 'issues')    { actions.innerHTML = csvBtn; renderIssues(); }
+  else if (page === 'cancelled') { actions.innerHTML = csvBtn; renderCancelled(); }
+  else if (page === 'subbies')   { actions.innerHTML = ''; subActivePerson = 'All'; renderSubbiesPage(); }
+  else if (page === 'calendar')  { actions.innerHTML = `<button class="btn btn-primary" onclick="openCalEventModal()">+ New Event</button>`; renderCalendar(); }
+  else if (page === 'dashboard') { actions.innerHTML = ''; renderDashboard(); }
+  else if (page === 'sor')       { actions.innerHTML = `<button class="btn btn-primary" onclick="openSORModal()">+ Add SOR Code</button>`; renderSOR(); }
   renderTabSummary(page);
   updateSidebar();
-  // Safety fallback: ensure mob cards are rendered for current page
-  const _mobMap = {all:'all',orders:'orders',completed:'completed',claims:'claims'};
-  if(_mobMap[page]) {
-    const _el = document.getElementById('mob-cards-'+_mobMap[page]);
-    if(_el && !_el.innerHTML) {
-      const _orders = {all:DB.orders, orders:DB.orders.filter(o=>(!o.status||o.status==='active')),
-        completed:DB.orders.filter(o=>o.status==='completed'), claims:DB.orders.filter(o=>o.status==='claim')};
-      mobRender(_mobMap[page], _orders[page]||[]);
-    }
-  }
 }
 
 // Local-calendar-day date string, e.g. "2026-06-22" — NOT new Date().toISOString(),
@@ -2766,6 +2861,7 @@ function saveOrder(e) {
   lsSet('hom_orders', JSON.stringify(DB.orders));
   lsSet('hom_claims', JSON.stringify(DB.claims));
   lsSet('hom_subbies', JSON.stringify(DB.subbies));
+  if(typeof mobRefresh==='function') setTimeout(mobRefresh, 50);
   if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
   cloudPush(); // immediate — don't wait for debounce
 
@@ -2978,7 +3074,7 @@ function renderCompleted() {
   const claimMap = {};
   DB.claims.forEach(c => { claimMap[c.orderNumber] = c; });
 
-  try { tbody.innerHTML = orders.map(o => {
+  tbody.innerHTML = orders.map(o => {
     const pc = claimMap[o.orderNumber];
     const payBadge = pc?.paid === 'Y'
       ? `<span class="badge badge-green">✓ Paid</span>`
@@ -3001,9 +3097,9 @@ function renderCompleted() {
       </div>
     </td>
   </tr>`;
-  }).join(''); } catch(e) { console.error('[renderCompleted table]', e); }
+  }).join('');
   renderTabSummary('completed');
-  mobRender('completed', orders);
+  updateMobNav('completed');
 }
 
 // ============================================================
@@ -4356,7 +4452,7 @@ function renderOrders() {
   empty.style.display = orders.length ? 'none' : 'block';
   tbody.style.display = orders.length ? '' : 'none';
 
-  try { tbody.innerHTML = orders.map(o => {
+  tbody.innerHTML = orders.map(o => {
     const hasClaim = o.hasClaim ? `<span class="claim-dot" title="Has Claim"></span> ` : '';
     const paidBadge = o.paid === 'Y'
       ? `<span class="badge badge-green">✓ Paid</span>`
@@ -4400,9 +4496,9 @@ function renderOrders() {
         </div>
       </td>
     </tr>`;
-  }).join(''); } catch(e) { console.error('[renderOrders table]', e); }
+  }).join('');
   renderTabSummary('orders');
-  mobRender('orders', orders);
+  updateMobNav('orders');
 }
 
 // ============================================================
@@ -4473,7 +4569,7 @@ function renderClaims() {
     </tr>`;
   }).join('');
   renderTabSummary('claims');
-  mobRender('claims', orders);
+  updateMobNav('claims');
 }
 
 // ============================================================
@@ -4551,7 +4647,7 @@ function renderAll() {
   empty.style.display = orders.length ? 'none' : 'block';
   tbody.style.display = orders.length ? '' : 'none';
 
-  try { tbody.innerHTML = orders.map(o => {
+  tbody.innerHTML = orders.map(o => {
     const st = o.status || 'active';
     const stLabel = statusLabels[st] || st;
     const stClass = statusColors[st] || 'badge-blue';
@@ -4582,8 +4678,8 @@ function renderAll() {
       <td><span class="badge ${stClass}" style="font-size:10px">${stLabel}</span></td>
       <td><div class="row-actions">${nextBtns[st] || ''}</div></td>
     </tr>`;
-  }).join(''); } catch(e) { console.error('[renderAll table]', e); }
-  mobRender('all', orders);
+  }).join('');
+  updateMobNav('all');
 }
 
 // ============================================================
@@ -5787,139 +5883,11 @@ function openEmailImport() {
   openModal('email-modal');
 }
 
-
-// ═══════════════════════════════════════════
-// MOBILE.HTML JS
-// ═══════════════════════════════════════════
-const MOB_COL={active:'#4f7ef8',completed:'#2ecc71',claim:'#f39c12',closed:'#8b90a7',issue:'#e74c3c',cancelled:'#aaa'};
-const MOB_LBL={active:'Active',completed:'Done',claim:'Claim',closed:'Closed',issue:'Issue',cancelled:'Cancelled'};
-
-function updateMobNav(p){} // stub — tab highlighting done by mobTabUpdate
-let _mQ='';
-function mobSearch(v){
-  _mQ=(v||'').toLowerCase().trim();
-  const m={all:renderAll,orders:renderOrders,completed:renderCompleted,claims:renderClaims,closed:renderClosed,issues:renderIssues};
-  const fn=m[currentPage]; if(fn) fn();
-}
-function mobRender(page,orders){
-  const el=document.getElementById('mob-cards-'+page); if(!el) return;
-  let list=orders;
-  if(_mQ) list=orders.filter(o=>
-    (o.orderNumber||'').toLowerCase().includes(_mQ)||
-    (o.address||'').toLowerCase().includes(_mQ)||
-    (o.subbies||'').toLowerCase().includes(_mQ)||
-    (o.area||'').toLowerCase().includes(_mQ)||
-    (o.sorCode||'').toLowerCase().includes(_mQ)
-  );
-  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  if(!list.length){el.innerHTML='<div style="padding:32px;text-align:center;color:var(--text3);font-size:14px">No orders found</div>';return;}
-  el.innerHTML=list.map(o=>{
-    const st=o.status||'active',col=MOB_COL[st]||'#4f7ef8',lbl=MOB_LBL[st]||st;
-    const meta=[o.area,o.subbies].filter(Boolean).join(' · ');
-    return `<div class="mob-card" onclick="mobVOpen('${o.id}')" style="border-left-color:${col}">
-      <div class="mob-card-top">
-        <span class="mob-card-no">${esc(o.orderNumber||'—')}</span>
-        <span class="mob-card-badge" style="background:${col}22;color:${col}">${lbl}</span>
-      </div>
-      <div class="mob-card-addr">${esc(o.address||'—')}</div>
-      <div class="mob-card-bot">
-        <span class="mob-card-meta">${esc(meta)}</span>
-        <span class="mob-card-amt">$${Number(o.amount||0).toFixed(2)}</span>
-      </div>
-    </div>`;
-  }).join('');
-}
-function mobTabUpdate(page){
-  const map={all:'all',orders:'orders',dashboard:'dashboard',claims:'claims'};
-  const more=['completed','closed','issues','cancelled','subbies','calendar','sor'];
-  document.querySelectorAll('.mob-tab').forEach(b=>b.classList.remove('active'));
-  const key=map[page]||(more.includes(page)?'more':null);
-  if(key){const b=document.getElementById('mobtab-'+key);if(b)b.classList.add('active');}
-}
-function mobDrawerOpen(){document.getElementById('mob-drawer').style.display='block';document.getElementById('mob-overlay').style.display='block';}
-function mobDrawerClose(){document.getElementById('mob-drawer').style.display='none';document.getElementById('mob-overlay').style.display='none';}
-let _mvId=null;
-function mobVOpen(id){
-  const o=DB.orders.find(x=>x.id===id);if(!o)return;
-  _mvId=id;
-  const st=o.status||'active',col=MOB_COL[st]||'#4f7ef8';
-  document.getElementById('mvs-no').textContent=o.orderNumber||'—';
-  const stEl=document.getElementById('mvs-st');
-  stEl.textContent=MOB_LBL[st]||st;stEl.style.background=col+'22';stEl.style.color=col;
-  document.getElementById('mvs-addr').textContent=o.address||'—';
-  document.getElementById('mvs-area').textContent=o.area||'—';
-  document.getElementById('mvs-sor').textContent=o.sorCode||'—';
-  document.getElementById('mvs-amt').textContent='$'+Number(o.amount||0).toFixed(2);
-  document.getElementById('mvs-date').textContent=o.orderDate||'—';
-  document.getElementById('mvs-sub').textContent=o.subbies||'—';
-  const nw=document.getElementById('mvs-notes-row');
-  if(o.notes){document.getElementById('mvs-notes').textContent=o.notes;nw.style.display='block';}else{nw.style.display='none';}
-  document.getElementById('mob-vbg').style.display='block';
-  document.getElementById('mob-vsheet').style.display='block';
-}
-function mobVClose(){
-  document.getElementById('mob-vbg').style.display='none';
-  document.getElementById('mob-vsheet').style.display='none';
-  _mvId=null;
-}
-function mobVEdit(){const id=_mvId;mobVClose();if(id)openOrderModal(id);}
-
-// ── SIMPLE MOBILE NAV ── directly renders cards without going through desktop render chain
-function mobNav(page) {
-  // 1. Switch page
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  const pg = document.getElementById('page-' + page);
-  if (pg) pg.classList.add('active');
-
-  // 2. Update tab highlight
-  document.querySelectorAll('.mob-tab').forEach(b => b.classList.remove('active'));
-  const tabMap = {all:'all', orders:'orders', dashboard:'dashboard', claims:'claims',
-    completed:'more', closed:'more', issues:'more', cancelled:'more', subbies:'more', calendar:'more', sor:'more'};
-  const tabId = 'mobtab-' + (tabMap[page] || 'more');
-  const tb = document.getElementById(tabId);
-  if (tb) tb.classList.add('active');
-
-  // 3. Render cards directly
-  const statusMap = {
-    all: null,            // all statuses
-    orders: 'active',
-    completed: 'completed',
-    claims: 'claim',
-    closed: 'closed',
-    issues: 'issue',
-    cancelled: 'cancelled'
-  };
-
-  if (page in statusMap) {
-    const wantStatus = statusMap[page];
-    const orders = DB.orders.filter(o => {
-      if (wantStatus === null) return true;       // "all" — show everything
-      const st = o.status || 'active';
-      return st === wantStatus;
-    });
-    mobRender(page === 'orders' ? 'orders' : page, orders);
-    renderTabSummary(page);
-  }
-
-  // 4. Let desktop render functions run too (for dashboard etc)
-  currentPage = page;
-  try {
-    if (page === 'dashboard') renderDashboard();
-    else if (page === 'subbies') renderSubbiesPage();
-    else if (page === 'calendar') renderCalendar();
-    else if (page === 'sor') renderSOR();
-  } catch(e) { console.error('[mobNav render]', e); }
-
-  updateSidebar();
-}
-
 function initApp() {
-  // Move modals to body level — fixes iOS Safari clipping fixed elements inside overflow:auto
-  document.querySelectorAll('.modal-overlay').forEach(m => document.body.appendChild(m));
   applyUiLabels();
   applyUiColors();
-  mobNav('orders');  // default to orders on mobile
   updateSidebar();
+  setTimeout(mobInit, 50);  // mobile init after data loads
   updateCalBadge();
   renderCloudStatus();
   if (CLOUD.enabled && CLOUD.url) startCloudSync();
@@ -5934,6 +5902,171 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
+
+// ══════════════════════════════════════════════════════════
+// MOBILE LAYER — completely independent of desktop renders
+// ══════════════════════════════════════════════════════════
+
+const _MOB_COL = { active:'#4f7ef8', completed:'#2ecc71', claim:'#f39c12', closed:'#8b90a7', issue:'#e74c3c', cancelled:'#aaa' };
+const _MOB_LBL = { active:'Active', completed:'Done', claim:'Claim', closed:'Closed', issue:'Issue', cancelled:'Cancelled' };
+const _MOB_FILTERS = {
+  all:       o => true,
+  orders:    o => (!o.status || o.status === 'active'),
+  completed: o => o.status === 'completed',
+  claims:    o => o.status === 'claim',
+  closed:    o => o.status === 'closed',
+  issues:    o => o.status === 'issue',
+};
+
+let _mobPage = 'orders';
+let _mobSearchQ = '';
+let _mobViewId = null;
+
+function mobNav(page) {
+  _mobPage = page;
+  // tab highlight
+  document.querySelectorAll('.mob-tab').forEach(b => b.classList.remove('active'));
+  const validTabs = ['orders','all','completed','claims'];
+  const tabKey = validTabs.includes(page) ? page : 'more';
+  const tb = document.getElementById('mt-' + tabKey);
+  if (tb) tb.classList.add('active');
+  mobRefresh();
+}
+
+function mobSearch(v) {
+  _mobSearchQ = (v || '').toLowerCase().trim();
+  mobRefresh();
+}
+
+function mobRefresh() {
+  const filterFn = _MOB_FILTERS[_mobPage] || _MOB_FILTERS.all;
+  let list = DB.orders.filter(filterFn);
+
+  // apply search
+  if (_mobSearchQ) {
+    list = list.filter(o =>
+      (o.orderNumber||'').toLowerCase().includes(_mobSearchQ) ||
+      (o.address||'').toLowerCase().includes(_mobSearchQ) ||
+      (o.subbies||'').toLowerCase().includes(_mobSearchQ) ||
+      (o.area||'').toLowerCase().includes(_mobSearchQ)
+    );
+  }
+
+  // sort newest first
+  list.sort((a, b) => ((b.orderDate||'') > (a.orderDate||'') ? 1 : -1));
+
+  const el = document.getElementById('mob-card-list');
+  if (!el) return;
+
+  if (!list.length) {
+    el.innerHTML = '<div class="mob-empty">No orders found</div>';
+    mobSummaryHide();
+    return;
+  }
+
+  const _esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  el.innerHTML = list.map(o => {
+    const st = o.status || 'active';
+    const col = _MOB_COL[st] || '#4f7ef8';
+    const lbl = _MOB_LBL[st] || st;
+    const meta = [o.area, o.subbies].filter(Boolean).join(' · ');
+    return `<div class="mc" onclick="mobVOpen('${o.id}')" style="border-left-color:${col}">
+      <div class="mc-top">
+        <span class="mc-no">${_esc(o.orderNumber||'—')}</span>
+        <span class="mc-badge" style="background:${col}22;color:${col}">${lbl}</span>
+      </div>
+      <div class="mc-addr">${_esc(o.address||'—')}</div>
+      <div class="mc-bot">
+        <span class="mc-meta">${_esc(meta)}</span>
+        <span class="mc-amt">$${Number(o.amount||0).toFixed(2)}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  mobSummaryShow(list);
+}
+
+function mobSummaryShow(list) {
+  const bar = document.getElementById('mob-summary');
+  if (!bar) return;
+  const total = list.reduce((s, o) => s + (o.amount||0), 0);
+  const byArea = {};
+  list.forEach(o => { const a = o.area||'—'; byArea[a] = (byArea[a]||0) + 1; });
+  const areaHtml = Object.entries(byArea).sort((a,b)=>b[1]-a[1])
+    .map(([a,c]) => `<span class="mob-sum-area">${a} ${c}</span>`).join('');
+  bar.style.display = 'flex';
+  bar.innerHTML = `<span class="mob-sum-total">$${Math.round(total).toLocaleString('en-AU')}</span>
+    <span class="mob-sum-cnt">(${list.length} orders)</span>
+    <span style="flex:1"></span>${areaHtml}`;
+}
+function mobSummaryHide() {
+  const bar = document.getElementById('mob-summary');
+  if (bar) bar.style.display = 'none';
+}
+
+// ── View Sheet ──
+function mobVOpen(id) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o) return;
+  _mobViewId = id;
+  const st = o.status || 'active';
+  const col = _MOB_COL[st] || '#4f7ef8';
+  const lbl = _MOB_LBL[st] || st;
+  const _esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const row = (label, val) => val ? `<div class="mvs-row"><span class="mvs-lbl">${label}</span><span class="mvs-val">${_esc(val)}</span></div>` : '';
+  document.getElementById('mob-vsheet-inner').innerHTML =
+    `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+       <span style="font-size:16px;font-weight:800;font-family:monospace">${_esc(o.orderNumber||'—')}</span>
+       <span class="mc-badge" style="background:${col}22;color:${col};font-size:12px;padding:3px 10px;border-radius:10px;font-weight:700">${lbl}</span>
+     </div>` +
+    row('Address', o.address) +
+    row('Area', o.area) +
+    row('SOR Code', o.sorCode) +
+    row('Amount', '$' + Number(o.amount||0).toFixed(2)) +
+    row('Order Date', o.orderDate) +
+    row('Subbie', o.subbies) +
+    row('Supervisor', o.supervisor) +
+    row('PRN', o.prn) +
+    row('Comments', o.comments) +
+    row('Notes', o.notes);
+  document.getElementById('mob-vbg').style.display = 'block';
+  document.getElementById('mob-vsheet').style.display = 'block';
+}
+function mobVClose() {
+  document.getElementById('mob-vbg').style.display = 'none';
+  document.getElementById('mob-vsheet').style.display = 'none';
+  _mobViewId = null;
+}
+function mobVEdit() {
+  const id = _mobViewId;
+  mobVClose();
+  if (id) openOrderModal(id);
+}
+
+// ── Drawer ──
+function mobDrawerOpen() {
+  document.getElementById('mob-drawer').style.display = 'block';
+  document.getElementById('mob-overlay').style.display = 'block';
+}
+function mobDrawerClose() {
+  document.getElementById('mob-drawer').style.display = 'none';
+  document.getElementById('mob-overlay').style.display = 'none';
+}
+
+// ── Cloud sync dot ──
+function mobSyncDot(color) {
+  const d = document.getElementById('mob-sync-dot');
+  if (d) d.style.background = color;
+}
+
+// ── Init ──
+function mobInit() {
+  // Move modals to body level (fixes iOS overflow clipping)
+  document.querySelectorAll('.modal-overlay').forEach(m => document.body.appendChild(m));
+  mobNav('orders');
+}
+
+
 </script>
 </body>
 </html>
