@@ -271,91 +271,74 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
 
 
-/* ══ MOBILE.HTML — always mobile layout ══ */
-* { box-sizing: border-box; }
+/* ══ MOBILE.HTML ONLY ══ */
 
-/* Hide desktop elements always */
-#sidebar { display: none !important; }
-#header  { display: none !important; }
+/* Kill desktop structure */
+#app, #sidebar, #main, #header, #content { all: unset; display: block; }
+#app { display: none !important; }
 
-/* Full-width main, padded for mob chrome */
-#main {
-  width: 100% !important;
-  padding-top: 50px !important;
-  padding-bottom: 60px !important;
-  overflow-y: auto !important;
-}
-#app {
-  display: block !important;   /* not flex row */
-}
-
-/* Pages: no desktop padding */
-.page { padding: 0 !important; }
-.card { border-radius: 0 !important; margin: 0 !important; box-shadow: none !important; }
-.card-body { padding: 0 !important; }
-.filters {
-  flex-wrap: wrap; gap: 5px; padding: 6px 10px;
-  position: sticky; top: 50px; z-index: 10;
+/* Viewport */
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+#mob-main {
+  position: fixed; top: 50px; bottom: 60px; left: 0; right: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
   background: var(--bg);
-  border-bottom: 1px solid var(--border);
 }
-.filters .filter-input[id^="search"] {
-  width: 100% !important; font-size: 13px !important; padding: 6px 12px !important;
+
+/* Pages */
+.page { display: none; padding: 0; }
+.page.active { display: block; }
+
+/* Modals still work */
+.modal { position: fixed; inset: 0; z-index: 500; display: none; align-items: flex-end; background: rgba(0,0,0,0.5); }
+.modal.active { display: flex; }
+.modal-content { width: 100%; max-height: 92dvh; border-radius: 16px 16px 0 0; overflow-y: auto; background: var(--surface); }
+
+/* Filters */
+.filters {
+  display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 10px;
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 5;
 }
+.filter-input[id^="search"] { width: 100% !important; font-size: 13px !important; padding: 7px 12px !important; }
 .filters select { font-size: 12px; padding: 5px 8px; }
 
-/* Always hide desktop tables, show cards */
-.table-wrap { display: none !important; }
-.mob-cards  { display: block !important; }
+/* Hide desktop tables always */
+.table-wrap, .tab-summary { display: none !important; }
 
-/* Dashboard: single column */
-#dash-widgets { grid-template-columns: 1fr !important; gap: 8px !important; }
+/* Dashboard */
+#dash-widgets { grid-template-columns: 1fr !important; gap: 8px !important; padding: 8px !important; }
 #dash-widgets .dash-widget { grid-column: span 1 !important; }
+#page-dashboard { padding: 8px !important; }
+#page-dashboard .filters { position: relative; top: auto; }
+#page-subbies, #page-calendar, #page-sor, #page-issues, #page-closed, #page-cancelled { padding: 8px; }
 
-/* Modals: slide up */
-.modal { align-items: flex-end !important; padding: 0 !important; }
-.modal-content {
-  width: 100% !important; max-width: 100% !important;
-  max-height: 92dvh !important; border-radius: 16px 16px 0 0 !important;
-  margin: 0 !important; overflow-y: auto !important;
-}
-
-/* ══ MOB HEADER ══ */
+/* ── MOBILE HEADER ── */
 #mob-header {
   position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-  display: flex; align-items: center; gap: 8px;
-  background: var(--dark); height: 50px; padding: 0 12px;
+  display: flex; align-items: center; gap: 6px;
+  background: var(--dark); height: 50px; padding: 0 10px;
   border-bottom: 1px solid rgba(255,255,255,0.07);
 }
-.mob-logo { font-size: 14px; font-weight: 800; color: var(--gold); letter-spacing: 1px; white-space: nowrap; }
+.mob-logo { font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 0.5px; white-space: nowrap; }
 #mob-search-wrap {
   flex: 1; display: flex; align-items: center; gap: 6px;
-  background: rgba(255,255,255,0.09); border-radius: 20px;
-  padding: 0 12px; height: 34px;
+  background: rgba(255,255,255,0.1); border-radius: 20px; padding: 0 12px; height: 34px;
 }
 .mob-search-icon { font-size: 13px; opacity: 0.5; flex-shrink: 0; }
-#mob-search {
-  background: none; border: none; outline: none;
-  color: var(--text); font-size: 13px; width: 100%;
-}
+#mob-search { background: none; border: none; outline: none; color: var(--text); font-size: 13px; width: 100%; }
 #mob-search::placeholder { color: var(--text3); }
 .mob-icon-btn {
-  background: none; border: 1px solid rgba(255,255,255,0.12);
+  display: flex; align-items: center; gap: 4px;
+  background: none; border: 1px solid rgba(255,255,255,0.13);
   border-radius: 10px; color: var(--text2); cursor: pointer;
-  padding: 4px 9px; font-size: 11px; font-weight: 600;
-  white-space: nowrap; display: flex; align-items: center; gap: 4px;
+  padding: 4px 8px; font-size: 10px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
 }
-.mob-icon-btn .dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--text3); display: inline-block;
-}
-.mob-hamburger {
-  background: none; border: none; color: var(--text2);
-  font-size: 22px; cursor: pointer; padding: 2px 4px; line-height: 1;
-  flex-shrink: 0;
-}
+.mob-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); display: inline-block; }
+.mob-sync-lbl { font-size: 10px; }
+.mob-hamburger { background: none; border: none; color: var(--text2); font-size: 22px; cursor: pointer; padding: 2px 4px; line-height: 1; flex-shrink: 0; }
 
-/* ══ BOTTOM NAV ══ */
+/* ── BOTTOM NAV ── */
 #mob-nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
   display: flex; align-items: stretch;
@@ -363,319 +346,164 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   border-top: 1px solid rgba(255,255,255,0.08);
 }
 .mob-tab {
-  flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 3px;
-  background: none; border: none; cursor: pointer;
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; background: none; border: none; cursor: pointer;
   color: var(--text3); font-size: 9px; font-weight: 700;
-  padding: 4px 2px; letter-spacing: 0.3px; font-family: inherit;
+  padding: 4px 2px; font-family: inherit; letter-spacing: 0.2px;
 }
-.mob-tab .ti { font-size: 19px; line-height: 1; }
+.mob-tab .ti { font-size: 20px; line-height: 1; }
 .mob-tab.active { color: var(--gold); }
 
-/* ══ DRAWER ══ */
-#mob-overlay {
-  display: none; position: fixed; inset: 0;
-  z-index: 299; background: rgba(0,0,0,0.5);
+/* ── FAB ── */
+#mob-fab {
+  position: fixed; bottom: 72px; right: 16px; z-index: 190;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: var(--gold); border: none; cursor: pointer;
+  font-size: 28px; color: #fff;
+  box-shadow: 0 4px 16px rgba(201,168,76,0.5);
+  display: flex; align-items: center; justify-content: center;
 }
-#mob-drawer {
+
+/* ── DRAWER ── */
+#mob-overlay { display: none; position: fixed; inset: 0; z-index: 299; background: rgba(0,0,0,0.5); }
+#mob-drawer  {
   display: none; position: fixed; top: 0; right: 0; bottom: 0;
-  width: 240px; z-index: 300; background: var(--dark);
+  width: 245px; z-index: 300; background: var(--dark);
   overflow-y: auto; box-shadow: -6px 0 24px rgba(0,0,0,0.4);
 }
 .mob-drawer-top {
-  padding: 20px 16px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
   display: flex; justify-content: space-between; align-items: center;
+  padding: 20px 16px 14px; border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 .mob-drawer-title { font-size: 11px; color: var(--text3); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
 .mob-drawer-close { background: none; border: none; color: var(--text3); font-size: 20px; cursor: pointer; }
-.mob-drawer-link {
+.mob-dl {
   display: flex; align-items: center; gap: 12px;
   padding: 12px 16px; color: var(--text); font-size: 14px; cursor: pointer;
-  border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.1s;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
 }
-.mob-drawer-link:active { background: rgba(255,255,255,0.06); }
-.dl-icon { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+.mob-dl:active { background: rgba(255,255,255,0.06); }
+.dl-i { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
 .mob-drawer-sep { height: 1px; background: rgba(255,255,255,0.08); margin: 6px 0; }
 
-/* ══ ORDER CARDS ══ */
-.mob-cards { padding: 6px 8px 10px; }
+/* ── ORDER CARDS ── */
+.mob-cards { padding: 6px 8px 12px; }
 .mob-card {
-  background: var(--surface);
-  border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
-  border-left: 4px solid #4f7ef8; cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
-  transition: opacity 0.1s;
+  background: var(--surface); border-radius: 10px; padding: 10px 12px;
+  margin-bottom: 6px; border-left: 4px solid #4f7ef8; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1); transition: opacity 0.1s;
 }
-.mob-card:active { opacity: 0.75; }
-.mob-card-top {
-  display: flex; justify-content: space-between;
-  align-items: center; margin-bottom: 4px;
-}
-.mob-card-no   { font-size: 12px; font-weight: 800; color: var(--text); }
-.mob-card-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; }
-.mob-card-addr {
-  font-size: 11px; color: var(--text2); margin-bottom: 5px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.mob-card-bot  { display: flex; justify-content: space-between; align-items: center; }
-.mob-card-meta { font-size: 10px; color: var(--text3); }
-.mob-card-amt  { font-size: 11px; font-weight: 700; color: var(--gold-dark); }
+.mob-card:active { opacity: 0.7; }
+.mob-card-top   { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.mob-card-no    { font-size: 12px; font-weight: 800; color: var(--text); }
+.mob-card-badge { font-size: 10px; padding: 2px 9px; border-radius: 10px; font-weight: 700; }
+.mob-card-addr  { font-size: 11px; color: var(--text2); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mob-card-bot   { display: flex; justify-content: space-between; align-items: center; }
+.mob-card-meta  { font-size: 10px; color: var(--text3); }
+.mob-card-amt   { font-size: 11px; font-weight: 700; color: var(--gold-dark); }
 
-/* ══ VIEW SHEET ══ */
-#mob-vsheet-bg {
-  display: none; position: fixed; inset: 0; z-index: 399; background: rgba(0,0,0,0.5);
-}
+/* ── VIEW SHEET ── */
+#mob-vbg { display: none; position: fixed; inset: 0; z-index: 399; background: rgba(0,0,0,0.5); }
 #mob-vsheet {
   display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 400;
   background: var(--surface); border-radius: 20px 20px 0 0;
-  padding: 16px 16px 32px; max-height: 75dvh; overflow-y: auto;
+  padding: 14px 16px 32px; max-height: 78dvh; overflow-y: auto;
   box-shadow: 0 -6px 30px rgba(0,0,0,0.35);
 }
 .mvs-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 14px; }
-.mvs-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
-.mvs-orderno { font-size: 20px; font-weight: 800; color: var(--text); line-height: 1.2; }
-.mvs-badge { font-size: 11px; padding: 3px 11px; border-radius: 12px; font-weight: 700; }
-.mvs-section { margin-bottom: 14px; }
-.mvs-label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 3px; }
-.mvs-val { font-size: 14px; color: var(--text); font-weight: 500; }
-.mvs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-.mvs-div { height: 1px; background: var(--border); margin: 14px 0 10px; }
-.mvs-btns { display: flex; gap: 10px; }
-.mvs-btn-close {
-  flex: 1; padding: 13px; background: var(--cream2);
-  border: 1px solid var(--border); border-radius: 12px;
-  color: var(--text2); font-size: 14px; cursor: pointer; font-family: inherit;
-}
-.mvs-btn-edit {
-  flex: 2; padding: 13px; background: var(--gold);
-  border: none; border-radius: 12px; color: #fff;
-  font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
-}
-
-/* New Order FAB */
-#mob-fab {
-  display: none; position: fixed; bottom: 72px; right: 16px; z-index: 190;
-  width: 52px; height: 52px; border-radius: 50%;
-  background: var(--gold); border: none; cursor: pointer;
-  font-size: 26px; color: #fff; box-shadow: 0 4px 14px rgba(201,168,76,0.5);
-  align-items: center; justify-content: center;
-}
+.mvs-head   { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.mvs-lbl    { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.8px; font-weight: 700; margin-bottom: 3px; }
+.mvs-val    { font-size: 14px; color: var(--text); font-weight: 500; }
+.mvs-orderno { font-size: 20px; font-weight: 800; color: var(--text); }
+.mvs-badge  { font-size: 11px; padding: 3px 11px; border-radius: 12px; font-weight: 700; flex-shrink: 0; margin-top: 4px; }
+.mvs-field  { margin-bottom: 12px; }
 </style>
 </head>
 <body>
 
-
-
 <!-- ══ MOBILE HEADER ══ -->
 <div id="mob-header">
-  <div class="mob-logo">SK</div>
+  <div class="mob-logo">SK<span style="color:var(--text2);font-weight:400"> ONTIME</span></div>
   <div id="mob-search-wrap">
     <span class="mob-search-icon">🔍</span>
-    <input id="mob-search" type="text" placeholder="Search orders, address, subbie…" oninput="mobSearch(this.value)" autocomplete="off"/>
+    <input id="mob-search" type="text" placeholder="Order#, address, subbie…" oninput="mobSearch(this.value)" autocomplete="off"/>
   </div>
   <button class="mob-icon-btn" onclick="openCloudModal()">
-    <span class="dot" id="mob-sync-dot"></span>Sync
+    <span id="mob-sync-dot" class="mob-dot"></span><span class="mob-sync-lbl">Sync</span>
   </button>
-  <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="mob-icon-btn" style="text-decoration:none;color:var(--gold-dark);border-color:rgba(79,126,248,0.4)">DCJ</a>
+  <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener"
+     class="mob-icon-btn" style="text-decoration:none;color:var(--gold-dark);border-color:rgba(79,126,248,0.4)">DCJ</a>
   <button class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
 </div>
 
 <!-- ══ BOTTOM NAV ══ -->
 <div id="mob-nav">
   <button class="mob-tab active" id="mobtab-dashboard" onclick="showPage('dashboard')"><span class="ti">📊</span>Board</button>
-  <button class="mob-tab" id="mobtab-all"       onclick="showPage('all')">      <span class="ti">📋</span>All</button>
-  <button class="mob-tab" id="mobtab-orders"    onclick="showPage('orders')">   <span class="ti">⚡</span>Active</button>
-  <button class="mob-tab" id="mobtab-claims"    onclick="showPage('claims')">   <span class="ti">🛡️</span>Claims</button>
-  <button class="mob-tab" id="mobtab-more"      onclick="mobDrawerOpen()">      <span class="ti">⋯</span>More</button>
+  <button class="mob-tab" id="mobtab-all"    onclick="showPage('all')">   <span class="ti">📋</span>All</button>
+  <button class="mob-tab" id="mobtab-orders" onclick="showPage('orders')"><span class="ti">⚡</span>Active</button>
+  <button class="mob-tab" id="mobtab-claims" onclick="showPage('claims')"><span class="ti">🛡️</span>Claims</button>
+  <button class="mob-tab" id="mobtab-more"   onclick="mobDrawerOpen()">   <span class="ti">⋯</span>More</button>
 </div>
 
-<!-- ══ FAB ══ -->
-<button id="mob-fab" onclick="openOrderModal()" title="New Order">＋</button>
+<!-- ══ NEW ORDER FAB ══ -->
+<button id="mob-fab" onclick="openOrderModal()">＋</button>
 
 <!-- ══ OVERLAY + DRAWER ══ -->
 <div id="mob-overlay" onclick="mobDrawerClose()"></div>
 <div id="mob-drawer">
   <div class="mob-drawer-top">
-    <span class="mob-drawer-title">Menu</span>
+    <span class="mob-drawer-title">Navigation</span>
     <button class="mob-drawer-close" onclick="mobDrawerClose()">✕</button>
   </div>
-  <div class="mob-drawer-link" onclick="showPage('dashboard');mobDrawerClose()"><span class="dl-icon">📊</span>Dashboard</div>
-  <div class="mob-drawer-link" onclick="showPage('all');mobDrawerClose()">       <span class="dl-icon">📋</span>All Orders</div>
-  <div class="mob-drawer-link" onclick="showPage('orders');mobDrawerClose()">    <span class="dl-icon">⚡</span>Active</div>
-  <div class="mob-drawer-link" onclick="showPage('completed');mobDrawerClose()"> <span class="dl-icon">✅</span>Completed</div>
-  <div class="mob-drawer-link" onclick="showPage('claims');mobDrawerClose()">    <span class="dl-icon">🛡️</span>Claims</div>
-  <div class="mob-drawer-link" onclick="showPage('closed');mobDrawerClose()">    <span class="dl-icon">🔒</span>Closed</div>
-  <div class="mob-drawer-link" onclick="showPage('issues');mobDrawerClose()">    <span class="dl-icon">⚠️</span>Issues</div>
-  <div class="mob-drawer-link" onclick="showPage('calendar');mobDrawerClose()">  <span class="dl-icon">📅</span>Calendar</div>
-  <div class="mob-drawer-link" onclick="showPage('subbies');mobDrawerClose()">   <span class="dl-icon">👷</span>Subbies</div>
-  <div class="mob-drawer-link" onclick="openSupModal();mobDrawerClose()">        <span class="dl-icon">👤</span>Supervisors</div>
-  <div class="mob-drawer-link" onclick="showPage('sor');mobDrawerClose()">       <span class="dl-icon">📄</span>SOR Codes</div>
+  <div class="mob-dl" onclick="showPage('dashboard');mobDrawerClose()"><span class="dl-i">📊</span>Dashboard</div>
+  <div class="mob-dl" onclick="showPage('all');mobDrawerClose()">       <span class="dl-i">📋</span>All Orders</div>
+  <div class="mob-dl" onclick="showPage('orders');mobDrawerClose()">    <span class="dl-i">⚡</span>Active</div>
+  <div class="mob-dl" onclick="showPage('completed');mobDrawerClose()"> <span class="dl-i">✅</span>Completed</div>
+  <div class="mob-dl" onclick="showPage('claims');mobDrawerClose()">    <span class="dl-i">🛡️</span>Claims</div>
+  <div class="mob-dl" onclick="showPage('closed');mobDrawerClose()">    <span class="dl-i">🔒</span>Closed</div>
+  <div class="mob-dl" onclick="showPage('issues');mobDrawerClose()">    <span class="dl-i">⚠️</span>Issues</div>
+  <div class="mob-dl" onclick="showPage('calendar');mobDrawerClose()">  <span class="dl-i">📅</span>Calendar</div>
+  <div class="mob-dl" onclick="showPage('subbies');mobDrawerClose()">   <span class="dl-i">👷</span>Subbies</div>
+  <div class="mob-dl" onclick="openSupModal();mobDrawerClose()">        <span class="dl-i">👤</span>Supervisors</div>
+  <div class="mob-dl" onclick="showPage('sor');mobDrawerClose()">       <span class="dl-i">📄</span>SOR Codes</div>
   <div class="mob-drawer-sep"></div>
-  <div class="mob-drawer-link" onclick="openCloudModal();mobDrawerClose()">      <span class="dl-icon">☁️</span>Cloud Sync</div>
-  <div class="mob-drawer-link" onclick="openSettingsModal();mobDrawerClose()">   <span class="dl-icon">⚙️</span>Settings</div>
-  <div class="mob-drawer-link" onclick="exportCSV();mobDrawerClose()">           <span class="dl-icon">📊</span>Export CSV</div>
+  <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()">     <span class="dl-i">☁️</span>Cloud Sync</div>
+  <div class="mob-dl" onclick="openSettingsModal();mobDrawerClose()">  <span class="dl-i">⚙️</span>Settings</div>
+  <div class="mob-dl" onclick="exportCSV();mobDrawerClose()">          <span class="dl-i">📊</span>Export CSV</div>
+  <div class="mob-dl" onclick="openOrderModal();mobDrawerClose()">     <span class="dl-i">➕</span>New Order</div>
 </div>
 
 <!-- ══ VIEW SHEET ══ -->
-<div id="mob-vsheet-bg" onclick="mobVClose()"></div>
+<div id="mob-vbg" onclick="mobVClose()"></div>
 <div id="mob-vsheet">
   <div class="mvs-handle"></div>
   <div class="mvs-head">
     <div>
-      <div class="mvs-label">Order Number</div>
+      <div class="mvs-lbl">Order Number</div>
       <div class="mvs-orderno" id="mvs-no">—</div>
     </div>
     <span class="mvs-badge" id="mvs-st">—</span>
   </div>
-  <div class="mvs-section"><div class="mvs-label">Address</div><div class="mvs-val" id="mvs-addr">—</div></div>
-  <div class="mvs-grid">
-    <div><div class="mvs-label">Area</div><div class="mvs-val" id="mvs-area">—</div></div>
-    <div><div class="mvs-label">SOR Code</div><div class="mvs-val" id="mvs-sor">—</div></div>
+  <div class="mvs-field"><div class="mvs-lbl">Address</div><div class="mvs-val" id="mvs-addr">—</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div><div class="mvs-lbl">Area</div><div class="mvs-val" id="mvs-area">—</div></div>
+    <div><div class="mvs-lbl">SOR Code</div><div class="mvs-val" id="mvs-sor">—</div></div>
   </div>
-  <div class="mvs-grid">
-    <div><div class="mvs-label">Amount</div><div class="mvs-val" id="mvs-amt">—</div></div>
-    <div><div class="mvs-label">Date</div><div class="mvs-val" id="mvs-date">—</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+    <div><div class="mvs-lbl">Amount</div><div class="mvs-val" style="color:var(--gold-dark);font-weight:700" id="mvs-amt">—</div></div>
+    <div><div class="mvs-lbl">Date</div><div class="mvs-val" id="mvs-date">—</div></div>
   </div>
-  <div class="mvs-section"><div class="mvs-label">Subbie</div><div class="mvs-val" id="mvs-sub">—</div></div>
-  <div id="mvs-notes-wrap" style="display:none" class="mvs-section"><div class="mvs-label">Notes</div><div class="mvs-val" id="mvs-notes" style="font-size:13px;color:var(--text2)">—</div></div>
-  <div class="mvs-div"></div>
-  <div class="mvs-btns">
-    <button class="mvs-btn-close" onclick="mobVClose()">Close</button>
-    <button class="mvs-btn-edit"  onclick="mobVEdit()">✏️ Edit Order</button>
+  <div class="mvs-field"><div class="mvs-lbl">Subbie</div><div class="mvs-val" id="mvs-sub">—</div></div>
+  <div id="mvs-notes-row" style="display:none" class="mvs-field"><div class="mvs-lbl">Notes</div><div class="mvs-val" id="mvs-notes" style="color:var(--text2);font-size:13px">—</div></div>
+  <div style="height:1px;background:var(--border);margin:14px 0 10px"></div>
+  <div style="display:flex;gap:10px">
+    <button style="flex:1;padding:13px;background:var(--cream2);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-size:14px;cursor:pointer;font-family:inherit" onclick="mobVClose()">Close</button>
+    <button style="flex:2;padding:13px;background:var(--gold);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit" onclick="mobVEdit()">✏️ Edit Order</button>
   </div>
 </div>
 
-<div id="app">
-
-  <!-- Sidebar -->
-  <div id="sidebar">
-    <div class="logo">
-      <div class="logo-mark"><span class="logo-sk">SK</span>&nbsp;<span class="logo-on">ON</span><span class="logo-time">TIME</span></div>
-      <div class="logo-sub">Holmes Order Manager</div>
-    </div>
-    <nav>
-      <div class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        <span id="navlabel-dashboard">Dashboard</span>
-      </div>
-      <div class="nav-divider"></div>
-      <div class="nav-item active" onclick="showPage('all')" id="nav-all">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        <span id="navlabel-all">All Orders</span>
-      </div>
-      <div class="nav-divider"></div>
-      <div class="nav-item" onclick="showPage('orders')" id="nav-orders">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        <span id="navlabel-orders">Orders</span>
-        <span class="nav-badge" id="orders-badge" style="background:var(--gold-light)">0</span>
-      </div>
-      <div class="nav-item" onclick="showPage('completed')" id="nav-completed">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-        <span id="navlabel-completed">Completed</span>
-        <span class="nav-badge" id="completed-badge" style="background:#FACC15;color:#422006">0</span>
-      </div>
-      <div class="nav-item" onclick="showPage('claims')" id="nav-claims">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span id="navlabel-claims">Claim</span>
-        <span class="nav-badge" id="claims-badge" style="background:#F97316">0</span>
-      </div>
-      <div class="nav-item" onclick="showPage('closed')" id="nav-closed">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <span id="navlabel-closed">Closed</span>
-        <span class="nav-badge-plain" id="closed-badge">0</span>
-      </div>
-      <div class="nav-item" onclick="showPage('issues')" id="nav-issues">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        <span id="navlabel-issues">Issues</span>
-        <span class="nav-badge" id="issues-badge" style="background:var(--red)">0</span>
-      </div>
-      <div class="nav-item" onclick="showPage('cancelled')" id="nav-cancelled">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-        <span id="navlabel-cancelled">Cancelled</span>
-        <span class="nav-badge-plain" id="cancelled-badge">0</span>
-      </div>
-      <div class="nav-divider"></div>
-      <div class="nav-item" onclick="showPage('calendar')" id="nav-calendar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="16" cy="15" r="1" fill="currentColor"/></svg>
-        <span id="navlabel-calendar">Calendar</span>
-        <span class="nav-badge" id="cal-badge" style="background:var(--accent2);display:none">0</span>
-      </div>
-      <div class="nav-item" onclick="showPage('subbies')" id="nav-subbies">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span id="navlabel-subbies">Subbies</span>
-        <span class="nav-badge" id="subbies-badge" style="background:var(--yellow);display:none">0</span>
-      </div>
-      <div class="nav-item" onclick="openSupModal()" id="nav-sup">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        <span id="navlabel-sup">Supervisors</span>
-      </div>
-      <div class="nav-item" onclick="showPage('sor')" id="nav-sor">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        <span id="navlabel-sor">SOR Codes</span>
-      </div>
-    </nav>
-    <div class="sidebar-footer">
-      <div class="stats-mini" id="sidebar-stats">
-        <div class="stat-mini-row"><span>This Month Revenue</span><span id="mini-month">$0</span></div>
-        <div class="stat-mini-row"><span>This Month Orders</span><span id="mini-month-count">0</span></div>
-        <div style="height:1px;background:rgba(255,255,255,0.08);margin:7px 0"></div>
-        <div class="stat-mini-row"><span>Unpaid by HomesNSW</span><span id="mini-homes-unpaid" style="color:var(--red);font-weight:700;font-variant-numeric:tabular-nums">$0</span></div>
-        <div class="stat-mini-row"><span>Owed to Subbies</span><span id="mini-subbie-owed" style="color:var(--yellow);font-weight:700;font-variant-numeric:tabular-nums">$0</span></div>
-        <div style="height:1px;background:rgba(255,255,255,0.08);margin:7px 0"></div>
-        <div class="stat-mini-row"><span>Total Orders</span><span id="mini-total">0</span></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Main -->
-  <div id="main">
-    <div id="header">
-      <h1 id="page-title">Orders</h1>
-      <div style="display:flex;gap:10px;align-items:center">
-        <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="btn btn-secondary" style="text-decoration:none;font-size:12.5px;border-color:rgba(79,126,248,0.4);color:var(--gold-dark)">
-          &#127974; <span id="navlabel-dcj">DCJ Portal</span>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        </a>
-        <div class="header-actions" id="header-actions"></div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div onclick="openCloudModal()" title="Click to open Cloud Sync settings" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 2px">
-            <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
-            Cloud Sync &middot; <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
-          </div>
-          <button id="undo-btn" onclick="undo()" disabled title="Nothing to undo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
-          </button>
-          <button id="redo-btn" onclick="redo()" disabled title="Nothing to redo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)" style="transform:scaleX(-1)"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.5"/></svg>
-          </button>
-          <button onclick="cloudForcePush()" title="Force Push — overwrite everyone's data with your current state" style="display:flex;align-items:center;gap:5px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:0 10px;height:34px;cursor:pointer;font-size:12px;font-family:inherit;color:var(--text2);white-space:nowrap">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--orange)"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-            Force Push
-          </button>
-          <button onclick="openSettingsModal()" title="App Settings — rename menu/button labels" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:pointer">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          </button>
-          <div style="position:relative">
-            <button onclick="toggleDataMenu(event)" title="Import / Export" style="display:flex;align-items:center;gap:6px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;cursor:pointer;font-family:inherit">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text3)"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div id="data-menu" style="display:none;position:absolute;right:0;top:40px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);width:200px;z-index:100;overflow:hidden">
-              <div onclick="document.getElementById('import-file-input').click(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--blue)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Import Data Backup
-              </div>
-              <div onclick="exportData(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--gold-dark)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Export Data Backup
-              </div>
-              <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importDataFile(this.files[0])">
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+<!-- ══ MOBILE CONTENT WRAPPER ══ -->
+<div id="mob-main">
     <div id="content">
 
       <!-- ALL ORDERS PAGE -->
@@ -1118,8 +946,6 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
     </div>
     <div id="tab-summary"></div>
-  </div>
-</div>
 
 <!-- ORDER MODAL -->
 <div class="modal-overlay" id="order-modal">
@@ -1695,6 +1521,8 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   </div>
 </div>
 
+
+</div><!-- /mob-main -->
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
@@ -2377,7 +2205,7 @@ function renderCloudStatus(msg) {
   if (dot) dot.style.background = color;
   const dot2 = document.getElementById('cloud-dot-2');
   if (dot2) dot2.style.background = color;
-  const sd=document.getElementById('mob-sync-dot'); if(sd) sd.style.background=color;
+  const sd=document.getElementById('mob-sync-dot');if(sd)sd.style.background=color;
 }
 
 // ============================================================
@@ -5950,11 +5778,11 @@ function openEmailImport() {
 }
 
 
-// ══════════════════════════════════════════════
-// MOBILE.HTML — mobile-only JS
-// ══════════════════════════════════════════════
-const MOB_COL = {active:'#4f7ef8',completed:'#2ecc71',claim:'#f39c12',closed:'#8b90a7',issue:'#e74c3c',cancelled:'#aaa'};
-const MOB_LBL = {active:'Active',completed:'Done',claim:'Claim',closed:'Closed',issue:'Issue',cancelled:'Cancelled'};
+// ═══════════════════════════════════════════
+// MOBILE.HTML JS
+// ═══════════════════════════════════════════
+const MOB_COL={active:'#4f7ef8',completed:'#2ecc71',claim:'#f39c12',closed:'#8b90a7',issue:'#e74c3c',cancelled:'#aaa'};
+const MOB_LBL={active:'Active',completed:'Done',claim:'Claim',closed:'Closed',issue:'Issue',cancelled:'Cancelled'};
 
 let _mQ='';
 function mobSearch(v){
@@ -5962,8 +5790,7 @@ function mobSearch(v){
   const m={all:renderAll,orders:renderOrders,completed:renderCompleted,claims:renderClaims,closed:renderClosed,issues:renderIssues};
   const fn=m[currentPage]; if(fn) fn();
 }
-
-function mobRender(page, orders){
+function mobRender(page,orders){
   const el=document.getElementById('mob-cards-'+page); if(!el) return;
   let list=orders;
   if(_mQ) list=orders.filter(o=>
@@ -5974,10 +5801,7 @@ function mobRender(page, orders){
     (o.sorCode||'').toLowerCase().includes(_mQ)
   );
   const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  if(!list.length){
-    el.innerHTML='<div style="padding:32px;text-align:center;color:var(--text3);font-size:14px">No orders found</div>';
-    return;
-  }
+  if(!list.length){el.innerHTML='<div style="padding:32px;text-align:center;color:var(--text3);font-size:14px">No orders found</div>';return;}
   el.innerHTML=list.map(o=>{
     const st=o.status||'active',col=MOB_COL[st]||'#4f7ef8',lbl=MOB_LBL[st]||st;
     const meta=[o.area,o.subbies].filter(Boolean).join(' · ');
@@ -5994,7 +5818,6 @@ function mobRender(page, orders){
     </div>`;
   }).join('');
 }
-
 function mobTabUpdate(page){
   const map={all:'all',orders:'orders',dashboard:'dashboard',claims:'claims'};
   const more=['completed','closed','issues','cancelled','subbies','calendar','sor'];
@@ -6002,45 +5825,33 @@ function mobTabUpdate(page){
   const key=map[page]||(more.includes(page)?'more':null);
   if(key){const b=document.getElementById('mobtab-'+key);if(b)b.classList.add('active');}
 }
-
-function mobDrawerOpen(){
-  document.getElementById('mob-drawer').style.display='block';
-  document.getElementById('mob-overlay').style.display='block';
-}
-function mobDrawerClose(){
-  document.getElementById('mob-drawer').style.display='none';
-  document.getElementById('mob-overlay').style.display='none';
-}
-
-// View sheet
+function mobDrawerOpen(){document.getElementById('mob-drawer').style.display='block';document.getElementById('mob-overlay').style.display='block';}
+function mobDrawerClose(){document.getElementById('mob-drawer').style.display='none';document.getElementById('mob-overlay').style.display='none';}
 let _mvId=null;
 function mobVOpen(id){
-  const o=DB.orders.find(x=>x.id===id); if(!o) return;
+  const o=DB.orders.find(x=>x.id===id);if(!o)return;
   _mvId=id;
   const st=o.status||'active',col=MOB_COL[st]||'#4f7ef8';
-  const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   document.getElementById('mvs-no').textContent=o.orderNumber||'—';
   const stEl=document.getElementById('mvs-st');
-  stEl.textContent=MOB_LBL[st]||st; stEl.style.background=col+'22'; stEl.style.color=col;
+  stEl.textContent=MOB_LBL[st]||st;stEl.style.background=col+'22';stEl.style.color=col;
   document.getElementById('mvs-addr').textContent=o.address||'—';
   document.getElementById('mvs-area').textContent=o.area||'—';
   document.getElementById('mvs-sor').textContent=o.sorCode||'—';
   document.getElementById('mvs-amt').textContent='$'+Number(o.amount||0).toFixed(2);
   document.getElementById('mvs-date').textContent=o.orderDate||'—';
   document.getElementById('mvs-sub').textContent=o.subbies||'—';
-  const nw=document.getElementById('mvs-notes-wrap');
-  if(o.notes){document.getElementById('mvs-notes').textContent=o.notes;nw.style.display='block';}
-  else{nw.style.display='none';}
-  document.getElementById('mob-vsheet-bg').style.display='block';
+  const nw=document.getElementById('mvs-notes-row');
+  if(o.notes){document.getElementById('mvs-notes').textContent=o.notes;nw.style.display='block';}else{nw.style.display='none';}
+  document.getElementById('mob-vbg').style.display='block';
   document.getElementById('mob-vsheet').style.display='block';
 }
 function mobVClose(){
-  document.getElementById('mob-vsheet-bg').style.display='none';
+  document.getElementById('mob-vbg').style.display='none';
   document.getElementById('mob-vsheet').style.display='none';
   _mvId=null;
 }
 function mobVEdit(){const id=_mvId;mobVClose();if(id)openOrderModal(id);}
-
 function initApp() {
   applyUiLabels();
   applyUiColors();
