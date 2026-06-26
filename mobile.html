@@ -6082,7 +6082,14 @@ function mobRefresh() {
       <div class="mc-addr">${_esc(o.address||'—')}</div>
       <div class="mc-bot">
         <span class="mc-meta">${_esc(o.area||'')}</span>
-        <span class="mc-amt">$${Number(o.amount||0).toFixed(2)}</span>
+        <span class="mc-amt">${(()=>{
+          const isSK = (o.subbies||'').startsWith('SK_');
+          if (isSK) return '';  // SK staff — no price shown
+          const sp = getSubbiePrice(o);
+          return sp != null
+            ? '$'+Number(sp).toFixed(2)   // external subbie — show subbie rate
+            : '$'+Number(o.amount||0).toFixed(2);
+        })()}</span>
       </div>
     </div>`;
   }).join('');
