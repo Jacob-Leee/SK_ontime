@@ -4067,7 +4067,10 @@ function renderIssues() {
     <td><div class="addr-full issue-addr">${esc(o.address)}</div></td>
     <td><span class="area-tag">${esc(o.area)}</span></td>
     <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
-    <td style="font-size:12px">${esc(o.subbies)}</td>
+    <td style="font-size:12px">
+      ${esc(o.subbies)}
+      ${o.supervisor ? `<br>${supervisorLink(o.supervisor, o.area)}` : ''}
+    </td>
     <td><select class="form-control" style="padding:4px 8px;font-size:12px;min-width:185px" onchange="setClaimStatus('${esc(o.orderNumber)}', this.value)">${claimStatusOptions(claimMap[o.orderNumber]?.status)}</select></td>
     <td><div class="truncate" title="${esc(o.issueNote)}" style="max-width:220px;cursor:pointer;color:var(--yellow)" onclick="editIssueNote('${o.id}')">${esc(o.issueNote) || '<span style=\'color:var(--text3)\'>+ add note</span>'}</div></td>
     <td>
