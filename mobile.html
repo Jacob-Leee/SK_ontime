@@ -416,6 +416,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     <button class="mob-hdr-btn" onclick="openCloudModal()">
       <span id="mob-sync-dot" class="mob-dot"></span>Sync
     </button>
+    <button class="mob-hdr-btn" id="mob-refresh-btn" onclick="mobRefreshPull()" title="Refresh data">↻</button>
     <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener"
        class="mob-hdr-btn" style="text-decoration:none">DCJ</a>
     <button class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
@@ -6083,6 +6084,10 @@ function mobRefresh() {
       <div class="mc-bot">
         <span class="mc-meta">${_esc(o.area||'')}</span>
         <span class="mc-amt">${(()=>{
+          if (window._SUBBIE_MODE) {
+            const sp = getSubbiePrice(o);
+            return sp != null ? '$'+Number(sp).toFixed(2) : '$'+Number(o.amount||0).toFixed(2);
+          }
           const isSK = (o.subbies||'').startsWith('SK_');
           if (isSK) return '';  // SK staff — no price shown
           const sp = getSubbiePrice(o);
@@ -6164,16 +6169,78 @@ function mobDrawerClose() {
   document.getElementById('mob-overlay').style.display = 'none';
 }
 
+
+// ── Manual refresh ──
+async function mobRefreshPull() {
+  const btn = document.getElementById('mob-refresh-btn');
+  if (btn) {
+    btn.style.opacity = '0.4';
+    btn.style.pointerEvents = 'none';
+    btn.innerHTML = '↻';
+    // Spin animation
+    btn._angle = 0;
+    btn._spin = setInterval(() => {
+      btn._angle = (btn._angle + 30) % 360;
+      btn.style.transform = `rotate(${btn._angle}deg)`;
+    }, 50);
+  }
+  try {
+    if (CLOUD.enabled && CLOUD.url) {
+      await cloudPull(true);
+    }
+    mobRefresh();
+  } catch(e) {
+    console.error('[mobRefreshPull]', e);
+  } finally {
+    if (btn) {
+      clearInterval(btn._spin);
+      btn.style.transform = 'rotate(0deg)';
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = '';
+    }
+  }
+}
 // ── Cloud sync dot ──
 function mobSyncDot(color) {
   const d = document.getElementById('mob-sync-dot');
   if (d) d.style.background = color;
 }
 
+
+// ── SUBBIE MODE (URL param ?subbie=Jake+Lee) ──────────────
+const _SUBBIE_PARAM = new URLSearchParams(location.search).get('subbie') || '';
+
+function mobSubbieMode() {
+  if (!_SUBBIE_PARAM) return;  // normal admin mode
+
+  const name = _SUBBIE_PARAM;
+
+  // 1. Hide all tabs except Active, change header
+  document.querySelectorAll('.mob-tab').forEach(b => b.style.display = 'none');
+  const activeTab = document.getElementById('mt-orders');
+  if (activeTab) { activeTab.style.display = 'flex'; activeTab.classList.add('active'); }
+
+  // 2. Hide FAB (no new orders), hide Sync button
+  const fab = document.getElementById('mob-fab');
+  if (fab) fab.style.display = 'none';
+  const syncBtn = document.querySelector('#mob-hdr .mob-hdr-btn');
+  if (syncBtn) syncBtn.style.display = 'none';
+
+  // 3. Update header logo
+  const logo = document.querySelector('.mob-logo');
+  if (logo) logo.innerHTML = `SK <span style="color:var(--text2);font-weight:400">ONTIME</span> <span style="font-size:11px;color:var(--gold);font-weight:600">· ${name}</span>`;
+
+  // 4. Override _MOB_FILTERS to only show this subbie's active orders
+  _MOB_FILTERS.orders = o => (!o.status || o.status === 'active') && o.subbies === name;
+
+  // 5. In subbie mode: always show subbie price, never blank
+  window._SUBBIE_MODE = true;
+}
 // ── Init ──
 function mobInit() {
   // Move modals to body level (fixes iOS overflow clipping)
   document.querySelectorAll('.modal-overlay').forEach(m => document.body.appendChild(m));
+  mobSubbieMode();
   mobNav('orders');
 }
 
