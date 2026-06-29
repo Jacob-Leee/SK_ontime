@@ -2,7 +2,11 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SK Ontime">
+<meta name="mobile-web-app-capable" content="yes">
 <title>SK Ontime — Holmes Order Manager</title>
 <script>
 /* Chart.js v4.4.0 — embedded for offline use (MIT License) */
@@ -325,6 +329,15 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .mob-tab .ti { font-size: 17px; line-height: 1; }
 .mob-tab.active { color: var(--gold); }
 
+/* ── Admin PIN ── */
+.pin-key {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: var(--bg2); border: none;
+  font-size: 22px; font-weight: 600; color: var(--text);
+  cursor: pointer; transition: background 0.1s;
+}
+.pin-key:active { background: var(--accent); color: #fff; }
+
 /* ── FAB ── */
 #mob-fab {
   position: fixed; right: 16px; bottom: 72px;
@@ -405,6 +418,35 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 </style>
 </head>
 <body>
+
+<!-- ══ ADMIN PIN OVERLAY ══ -->
+<div id="mob-pin-overlay" style="position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px">
+  <div style="font-size:40px;margin-bottom:10px">🔐</div>
+  <div style="font-size:20px;font-weight:800;margin-bottom:4px;color:var(--text)">SK Ontime</div>
+  <div style="font-size:13px;color:var(--text3);margin-bottom:28px;text-align:center">Enter Admin PIN to view prices,<br>or skip for limited view.</div>
+  <div id="mob-pin-dots" style="display:flex;gap:14px;margin-bottom:28px">
+    <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="0"></div>
+    <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="1"></div>
+    <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="2"></div>
+    <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="3"></div>
+  </div>
+  <div id="mob-pin-err" style="height:18px;color:#e74c3c;font-size:13px;font-weight:600;margin-bottom:12px;text-align:center"></div>
+  <div style="display:grid;grid-template-columns:repeat(3,72px);gap:10px">
+    <button class="pin-key" onclick="mobPinKey('1')">1</button>
+    <button class="pin-key" onclick="mobPinKey('2')">2</button>
+    <button class="pin-key" onclick="mobPinKey('3')">3</button>
+    <button class="pin-key" onclick="mobPinKey('4')">4</button>
+    <button class="pin-key" onclick="mobPinKey('5')">5</button>
+    <button class="pin-key" onclick="mobPinKey('6')">6</button>
+    <button class="pin-key" onclick="mobPinKey('7')">7</button>
+    <button class="pin-key" onclick="mobPinKey('8')">8</button>
+    <button class="pin-key" onclick="mobPinKey('9')">9</button>
+    <div></div>
+    <button class="pin-key" onclick="mobPinKey('0')">0</button>
+    <button class="pin-key" onclick="mobPinDel()" style="font-size:20px">⌫</button>
+  </div>
+  <button onclick="mobPinSkip()" style="margin-top:24px;font-size:13px;color:var(--text3);background:none;border:none;cursor:pointer;padding:8px 16px">Skip (view only)</button>
+</div>
 
 <!-- ══ MOBILE SHELL ══ -->
 <div id="mob-wrap">
@@ -6084,16 +6126,14 @@ function mobRefresh() {
       <div class="mc-bot">
         <span class="mc-meta">${_esc(o.area||'')}</span>
         <span class="mc-amt">${(()=>{
+          if (window._ADMIN_MODE) {
+            return '$'+Number(o.amount||0).toFixed(2);
+          }
           if (window._SUBBIE_MODE) {
             const sp = getSubbiePrice(o);
             return sp != null ? '$'+Number(sp).toFixed(2) : '$'+Number(o.amount||0).toFixed(2);
           }
-          const isSK = (o.subbies||'').startsWith('SK_');
-          if (isSK) return '';  // SK staff — no price shown
-          const sp = getSubbiePrice(o);
-          return sp != null
-            ? '$'+Number(sp).toFixed(2)   // external subbie — show subbie rate
-            : '$'+Number(o.amount||0).toFixed(2);
+          return '<span style="color:var(--text3);letter-spacing:2px">***</span>';
         })()}</span>
       </div>
     </div>`;
@@ -6138,10 +6178,14 @@ function mobVOpen(id) {
     row('Address', o.address) +
     row('Area', o.area) +
     row('SOR Code', o.sorCode) +
-    row('Amount', '$' + Number(o.amount||0).toFixed(2)) +
+    (window._ADMIN_MODE
+      ? row('Amount', '$' + Number(o.amount||0).toFixed(2))
+      : window._SUBBIE_MODE
+        ? row('Amount', '$' + Number(getSubbiePrice(o) != null ? getSubbiePrice(o) : o.amount||0).toFixed(2))
+        : `<div class="mvs-row"><span class="mvs-lbl">Amount</span><span class="mvs-val" style="color:var(--text3);letter-spacing:2px">***</span></div>`) +
     row('Order Date', o.orderDate) +
     row('Subbie', o.subbies) +
-    row('Supervisor', o.supervisor) +
+    (o.supervisor ? `<div class="mvs-row"><span class="mvs-lbl">Supervisor</span><span class="mvs-val"><span onclick="mobSupContact('${_esc(o.supervisor)}')" style="cursor:pointer;color:var(--accent);text-decoration:underline">👤 ${_esc(o.supervisor)}</span></span></div>` : '') +
     row('PRN', o.prn) +
     row('Comments', o.comments) +
     row('Notes', o.notes);
@@ -6159,7 +6203,8 @@ function mobVEdit() {
   if (id) openOrderModal(id);
 }
 
-// ── Drawer ──
+
+// ── Drawer ──────────────────────────────────────────────────────
 function mobDrawerOpen() {
   document.getElementById('mob-drawer').style.display = 'block';
   document.getElementById('mob-overlay').style.display = 'block';
@@ -6169,81 +6214,138 @@ function mobDrawerClose() {
   document.getElementById('mob-overlay').style.display = 'none';
 }
 
-
-// ── Manual refresh ──
+// ── Refresh / Sync ───────────────────────────────────────────────
 async function mobRefreshPull() {
   const btn = document.getElementById('mob-refresh-btn');
-  if (btn) {
-    btn.style.opacity = '0.4';
-    btn.style.pointerEvents = 'none';
-    btn.innerHTML = '↻';
-    // Spin animation
-    btn._angle = 0;
-    btn._spin = setInterval(() => {
-      btn._angle = (btn._angle + 30) % 360;
-      btn.style.transform = `rotate(${btn._angle}deg)`;
-    }, 50);
-  }
+  if (btn) { btn.style.opacity = '0.5'; btn.style.transform = 'rotate(360deg)'; btn.style.transition = 'transform 0.6s'; }
   try {
-    if (CLOUD.enabled && CLOUD.url) {
-      await cloudPull(true);
-    }
+    if (typeof cloudPull === 'function') await cloudPull(true);
     mobRefresh();
   } catch(e) {
     console.error('[mobRefreshPull]', e);
   } finally {
-    if (btn) {
-      clearInterval(btn._spin);
-      btn.style.transform = 'rotate(0deg)';
-      btn.style.opacity = '1';
-      btn.style.pointerEvents = '';
-    }
+    if (btn) { setTimeout(() => { btn.style.opacity = ''; btn.style.transform = ''; btn.style.transition = ''; }, 700); }
   }
 }
-// ── Cloud sync dot ──
 function mobSyncDot(color) {
-  const d = document.getElementById('mob-sync-dot');
-  if (d) d.style.background = color;
+  const dot = document.getElementById('mob-sync-dot');
+  if (!dot) return;
+  dot.style.background = color || 'transparent';
 }
 
+// ── Supervisor Contact Popup ──────────────────────────────────────
+function mobSupContact(name) {
+  const sups = loadSupervisors();
+  const sup  = sups.find(s => s.name === name);
+  const phone = sup && sup.phone ? sup.phone.replace(/\s/g,'') : '';
+  const email = sup && sup.email ? sup.email : '';
 
-// ── SUBBIE MODE (URL param ?subbie=Jake+Lee) ──────────────
+  const existing = document.getElementById('mob-sup-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'mob-sup-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:flex-end;background:rgba(0,0,0,0.5)';
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+
+  const btnStyle = 'display:flex;align-items:center;gap:12px;width:100%;background:var(--bg2);border:none;border-radius:12px;padding:14px 16px;margin-bottom:10px;font-size:15px;color:var(--text);cursor:pointer;text-align:left';
+
+  modal.innerHTML = `
+    <div style="width:100%;background:var(--card);border-radius:16px 16px 0 0;padding:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px))">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px;color:var(--text)">👤 ${name}</div>
+      ${phone ? `
+        <button style="${btnStyle}" onclick="location.href='tel:${phone}'">📞 <span>Call ${sup.phone}</span></button>
+        <button style="${btnStyle}" onclick="location.href='sms:${phone}'">💬 <span>Text ${sup.phone}</span></button>
+      ` : '<div style="color:var(--text3);font-size:13px;margin-bottom:10px">No phone number saved</div>'}
+      ${email ? `
+        <button style="${btnStyle}" onclick="location.href='mailto:${email}'">✉️ <span>${email}</span></button>
+      ` : '<div style="color:var(--text3);font-size:13px;margin-bottom:10px">No email saved</div>'}
+      <button onclick="document.getElementById('mob-sup-modal').remove()" style="width:100%;background:var(--bg2);border:none;border-radius:12px;padding:14px;margin-top:4px;font-size:15px;color:var(--text3);cursor:pointer;font-weight:600">
+        Cancel
+      </button>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+// ── Admin PIN ─────────────────────────────────────────────────────
+let _pinBuf = '';
+window._ADMIN_MODE = false;
+
+function mobPinKey(digit) {
+  if (_pinBuf.length >= 4) return;
+  _pinBuf += digit;
+  _pinUpdateDots();
+  if (_pinBuf.length === 4) {
+    setTimeout(mobPinCheck, 120);
+  }
+}
+function mobPinDel() {
+  _pinBuf = _pinBuf.slice(0, -1);
+  _pinUpdateDots();
+}
+function _pinUpdateDots() {
+  document.querySelectorAll('#mob-pin-dots [data-dot]').forEach((dot, i) => {
+    dot.style.background = i < _pinBuf.length ? 'var(--accent)' : 'transparent';
+    dot.style.borderColor = i < _pinBuf.length ? 'var(--accent)' : 'var(--text3)';
+  });
+}
+function mobPinCheck() {
+  const correct = lsGet('mob_admin_pin') || '1234';
+  if (_pinBuf === correct) {
+    window._ADMIN_MODE = true;
+    sessionStorage.setItem('mob_admin_sess', '1');
+    document.getElementById('mob-pin-overlay').style.display = 'none';
+    mobRefresh();
+  } else {
+    const err = document.getElementById('mob-pin-err');
+    if (err) { err.textContent = 'Incorrect PIN'; setTimeout(() => { err.textContent = ''; }, 1500); }
+    _pinBuf = '';
+    _pinUpdateDots();
+  }
+}
+function mobPinSkip() {
+  window._ADMIN_MODE = false;
+  document.getElementById('mob-pin-overlay').style.display = 'none';
+  mobRefresh();
+}
+
+// ── Subbie URL mode ───────────────────────────────────────────────
 const _SUBBIE_PARAM = new URLSearchParams(location.search).get('subbie') || '';
 
 function mobSubbieMode() {
-  if (!_SUBBIE_PARAM) return;  // normal admin mode
-
-  const name = _SUBBIE_PARAM;
-
-  // 1. Hide all tabs except Active, change header
-  document.querySelectorAll('.mob-tab').forEach(b => b.style.display = 'none');
-  const activeTab = document.getElementById('mt-orders');
-  if (activeTab) { activeTab.style.display = 'flex'; activeTab.classList.add('active'); }
-
-  // 2. Hide FAB (no new orders), hide Sync button
+  if (!_SUBBIE_PARAM) return;
+  window._SUBBIE_MODE = true;
+  // Show only relevant tabs
+  ['mt-dashboard','mt-all','mt-done','mt-issues'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  // Hide FAB and Sync in subbie mode
   const fab = document.getElementById('mob-fab');
   if (fab) fab.style.display = 'none';
-  const syncBtn = document.querySelector('#mob-hdr .mob-hdr-btn');
-  if (syncBtn) syncBtn.style.display = 'none';
-
-  // 3. Update header logo
-  const logo = document.querySelector('.mob-logo');
-  if (logo) logo.innerHTML = `SK <span style="color:var(--text2);font-weight:400">ONTIME</span> <span style="font-size:11px;color:var(--gold);font-weight:600">· ${name}</span>`;
-
-  // 4. Override _MOB_FILTERS to only show this subbie's active orders
-  _MOB_FILTERS.orders = o => (!o.status || o.status === 'active') && o.subbies === name;
-
-  // 5. In subbie mode: always show subbie price, never blank
-  window._SUBBIE_MODE = true;
 }
-// ── Init ──
+
+// ── Init ──────────────────────────────────────────────────────────
 function mobInit() {
   // Move modals to body level (fixes iOS overflow clipping)
   document.querySelectorAll('.modal-overlay').forEach(m => document.body.appendChild(m));
   mobSubbieMode();
+
+  // Check session-based admin auth
+  if (sessionStorage.getItem('mob_admin_sess') === '1') {
+    window._ADMIN_MODE = true;
+    const overlay = document.getElementById('mob-pin-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  // If subbie mode, skip PIN and go straight to orders
+  if (window._SUBBIE_MODE) {
+    const overlay = document.getElementById('mob-pin-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
   mobNav('orders');
 }
-
 
 </script>
 </body>
