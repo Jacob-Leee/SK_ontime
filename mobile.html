@@ -6616,6 +6616,9 @@ function mobApplyAdminUI() {
     // Show FAB
     const fab = document.getElementById('mob-fab');
     if (fab && !window._SUBBIE_MODE) fab.style.display = '';
+    // Show Home button for admin too
+    const backBtn = document.getElementById('mob-back-btn');
+    if (backBtn) { backBtn.style.display = 'inline-flex'; backBtn.style.alignItems = 'center'; }
   } else {
     // Non-admin: Active tab only
     NON_ADMIN_HIDDEN.forEach(id => {
