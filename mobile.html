@@ -293,14 +293,20 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
 /* ── HEADER ── */
 #mob-hdr {
-  flex: 0 0 50px; height: 50px;
-  background: var(--dark); display: flex; align-items: center; gap: 6px; padding: 0 10px;
-  z-index: 100;
+  flex: 0 0 auto;
+  background: var(--dark); z-index: 100;
 }
-.mob-logo { font-size: 15px; font-weight: 800; color: var(--gold); letter-spacing: 0.5px; flex-shrink: 0; }
+#mob-hdr-row1 {
+  display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 50px;
+}
+#mob-hdr-row2 {
+  padding: 0 12px 10px;
+}
+.mob-logo { font-size: 15px; font-weight: 800; color: var(--gold); letter-spacing: 0.5px; flex: 1; }
 #mob-search-box {
-  flex: 1; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 20px; padding: 5px 12px; font-size: 12px; color: #fff; outline: none;
+  width: 100%; box-sizing: border-box;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 20px; padding: 7px 14px; font-size: 13px; color: #fff; outline: none;
 }
 #mob-search-box::placeholder { color: rgba(255,255,255,0.4); }
 .mob-hdr-btn {
@@ -420,32 +426,71 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 <body>
 
 <!-- ══ ADMIN PIN OVERLAY ══ -->
-<div id="mob-pin-overlay" style="position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px">
-  <div style="font-size:40px;margin-bottom:10px">🔐</div>
-  <div style="font-size:20px;font-weight:800;margin-bottom:4px;color:var(--text)">SK Ontime</div>
-  <div style="font-size:13px;color:var(--text3);margin-bottom:28px;text-align:center">Enter Admin PIN to view prices,<br>or skip for limited view.</div>
-  <div id="mob-pin-dots" style="display:flex;gap:14px;margin-bottom:28px">
-    <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="0"></div>
-    <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="1"></div>
-    <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="2"></div>
-    <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="3"></div>
+<div id="mob-pin-overlay" style="position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px">
+
+  <!-- ── Phase 1: Role selection ── -->
+  <div id="mob-role-select">
+    <div style="text-align:center;margin-bottom:36px">
+      <div style="font-size:36px;margin-bottom:10px">🏗️</div>
+      <div style="font-size:22px;font-weight:800;color:var(--text)">SK Ontime</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:6px">Select your role to continue</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;width:260px">
+      <button onclick="mobRoleAdmin()"
+        style="display:flex;align-items:center;gap:16px;padding:20px 22px;
+               background:var(--accent);border:none;border-radius:16px;
+               cursor:pointer;text-align:left;width:100%">
+        <span style="font-size:28px">🔐</span>
+        <span style="display:flex;flex-direction:column;gap:3px">
+          <span style="font-size:17px;font-weight:800;color:#fff">Admin</span>
+          <span style="font-size:12px;color:rgba(255,255,255,0.75)">Full access · PIN required</span>
+        </span>
+      </button>
+      <button onclick="mobRoleSubbie()"
+        style="display:flex;align-items:center;gap:16px;padding:20px 22px;
+               background:var(--bg2);border:2px solid var(--border,rgba(255,255,255,0.1));border-radius:16px;
+               cursor:pointer;text-align:left;width:100%">
+        <span style="font-size:28px">🪚</span>
+        <span style="display:flex;flex-direction:column;gap:3px">
+          <span style="font-size:17px;font-weight:800;color:var(--text)">Subcontractor</span>
+          <span style="font-size:12px;color:var(--text3)">Active orders · view only</span>
+        </span>
+      </button>
+    </div>
   </div>
-  <div id="mob-pin-err" style="height:18px;color:#e74c3c;font-size:13px;font-weight:600;margin-bottom:12px;text-align:center"></div>
-  <div style="display:grid;grid-template-columns:repeat(3,72px);gap:10px">
-    <button class="pin-key" onclick="mobPinKey('1')">1</button>
-    <button class="pin-key" onclick="mobPinKey('2')">2</button>
-    <button class="pin-key" onclick="mobPinKey('3')">3</button>
-    <button class="pin-key" onclick="mobPinKey('4')">4</button>
-    <button class="pin-key" onclick="mobPinKey('5')">5</button>
-    <button class="pin-key" onclick="mobPinKey('6')">6</button>
-    <button class="pin-key" onclick="mobPinKey('7')">7</button>
-    <button class="pin-key" onclick="mobPinKey('8')">8</button>
-    <button class="pin-key" onclick="mobPinKey('9')">9</button>
-    <div></div>
-    <button class="pin-key" onclick="mobPinKey('0')">0</button>
-    <button class="pin-key" onclick="mobPinDel()" style="font-size:20px">⌫</button>
+
+  <!-- ── Phase 2: PIN entry ── -->
+  <div id="mob-pin-entry" style="display:none;flex-direction:column;align-items:center">
+    <button onclick="mobRoleBack()"
+      style="align-self:flex-start;background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;margin-bottom:20px;padding:4px 0">
+      ← Back
+    </button>
+    <div style="font-size:28px;margin-bottom:8px">🔐</div>
+    <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:4px">Admin PIN</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:24px">Enter your 4-digit PIN</div>
+    <div id="mob-pin-dots" style="display:flex;gap:14px;margin-bottom:20px">
+      <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="0"></div>
+      <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="1"></div>
+      <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="2"></div>
+      <div style="width:14px;height:14px;border-radius:50%;border:2px solid var(--text3);background:transparent" data-dot="3"></div>
+    </div>
+    <div id="mob-pin-err" style="height:18px;color:#e74c3c;font-size:13px;font-weight:600;margin-bottom:12px;text-align:center"></div>
+    <div style="display:grid;grid-template-columns:repeat(3,72px);gap:10px">
+      <button class="pin-key" onclick="mobPinKey('1')">1</button>
+      <button class="pin-key" onclick="mobPinKey('2')">2</button>
+      <button class="pin-key" onclick="mobPinKey('3')">3</button>
+      <button class="pin-key" onclick="mobPinKey('4')">4</button>
+      <button class="pin-key" onclick="mobPinKey('5')">5</button>
+      <button class="pin-key" onclick="mobPinKey('6')">6</button>
+      <button class="pin-key" onclick="mobPinKey('7')">7</button>
+      <button class="pin-key" onclick="mobPinKey('8')">8</button>
+      <button class="pin-key" onclick="mobPinKey('9')">9</button>
+      <div></div>
+      <button class="pin-key" onclick="mobPinKey('0')">0</button>
+      <button class="pin-key" onclick="mobPinDel()" style="font-size:20px">⌫</button>
+    </div>
   </div>
-  <button onclick="mobPinSkip()" style="margin-top:24px;font-size:13px;color:var(--text3);background:none;border:none;cursor:pointer;padding:8px 16px">Skip (view only)</button>
+
 </div>
 
 <!-- ══ MOBILE SHELL ══ -->
@@ -453,13 +498,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
   <!-- Header -->
   <div id="mob-hdr">
-    <div class="mob-logo">SK ONTIME</div>
-    <input id="mob-search-box" type="search" placeholder="Order#, address…" oninput="mobSearch(this.value)" autocomplete="off"/>
-    <button class="mob-hdr-btn" onclick="openCloudModal()">
-      <span id="mob-sync-dot" class="mob-dot"></span>Sync
-    </button>
-    <button class="mob-hdr-btn" id="mob-refresh-btn" onclick="mobRefreshPull()" title="Refresh data">↻</button>
-    <button class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
+    <div id="mob-hdr-row1">
+      <div class="mob-logo">SK ONTIME</div>
+      <button class="mob-hdr-btn" onclick="openCloudModal()">
+        <span id="mob-sync-dot" class="mob-dot"></span>Sync
+      </button>
+      <button class="mob-hdr-btn" id="mob-refresh-btn" onclick="mobRefreshPull()" title="Refresh">↻</button>
+      <button class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
+    </div>
+    <div id="mob-hdr-row2">
+      <input id="mob-search-box" type="search" placeholder="🔍  Search order#, address…" oninput="mobSearch(this.value)" autocomplete="off"/>
+    </div>
   </div>
 
   <!-- Scrollable body -->
@@ -6222,10 +6271,17 @@ function mobDrawerClose() {
 function mobDrawerChangePIN() {
   const currentPin = lsGet('mob_admin_pin') || '1234';
 
-  // If not yet admin, show normal PIN entry instead
+  // If not yet admin, show role selection screen
   if (!window._ADMIN_MODE) {
     const overlay = document.getElementById('mob-pin-overlay');
-    if (overlay) { overlay.style.display = 'flex'; }
+    if (overlay) {
+      overlay.style.display = 'flex';
+      // Reset to role selection
+      const rs = document.getElementById('mob-role-select');
+      const pe = document.getElementById('mob-pin-entry');
+      if (rs) rs.style.display = 'block';
+      if (pe) pe.style.display = 'none';
+    }
     return;
   }
 
@@ -6317,6 +6373,29 @@ function mobSupContact(name) {
   document.body.appendChild(modal);
 }
 
+// ── Role selection ───────────────────────────────────────────────
+function mobRoleAdmin() {
+  document.getElementById('mob-role-select').style.display = 'none';
+  const pe = document.getElementById('mob-pin-entry');
+  pe.style.display = 'flex';
+  _pinBuf = '';
+  _pinUpdateDots();
+}
+function mobRoleSubbie() {
+  window._ADMIN_MODE = false;
+  document.getElementById('mob-pin-overlay').style.display = 'none';
+  mobApplyAdminUI();
+  mobRefresh();
+}
+function mobRoleBack() {
+  document.getElementById('mob-pin-entry').style.display = 'none';
+  document.getElementById('mob-role-select').style.display = 'block';
+  _pinBuf = '';
+  _pinUpdateDots();
+  const err = document.getElementById('mob-pin-err');
+  if (err) err.textContent = '';
+}
+
 // ── Admin PIN ─────────────────────────────────────────────────────
 let _pinBuf = '';
 window._ADMIN_MODE = false;
@@ -6339,12 +6418,38 @@ function _pinUpdateDots() {
     dot.style.borderColor = i < _pinBuf.length ? 'var(--accent)' : 'var(--text3)';
   });
 }
+function mobApplyAdminUI() {
+  const NON_ADMIN_HIDDEN = ['mt-dashboard','mt-completed','mt-issues','mt-all'];
+  if (window._ADMIN_MODE) {
+    // Show all tabs
+    NON_ADMIN_HIDDEN.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = '';
+    });
+    // Show FAB
+    const fab = document.getElementById('mob-fab');
+    if (fab && !window._SUBBIE_MODE) fab.style.display = '';
+  } else {
+    // Non-admin: Active tab only
+    NON_ADMIN_HIDDEN.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    // Hide FAB
+    const fab = document.getElementById('mob-fab');
+    if (fab) fab.style.display = 'none';
+    // Force page to Active
+    _mobPage = 'orders';
+  }
+}
+
 function mobPinCheck() {
   const correct = lsGet('mob_admin_pin') || '1234';
   if (_pinBuf === correct) {
     window._ADMIN_MODE = true;
     sessionStorage.setItem('mob_admin_sess', '1');
     document.getElementById('mob-pin-overlay').style.display = 'none';
+    mobApplyAdminUI();
     mobRefresh();
   } else {
     const err = document.getElementById('mob-pin-err');
@@ -6356,6 +6461,7 @@ function mobPinCheck() {
 function mobPinSkip() {
   window._ADMIN_MODE = false;
   document.getElementById('mob-pin-overlay').style.display = 'none';
+  mobApplyAdminUI();
   mobRefresh();
 }
 
@@ -6386,6 +6492,7 @@ function mobInit() {
     window._ADMIN_MODE = true;
     const overlay = document.getElementById('mob-pin-overlay');
     if (overlay) overlay.style.display = 'none';
+    mobApplyAdminUI();
   }
 
   // If subbie mode, skip PIN and go straight to orders
