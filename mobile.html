@@ -500,11 +500,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   <div id="mob-hdr">
     <div id="mob-hdr-row1">
       <div class="mob-logo">SK ONTIME</div>
-      <button class="mob-hdr-btn" onclick="openCloudModal()">
+      <button id="mob-sync-btn" class="mob-hdr-btn" onclick="openCloudModal()">
         <span id="mob-sync-dot" class="mob-dot"></span>Sync
       </button>
       <button class="mob-hdr-btn" id="mob-refresh-btn" onclick="mobRefreshPull()" title="Refresh">↻</button>
-      <button class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
+      <button id="mob-menu-btn" class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
     </div>
     <div id="mob-hdr-row2">
       <input id="mob-search-box" type="search" placeholder="🔍  Search order#, address…" oninput="mobSearch(this.value)" autocomplete="off"/>
@@ -6471,14 +6471,16 @@ const _SUBBIE_PARAM = new URLSearchParams(location.search).get('subbie') || '';
 function mobSubbieMode() {
   if (!_SUBBIE_PARAM) return;
   window._SUBBIE_MODE = true;
-  // Show only relevant tabs
+  // Show only Active tab
   ['mt-dashboard','mt-all','mt-done','mt-issues'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  // Hide FAB and Sync in subbie mode
-  const fab = document.getElementById('mob-fab');
-  if (fab) fab.style.display = 'none';
+  // Hide header extras — subbie only needs logo + refresh
+  ['mob-fab','mob-sync-btn','mob-menu-btn','mob-hdr-row2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
 }
 
 // ── Init ──────────────────────────────────────────────────────────
