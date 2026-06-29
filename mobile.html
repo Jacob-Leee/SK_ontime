@@ -6191,11 +6191,14 @@ function mobRefresh() {
     const subTag = subCol
       ? `<div style="font-size:12px;font-weight:800;color:${subCol};margin-bottom:3px">${_esc(o.subbies)}</div>`
       : '';
-    return `<div class="mc" onclick="mobVOpen('${o.id}')" style="border-left-color:${borderCol};border-left-width:${subCol?'5':'4'}px">
+    return `<div class="mc" onclick="mobVOpen('${o.id}')" style="border-left-color:${borderCol};border-left-width:${subCol?'5':'4'}px;position:relative">
       ${subTag}
       <div class="mc-top">
         <span class="mc-no">${_esc(o.orderNumber||'—')}</span>
         <span class="mc-badge" style="background:${col}22;color:${col}">${lbl}</span>
+        <button onclick="event.stopPropagation();mobCopyOrder('${o.id}')" id="copy-btn-${o.id}"
+          style="margin-left:auto;background:none;border:none;padding:2px 4px;cursor:pointer;color:var(--text3);font-size:15px;line-height:1;flex-shrink:0"
+          title="Copy order info">⎘</button>
       </div>
       <div class="mc-addr">${_esc(o.address||'—')}</div>
       <div class="mc-bot">
@@ -6215,6 +6218,39 @@ function mobRefresh() {
   }).join('');
 
   mobSummaryShow(list);
+}
+
+function mobCopyOrder(id) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o) return;
+  const parts = [
+    o.orderNumber || '',
+    o.address || '',
+    o.prn ? 'PRN ' + o.prn : ''
+  ].filter(Boolean);
+  const text = parts.join(' - ');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(function() {
+      const btn = document.getElementById('copy-btn-' + id);
+      if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '✓';
+        btn.style.color = '#2ecc71';
+        setTimeout(function(){ btn.innerHTML = orig; btn.style.color = ''; }, 1500);
+      }
+    }).catch(function() { mobCopyFallback(text); });
+  } else {
+    mobCopyFallback(text);
+  }
+}
+function mobCopyFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
 }
 
 function mobSummaryShow(list) {
@@ -6248,7 +6284,11 @@ function mobVOpen(id) {
   document.getElementById('mob-vsheet-inner').innerHTML =
     `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
        <span style="font-size:16px;font-weight:800;font-family:monospace">${_esc(o.orderNumber||'—')}</span>
-       <span class="mc-badge" style="background:${col}22;color:${col};font-size:12px;padding:3px 10px;border-radius:10px;font-weight:700">${lbl}</span>
+       <div style="display:flex;align-items:center;gap:8px">
+         <button onclick="mobCopyOrder('${o.id}')" id="copy-btn-${o.id}"
+           style="background:var(--bg2);border:none;border-radius:8px;padding:5px 10px;font-size:13px;color:var(--text3);cursor:pointer">⎘ Copy</button>
+         <span class="mc-badge" style="background:${col}22;color:${col};font-size:12px;padding:3px 10px;border-radius:10px;font-weight:700">${lbl}</span>
+       </div>
      </div>` +
     row('Address', o.address) +
     row('Area', o.area) +
@@ -6288,7 +6328,7 @@ function mobBackToHome() {
   window._SUBBIE_MODE = false;
   window._SELECTED_SUBBIE = null;
   window._ADMIN_MODE = false;
-  sessionStorage.removeItem('mob_admin_sess');
+  // (no sessionStorage to clear)
   // Hide back button
   const backBtn = document.getElementById('mob-back-btn');
   if (backBtn) backBtn.style.display = 'none';
@@ -6593,7 +6633,6 @@ function mobPinCheck() {
   const correct = lsGet('mob_admin_pin') || '1234';
   if (_pinBuf === correct) {
     window._ADMIN_MODE = true;
-    sessionStorage.setItem('mob_admin_sess', '1');
     document.getElementById('mob-pin-overlay').style.display = 'none';
     mobApplyAdminUI();
     mobRefresh();
@@ -6632,13 +6671,7 @@ function mobInit() {
   document.querySelectorAll('.modal-overlay').forEach(m => document.body.appendChild(m));
   mobSubbieMode();
 
-  // Check session-based admin auth
-  if (sessionStorage.getItem('mob_admin_sess') === '1') {
-    window._ADMIN_MODE = true;
-    const overlay = document.getElementById('mob-pin-overlay');
-    if (overlay) overlay.style.display = 'none';
-    mobApplyAdminUI();
-  }
+  // Note: no sessionStorage auto-login — always show role screen on fresh load
 
   // If subbie mode, skip PIN and go straight to orders
   if (window._SUBBIE_MODE) {
