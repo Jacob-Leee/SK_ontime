@@ -1,0 +1,173 @@
+<!-- ============================================================
+  SK ONTIME — Supervisor Contact Popup Patch
+  붙여넣기 위치: 기존 HTML 파일의 </body> 바로 위에 추가
+  ============================================================ -->
+
+<!-- ① MODAL HTML — body 안 어디든 한 번만 추가 -->
+<div id="supContactSheet" style="display:none" onclick="if(event.target===this)closeSupervisorSheet()" style="
+  position:fixed;inset:0;z-index:9999;
+  background:rgba(0,0,0,0.45);
+  display:flex;align-items:flex-end;justify-content:center;">
+  <div id="supContactCard" style="
+    background:#fff;border-radius:18px 18px 0 0;
+    width:100%;max-width:480px;
+    padding:20px 20px 32px;
+    box-shadow:0 -4px 24px rgba(0,0,0,0.18);
+    animation:slideUp .22s ease;">
+    <div style="width:40px;height:4px;background:#ddd;border-radius:4px;margin:0 auto 16px;"></div>
+    <div id="supContactName"  style="font-size:17px;font-weight:700;color:#1a1a1a;margin-bottom:2px;"></div>
+    <div id="supContactRole"  style="font-size:13px;color:#666;margin-bottom:4px;"></div>
+    <div id="supContactGroup" style="font-size:12px;color:#888;margin-bottom:20px;"></div>
+    <div id="supContactBtns"  style="display:flex;flex-direction:column;gap:10px;"></div>
+    <button onclick="closeSupervisorSheet()" style="
+      margin-top:14px;width:100%;padding:13px;
+      background:#f2f2f7;border:none;border-radius:12px;
+      font-size:15px;font-weight:600;color:#333;cursor:pointer;">
+      Cancel
+    </button>
+  </div>
+</div>
+
+<style>
+@keyframes slideUp {
+  from { transform:translateY(100%); }
+  to   { transform:translateY(0); }
+}
+/* supervisor name chip in Active table */
+.sup-chip {
+  display:inline-block;
+  padding:2px 8px;
+  background:#e8f0fe;
+  color:#1a56db;
+  border-radius:20px;
+  font-size:12px;
+  cursor:pointer;
+  white-space:nowrap;
+  border:none;
+  font-family:inherit;
+}
+.sup-chip:hover { background:#d0e2ff; }
+.sup-contact-btn {
+  display:flex;align-items:center;gap:12px;
+  padding:13px 16px;
+  border:none;border-radius:12px;
+  font-size:15px;font-weight:500;
+  cursor:pointer;text-decoration:none;
+  width:100%;box-sizing:border-box;
+}
+.sup-contact-btn.call  { background:#e8f8ee; color:#1b8a3c; }
+.sup-contact-btn.sms   { background:#e8f0fe; color:#1a56db; }
+.sup-contact-btn.email { background:#fff3e0; color:#c45000; }
+.sup-contact-btn .btn-icon { font-size:20px; }
+</style>
+
+<script>
+// ============================================================
+// Supervisor Contact Popup
+// ============================================================
+
+/**
+ * supervisors 배열에서 이름으로 매칭해 연락처 팝업 열기
+ * order.supervisor (name string) → supervisors store에서 lookup
+ *
+ * @param {string} name - order.supervisor 값 (supervisor 이름)
+ */
+function showSupervisorContact(name) {
+  if (!name) return;
+
+  // 앱 전역 supervisors 배열에서 이름 매칭 (대소문자 무시)
+  var supervisors = (typeof appState !== 'undefined' && appState.supervisors)
+    ? appState.supervisors
+    : (typeof store !== 'undefined' && store.supervisors)
+    ? store.supervisors
+    : [];
+
+  // 이름으로 매칭 (정확히 일치 먼저, 그 다음 포함 검색)
+  var sup = supervisors.find(function(s) {
+    return s.name && s.name.trim().toLowerCase() === name.trim().toLowerCase();
+  }) || supervisors.find(function(s) {
+    return s.name && s.name.toLowerCase().includes(name.toLowerCase());
+  });
+
+  // 찾지 못하면 이름만이라도 표시
+  if (!sup) {
+    sup = { name: name, role: '', group: '', phone: '', email: '' };
+  }
+
+  // 모달 채우기
+  document.getElementById('supContactName').textContent  = sup.name  || name;
+  document.getElementById('supContactRole').textContent  = sup.role  || '';
+  document.getElementById('supContactGroup').textContent = sup.group || '';
+
+  var btnsEl = document.getElementById('supContactBtns');
+  btnsEl.innerHTML = '';
+
+  if (sup.phone) {
+    // Phone digits only for tel: link
+    var digits = sup.phone.replace(/\s+/g, '');
+
+    // Call button
+    var callBtn = document.createElement('a');
+    callBtn.href = 'tel:' + digits;
+    callBtn.className = 'sup-contact-btn call';
+    callBtn.innerHTML = '<span class="btn-icon">📞</span> Call ' + sup.phone;
+    btnsEl.appendChild(callBtn);
+
+    // SMS button
+    var smsBtn = document.createElement('a');
+    smsBtn.href = 'sms:' + digits;
+    smsBtn.className = 'sup-contact-btn sms';
+    smsBtn.innerHTML = '<span class="btn-icon">💬</span> Message ' + sup.phone;
+    btnsEl.appendChild(smsBtn);
+  }
+
+  if (sup.email) {
+    var emailBtn = document.createElement('a');
+    emailBtn.href = 'mailto:' + sup.email;
+    emailBtn.className = 'sup-contact-btn email';
+    emailBtn.innerHTML = '<span class="btn-icon">✉️</span> Email ' + sup.email;
+    btnsEl.appendChild(emailBtn);
+  }
+
+  if (!sup.phone && !sup.email) {
+    btnsEl.innerHTML = '<p style="color:#888;text-align:center;margin:8px 0">No contact details on file</p>';
+  }
+
+  var sheet = document.getElementById('supContactSheet');
+  sheet.style.display = 'flex';
+  // Prevent body scroll while open
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSupervisorSheet() {
+  document.getElementById('supContactSheet').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+// ESC key to close
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeSupervisorSheet();
+});
+
+// ============================================================
+// HOW TO USE — Active 탭 테이블 행 렌더링 함수에 아래 변경 적용
+// ============================================================
+//
+// ✅ 기존 코드 (supervisor 이름을 그냥 텍스트로 출력하는 부분):
+//   cell.textContent = order.supervisor || '';
+//   또는 td.innerHTML = order.supervisor || '';
+//
+// ✅ 변경할 코드:
+//   td.innerHTML = order.supervisor
+//     ? '<button class="sup-chip" onclick="showSupervisorContact(\'' +
+//       (order.supervisor || '').replace(/'/g, "\\'") + '\')">' +
+//       escHtml(order.supervisor) + '</button>'
+//     : '';
+//
+// escHtml 함수가 없다면 아래 추가:
+//   function escHtml(s) {
+//     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+//                     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+//   }
+// ============================================================
+</script>
