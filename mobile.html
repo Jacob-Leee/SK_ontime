@@ -459,35 +459,16 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     </div>
   </div>
 
-  <!-- ── Phase 3: Subbie picker ── -->
-  <div id="mob-subbie-pick" style="display:none;flex-direction:column;align-items:center;width:100%">
+  <!-- ── Phase 3: Subbie picker (dynamically populated from DB.subbies) ── -->
+  <div id="mob-subbie-pick" style="display:none;flex-direction:column;align-items:center;width:100%;max-height:80vh;overflow-y:auto">
     <button onclick="mobRoleBack()"
-      style="align-self:flex-start;background:none;border:none;color:rgba(255,255,255,0.5);font-size:14px;cursor:pointer;margin-bottom:24px;padding:4px 0">
+      style="align-self:flex-start;background:none;border:none;color:rgba(255,255,255,0.5);font-size:14px;cursor:pointer;margin-bottom:24px;padding:4px 0;flex-shrink:0">
       ← Back
     </button>
-    <div style="font-size:28px;margin-bottom:8px">🪚</div>
-    <div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px">Who are you?</div>
-    <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:28px">Select your name to see your orders</div>
-    <div style="display:flex;flex-direction:column;gap:12px;width:260px">
-      <button onclick="mobRoleSubbiePick('Jake Lee')"
-        style="display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(255,255,255,0.1);
-               border:2px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;text-align:left;width:100%">
-        <span style="width:40px;height:40px;border-radius:50%;background:hsl(207,60%,45%);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">JL</span>
-        <span style="font-size:16px;font-weight:700;color:#fff">Jake Lee</span>
-      </button>
-      <button onclick="mobRoleSubbiePick('Sean Park')"
-        style="display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(255,255,255,0.1);
-               border:2px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;text-align:left;width:100%">
-        <span style="width:40px;height:40px;border-radius:50%;background:hsl(112,60%,35%);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">SP</span>
-        <span style="font-size:16px;font-weight:700;color:#fff">Sean Park</span>
-      </button>
-      <button onclick="mobRoleSubbiePick('Chris Choi')"
-        style="display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(255,255,255,0.1);
-               border:2px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;text-align:left;width:100%">
-        <span style="width:40px;height:40px;border-radius:50%;background:hsl(340,60%,45%);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0">CC</span>
-        <span style="font-size:16px;font-weight:700;color:#fff">Chris Choi</span>
-      </button>
-    </div>
+    <div style="font-size:28px;margin-bottom:8px;flex-shrink:0">🪚</div>
+    <div style="font-size:18px;font-weight:800;color:#fff;margin-bottom:6px;flex-shrink:0">Who are you?</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:24px;flex-shrink:0">Select your name to see your orders</div>
+    <div id="mob-subbie-list" style="display:flex;flex-direction:column;gap:12px;width:280px"></div>
   </div>
 
   <!-- ── Phase 2: PIN entry ── -->
@@ -6424,7 +6405,24 @@ function mobRoleAdmin() {
   _pinUpdateDots();
 }
 function mobRoleSubbie() {
-  // Show subbie name picker
+  // Populate subbie list from DB.subbies (exclude SK_ internal staff)
+  const subbies = (DB.subbies || []).filter(n => !n.startsWith('SK_')).sort();
+  const listEl = document.getElementById('mob-subbie-list');
+  if (listEl) {
+    listEl.innerHTML = subbies.map(name => {
+      const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
+      let h = 0;
+      for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+      const color = `hsl(${Math.abs(h)%360},60%,42%)`;
+      return `<button onclick="mobRoleSubbiePick(${JSON.stringify(name)})"
+        style="display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(255,255,255,0.1);
+               border:2px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;text-align:left;width:100%">
+        <span style="width:42px;height:42px;border-radius:50%;background:${color};display:flex;align-items:center;
+                     justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0">${initials}</span>
+        <span style="font-size:16px;font-weight:700;color:#fff">${name}</span>
+      </button>`;
+    }).join('');
+  }
   document.getElementById('mob-role-select').style.display = 'none';
   const sp = document.getElementById('mob-subbie-pick');
   sp.style.display = 'flex';
