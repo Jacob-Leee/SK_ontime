@@ -6205,14 +6205,8 @@ function mobRefresh() {
       <div class="mc-bot">
         <span class="mc-meta">${_esc(o.area||'')}</span>
         <span class="mc-amt">${(()=>{
-          if (window._ADMIN_MODE) {
-            return '$'+Number(o.amount||0).toFixed(2);
-          }
-          if (window._SUBBIE_MODE) {
-            const sp = getSubbiePrice(o);
-            return sp != null ? '$'+Number(sp).toFixed(2) : '$'+Number(o.amount||0).toFixed(2);
-          }
-          return '<span style="color:var(--text3);letter-spacing:2px">***</span>';
+          if (window._ADMIN_MODE) return '$'+Number(o.amount||0).toFixed(2);
+          return '';
         })()}</span>
       </div>
     </div>`;
@@ -6263,8 +6257,8 @@ function mobSummaryShow(list) {
   const areaHtml = Object.entries(byArea).sort((a,b)=>b[1]-a[1])
     .map(([a,c]) => `<span class="mob-sum-area">${a} ${c}</span>`).join('');
   bar.style.display = 'flex';
-  bar.innerHTML = `<span class="mob-sum-total">$${Math.round(total).toLocaleString('en-AU')}</span>
-    <span class="mob-sum-cnt">(${list.length} orders)</span>
+  bar.innerHTML = (window._ADMIN_MODE ? `<span class="mob-sum-total">$${Math.round(total).toLocaleString('en-AU')}</span>` : '')
+    + `<span class="mob-sum-cnt">(${list.length} orders)</span>
     <span style="flex:1"></span>${areaHtml}`;
 }
 function mobSummaryHide() {
@@ -6294,11 +6288,7 @@ function mobVOpen(id) {
     row('Address', o.address) +
     row('Area', o.area) +
     row('SOR Code', o.sorCode) +
-    (window._ADMIN_MODE
-      ? row('Amount', '$' + Number(o.amount||0).toFixed(2))
-      : window._SUBBIE_MODE
-        ? row('Amount', '$' + Number(getSubbiePrice(o) != null ? getSubbiePrice(o) : o.amount||0).toFixed(2))
-        : `<div class="mvs-row"><span class="mvs-lbl">Amount</span><span class="mvs-val" style="color:var(--text3);letter-spacing:2px">***</span></div>`) +
+    (window._ADMIN_MODE ? row('Amount', '$' + Number(o.amount||0).toFixed(2)) : '') +
     row('Order Date', o.orderDate) +
     row('Subbie', o.subbies) +
     (o.supervisor ? `<div class="mvs-row"><span class="mvs-lbl">Supervisor</span><span class="mvs-val"><span onclick="mobSupContact('${_esc(o.supervisor)}')" style="cursor:pointer;color:var(--accent);text-decoration:underline">👤 ${_esc(o.supervisor)}</span></span></div>` : '') +
