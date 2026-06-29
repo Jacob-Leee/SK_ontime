@@ -459,8 +459,6 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span id="mob-sync-dot" class="mob-dot"></span>Sync
     </button>
     <button class="mob-hdr-btn" id="mob-refresh-btn" onclick="mobRefreshPull()" title="Refresh data">↻</button>
-    <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener"
-       class="mob-hdr-btn" style="text-decoration:none">DCJ</a>
     <button class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
   </div>
 
@@ -507,6 +505,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   <div class="mob-drawer-title">Tools</div>
   <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()"><span class="dl-i">☁️</span>Cloud Sync</div>
   <div class="mob-dl" onclick="openOrderModal();mobDrawerClose()"><span class="dl-i">➕</span>New Order</div>
+  <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener"
+     class="mob-dl" style="text-decoration:none;color:inherit"><span class="dl-i">🌐</span>DCJ Portal</a>
+  <div class="mob-drawer-title">Settings</div>
+  <div class="mob-dl" id="mob-admin-status" onclick="mobDrawerChangePIN();mobDrawerClose()"><span class="dl-i">🔐</span><span id="mob-admin-label">Admin PIN</span></div>
 </div>
 
 <!-- View Sheet -->
@@ -6206,12 +6208,36 @@ function mobVEdit() {
 
 // ── Drawer ──────────────────────────────────────────────────────
 function mobDrawerOpen() {
+  // Update admin status label
+  const lbl = document.getElementById('mob-admin-label');
+  if (lbl) lbl.textContent = window._ADMIN_MODE ? 'Admin Mode: ON  (change PIN)' : 'Admin PIN (locked)';
   document.getElementById('mob-drawer').style.display = 'block';
   document.getElementById('mob-overlay').style.display = 'block';
 }
 function mobDrawerClose() {
   document.getElementById('mob-drawer').style.display = 'none';
   document.getElementById('mob-overlay').style.display = 'none';
+}
+
+function mobDrawerChangePIN() {
+  const currentPin = lsGet('mob_admin_pin') || '1234';
+
+  // If not yet admin, show normal PIN entry instead
+  if (!window._ADMIN_MODE) {
+    const overlay = document.getElementById('mob-pin-overlay');
+    if (overlay) { overlay.style.display = 'flex'; }
+    return;
+  }
+
+  // Admin is logged in — allow PIN change
+  const newPin = prompt('Enter new 4-digit Admin PIN (current: ' + currentPin + '):');
+  if (newPin === null) return; // cancelled
+  if (!/^\d{4}$/.test(newPin)) {
+    alert('PIN must be exactly 4 digits.');
+    return;
+  }
+  lsSet('mob_admin_pin', newPin);
+  alert('Admin PIN updated to ' + newPin);
 }
 
 // ── Refresh / Sync ───────────────────────────────────────────────
