@@ -6426,7 +6426,8 @@ function mobRoleSubbie() {
       let h = 0;
       for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
       const color = `hsl(${Math.abs(h)%360},60%,42%)`;
-      return `<button onclick="mobRoleSubbiePick(${JSON.stringify(name)})"
+      const safeName = name.replace(/'/g, "\\'");
+      return `<button onclick="mobRoleSubbiePick('${safeName}')"
         style="display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(255,255,255,0.1);
                border:2px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;text-align:left;width:100%">
         <span style="width:42px;height:42px;border-radius:50%;background:${color};display:flex;align-items:center;
