@@ -6417,28 +6417,32 @@ function mobRoleAdmin() {
   _pinUpdateDots();
 }
 function mobRoleSubbie() {
-  // Populate subbie list from DB.subbies (exclude SK_ internal staff)
   const subbies = (DB.subbies || []).filter(n => !n.startsWith('SK_')).sort();
   const listEl = document.getElementById('mob-subbie-list');
   if (listEl) {
-    listEl.innerHTML = subbies.map(name => {
-      const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2);
-      let h = 0;
-      for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
-      const color = `hsl(${Math.abs(h)%360},60%,42%)`;
-      const safeName = name.replace(/'/g, "\\'");
-      return `<button onclick="mobRoleSubbiePick('${safeName}')"
-        style="display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(255,255,255,0.1);
-               border:2px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;text-align:left;width:100%">
-        <span style="width:42px;height:42px;border-radius:50%;background:${color};display:flex;align-items:center;
-                     justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0">${initials}</span>
-        <span style="font-size:16px;font-weight:700;color:#fff">${name}</span>
-      </button>`;
-    }).join('');
+    listEl.innerHTML = '';
+    subbies.forEach(function(name) {
+      var initials = name.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
+      var h = 0;
+      for (var i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+      var color = 'hsl(' + (Math.abs(h)%360) + ',60%,42%)';
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.style.cssText = 'display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;text-align:left;width:100%;margin-bottom:0';
+      var avatar = document.createElement('span');
+      avatar.style.cssText = 'width:42px;height:42px;border-radius:50%;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0';
+      avatar.textContent = initials;
+      var label = document.createElement('span');
+      label.style.cssText = 'font-size:16px;font-weight:700;color:#fff';
+      label.textContent = name;
+      btn.appendChild(avatar);
+      btn.appendChild(label);
+      (function(n){ btn.addEventListener('click', function(){ mobRoleSubbiePick(n); }); })(name);
+      listEl.appendChild(btn);
+    });
   }
   document.getElementById('mob-role-select').style.display = 'none';
-  const sp = document.getElementById('mob-subbie-pick');
-  sp.style.display = 'flex';
+  document.getElementById('mob-subbie-pick').style.display = 'flex';
 }
 
 function mobRoleSubbiePick(name) {
