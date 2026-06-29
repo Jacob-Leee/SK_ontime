@@ -511,6 +511,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   <!-- Header -->
   <div id="mob-hdr">
     <div id="mob-hdr-row1">
+      <button id="mob-back-btn" onclick="mobBackToHome()" style="display:none;background:none;border:none;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;padding:4px 6px 4px 0;flex-shrink:0">← Home</button>
       <div class="mob-logo">SK ONTIME</div>
       <button id="mob-sync-btn" class="mob-hdr-btn" onclick="openCloudModal()">
         <span id="mob-sync-dot" class="mob-dot"></span>Sync
@@ -6282,6 +6283,37 @@ function mobVEdit() {
 
 
 // ── Drawer ──────────────────────────────────────────────────────
+function mobBackToHome() {
+  // Reset all subbie state
+  window._SUBBIE_MODE = false;
+  window._SELECTED_SUBBIE = null;
+  window._ADMIN_MODE = false;
+  sessionStorage.removeItem('mob_admin_sess');
+  // Hide back button
+  const backBtn = document.getElementById('mob-back-btn');
+  if (backBtn) backBtn.style.display = 'none';
+  // Restore header items
+  ['mob-fab','mob-sync-btn','mob-menu-btn','mob-hdr-row2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = '';
+  });
+  // Restore all nav tabs
+  ['mt-dashboard','mt-orders','mt-completed','mt-issues','mt-all'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = '';
+  });
+  // Reset subbie picker to role select
+  const rs = document.getElementById('mob-role-select');
+  const sp = document.getElementById('mob-subbie-pick');
+  const pe = document.getElementById('mob-pin-entry');
+  if (rs) rs.style.display = 'block';
+  if (sp) sp.style.display = 'none';
+  if (pe) pe.style.display = 'none';
+  // Show overlay
+  const overlay = document.getElementById('mob-pin-overlay');
+  if (overlay) overlay.style.display = 'flex';
+}
+
 function mobDrawerOpen() {
   // Update admin status label
   const lbl = document.getElementById('mob-admin-label');
@@ -6478,6 +6510,9 @@ function mobRoleSubbiePick(name) {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
+  // Show back button
+  const backBtn = document.getElementById('mob-back-btn');
+  if (backBtn) backBtn.style.display = '';
   mobApplySubbieUI();
   mobNav('orders');
 }
@@ -6516,13 +6551,17 @@ function _pinUpdateDots() {
 }
 function mobApplySubbieUI() {
   // Subbie sees: Active, Completed, Issues, All Orders — NO dashboard, NO FAB
-  document.getElementById('mt-dashboard') && (document.getElementById('mt-dashboard').style.display = 'none');
+  const dash = document.getElementById('mt-dashboard');
+  if (dash) dash.style.display = 'none';
   ['mt-orders','mt-completed','mt-issues','mt-all'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = '';
   });
   const fab = document.getElementById('mob-fab');
   if (fab) fab.style.display = 'none';
+  // Always show Home button in subbie mode
+  const backBtn = document.getElementById('mob-back-btn');
+  if (backBtn) { backBtn.style.display = 'inline-flex'; backBtn.style.alignItems = 'center'; }
 }
 
 function mobApplyAdminUI() {
