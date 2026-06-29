@@ -6208,7 +6208,7 @@ function mobRefresh() {
       <div class="mc-bot">
         <span class="mc-meta">${_esc(o.area||'')}</span>
         <span class="mc-amt">${(()=>{
-          if (window._ADMIN_MODE) return '$'+Number(o.amount||0).toFixed(2);
+          if (window._ADMIN_MODE && _mobPage !== 'all') return '$'+Number(o.amount||0).toFixed(2);
           return '';
         })()}</span>
       </div>
@@ -6260,7 +6260,7 @@ function mobSummaryShow(list) {
   const areaHtml = Object.entries(byArea).sort((a,b)=>b[1]-a[1])
     .map(([a,c]) => `<span class="mob-sum-area">${a} ${c}</span>`).join('');
   bar.style.display = 'flex';
-  bar.innerHTML = (window._ADMIN_MODE ? `<span class="mob-sum-total">$${Math.round(total).toLocaleString('en-AU')}</span>` : '')
+  bar.innerHTML = (window._ADMIN_MODE && _mobPage !== 'all' ? `<span class="mob-sum-total">$${Math.round(total).toLocaleString('en-AU')}</span>` : '')
     + `<span class="mob-sum-cnt">(${list.length} orders)</span>
     <span style="flex:1"></span>${areaHtml}`;
 }
