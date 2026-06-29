@@ -460,7 +460,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   </div>
 
   <!-- ── Phase 3: Subbie picker (dynamically populated from DB.subbies) ── -->
-  <div id="mob-subbie-pick" style="display:none;flex-direction:column;align-items:center;width:100%;max-height:80vh;overflow-y:auto">
+  <div id="mob-subbie-pick" style="display:none;flex-direction:column;align-items:center;width:100%">
     <button onclick="mobRoleBack()"
       style="align-self:flex-start;background:none;border:none;color:rgba(255,255,255,0.5);font-size:14px;cursor:pointer;margin-bottom:24px;padding:4px 0;flex-shrink:0">
       ← Back
@@ -6417,29 +6417,52 @@ function mobRoleAdmin() {
   _pinUpdateDots();
 }
 function mobRoleSubbie() {
-  const subbies = (DB.subbies || []).filter(n => !n.startsWith('SK_')).sort();
+  const subbies = (DB.subbies || []).filter(function(n){ return !n.startsWith('SK_'); }).sort();
   const listEl = document.getElementById('mob-subbie-list');
   if (listEl) {
     listEl.innerHTML = '';
     subbies.forEach(function(name) {
-      var initials = name.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
       var h = 0;
       for (var i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
       var color = 'hsl(' + (Math.abs(h)%360) + ',60%,42%)';
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.style.cssText = 'display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;text-align:left;width:100%;margin-bottom:0';
-      var avatar = document.createElement('span');
-      avatar.style.cssText = 'width:42px;height:42px;border-radius:50%;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0';
-      avatar.textContent = initials;
-      var label = document.createElement('span');
-      label.style.cssText = 'font-size:16px;font-weight:700;color:#fff';
-      label.textContent = name;
-      btn.appendChild(avatar);
-      btn.appendChild(label);
-      (function(n){ btn.addEventListener('click', function(){ mobRoleSubbiePick(n); }); })(name);
-      listEl.appendChild(btn);
+      var initials = name.split(' ').map(function(w){return w[0]||'';}).join('').toUpperCase().slice(0,2);
+
+      var row = document.createElement('div');
+      row.setAttribute('data-subbie', name);
+      row.style.cssText = 'display:flex;align-items:center;gap:14px;padding:18px 20px;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;margin-bottom:12px;-webkit-tap-highlight-color:rgba(255,255,255,0.2);user-select:none;';
+
+      var av = document.createElement('div');
+      av.style.cssText = 'width:42px;height:42px;border-radius:50%;background:'+color+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0;pointer-events:none';
+      av.textContent = initials;
+
+      var lbl = document.createElement('div');
+      lbl.style.cssText = 'font-size:16px;font-weight:700;color:#fff;pointer-events:none';
+      lbl.textContent = name;
+
+      row.appendChild(av);
+      row.appendChild(lbl);
+      listEl.appendChild(row);
     });
+
+    // Single event listener using delegation — works reliably on iOS
+    listEl.ontouchend = function(e) {
+      e.preventDefault();
+      var el = e.target;
+      while (el && el !== listEl) {
+        var n = el.getAttribute('data-subbie');
+        if (n) { mobRoleSubbiePick(n); return; }
+        el = el.parentElement;
+      }
+    };
+    // Fallback for non-touch
+    listEl.onclick = function(e) {
+      var el = e.target;
+      while (el && el !== listEl) {
+        var n = el.getAttribute('data-subbie');
+        if (n) { mobRoleSubbiePick(n); return; }
+        el = el.parentElement;
+      }
+    };
   }
   document.getElementById('mob-role-select').style.display = 'none';
   document.getElementById('mob-subbie-pick').style.display = 'flex';
