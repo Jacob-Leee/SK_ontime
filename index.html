@@ -294,11 +294,18 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <span id="navlabel-all">All Orders</span>
       </div>
       <div class="nav-divider"></div>
-      <div class="nav-item" onclick="showPage('orders')" id="nav-orders">
+      <div class="nav-item" onclick="showPage('vac')" id="nav-vac">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        <span id="navlabel-orders">Orders</span>
-        <span class="nav-badge" id="orders-badge" style="background:var(--gold-light)">0</span>
+        <span>VAC Orders</span>
+        <span class="nav-badge" id="vac-badge" style="background:var(--gold-light)">0</span>
       </div>
+      <div class="nav-item" onclick="showPage('mpw')" id="nav-mpw">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        <span>MPW Orders</span>
+        <span class="nav-badge" id="mpw-badge" style="background:#a78bfa">0</span>
+      </div>
+      <!-- legacy nav-orders hidden -->
+      <div id="nav-orders" style="display:none"></div>
       <div class="nav-item" onclick="showPage('completed')" id="nav-completed">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         <span id="navlabel-completed">Completed</span>
@@ -457,56 +464,91 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       </div>
 
       <!-- ORDERS PAGE -->
-      <div id="page-orders" class="page">
+      <div id="page-vac" class="page">
         <div class="filters">
-          <input class="filter-input" id="search-orders" placeholder="🔍  Search orders, address, PRN..." style="width:280px" oninput="renderOrders()">
-          <select class="filter-input" id="filter-area" onchange="renderOrders()">
+          <input class="filter-input" id="search-vac" placeholder="🔍  Search VAC orders, address, PRN..." style="width:280px" oninput="renderVAC()">
+          <select class="filter-input" id="filter-vac-area" onchange="renderVAC()">
             <option value="">All Areas</option>
           </select>
-          <select class="filter-input" id="filter-worktype" onchange="renderOrders()">
-            <option value="">All Work Types</option>
-            <option value="vac">VAC</option>
-            <option value="res">RES</option>
-            <option value="pro">PRO</option>
-          </select>
-          <select class="filter-input" id="filter-paid" onchange="renderOrders()">
-            <option value="">All Payment</option>
-            <option value="Y">Paid</option>
-            <option value="N">Unpaid</option>
-          </select>
-          <select class="filter-input" id="filter-month" onchange="renderOrders()">
+          <select class="filter-input" id="filter-vac-month" onchange="renderVAC()">
             <option value="">All Months</option>
           </select>
-          <span id="orders-count" style="color:var(--text3);font-size:12px;margin-left:4px"></span>
+          <span id="vac-count" style="color:var(--text3);font-size:12px;margin-left:4px"></span>
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
             <div class="table-wrap">
-              <table id="orders-table">
+              <table>
                 <thead>
                   <tr>
-                    <th data-sort="orderDate" onclick="sortBy('orders','orderDate')">Order Date <span class="sort-icon">↕</span></th>
-                    <th data-sort="orderNumber" onclick="sortBy('orders','orderNumber')">Order # <span class="sort-icon">↕</span></th>
-                    <th data-sort="address" onclick="sortBy('orders','address')">Address <span class="sort-icon">↕</span></th>
-                    <th data-sort="prn" onclick="sortBy('orders','prn')">PRN <span class="sort-icon">↕</span></th>
-                    <th data-sort="workType" onclick="sortBy('orders','workType')">Type <span class="sort-icon">↕</span></th>
-                    <th data-sort="area" onclick="sortBy('orders','area')">Area <span class="sort-icon">↕</span></th>
-                    <th data-sort="sorCode" onclick="sortBy('orders','sorCode')">SOR Code <span class="sort-icon">↕</span></th>
-                    <th data-sort="amount" onclick="sortBy('orders','amount')">Amount <span class="sort-icon">↕</span></th>
-                    <th data-sort="subbies" onclick="sortBy('orders','subbies')">Subbies <span class="sort-icon">↕</span></th>
-                    <th data-sort="comments" onclick="sortBy('orders','comments')">Comments <span class="sort-icon">↕</span></th>
+                    <th data-sort="orderDate" onclick="sortBy('vac','orderDate')">Order Date <span class="sort-icon">↕</span></th>
+                    <th data-sort="orderNumber" onclick="sortBy('vac','orderNumber')">Order # <span class="sort-icon">↕</span></th>
+                    <th data-sort="address" onclick="sortBy('vac','address')">Address <span class="sort-icon">↕</span></th>
+                    <th data-sort="prn" onclick="sortBy('vac','prn')">PRN <span class="sort-icon">↕</span></th>
+                    <th data-sort="area" onclick="sortBy('vac','area')">Area <span class="sort-icon">↕</span></th>
+                    <th data-sort="sorCode" onclick="sortBy('vac','sorCode')">SOR Code <span class="sort-icon">↕</span></th>
+                    <th data-sort="amount" onclick="sortBy('vac','amount')">Amount <span class="sort-icon">↕</span></th>
+                    <th data-sort="subbies" onclick="sortBy('vac','subbies')">Subbies <span class="sort-icon">↕</span></th>
+                    <th data-sort="comments" onclick="sortBy('vac','comments')">Comments <span class="sort-icon">↕</span></th>
                     <th></th>
                   </tr>
                 </thead>
-                <tbody id="orders-tbody"></tbody>
+                <tbody id="vac-tbody"></tbody>
               </table>
             </div>
-            <div id="orders-empty" class="empty-state" style="display:none">
+            <div id="vac-empty" class="empty-state" style="display:none">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-              <p>No orders yet. Click <strong>+ New Order</strong> to get started.</p>
+              <p>No active VAC orders.</p>
             </div>
           </div>
         </div>
+      </div>
+
+      <div id="page-mpw" class="page">
+        <div class="filters">
+          <input class="filter-input" id="search-mpw" placeholder="🔍  Search MPW orders, address, PRN..." style="width:280px" oninput="renderMPW()">
+          <select class="filter-input" id="filter-mpw-area" onchange="renderMPW()">
+            <option value="">All Areas</option>
+          </select>
+          <select class="filter-input" id="filter-mpw-month" onchange="renderMPW()">
+            <option value="">All Months</option>
+          </select>
+          <span id="mpw-count" style="color:var(--text3);font-size:12px;margin-left:4px"></span>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th data-sort="orderDate" onclick="sortBy('mpw','orderDate')">Order Date <span class="sort-icon">↕</span></th>
+                    <th data-sort="orderNumber" onclick="sortBy('mpw','orderNumber')">Order # <span class="sort-icon">↕</span></th>
+                    <th data-sort="address" onclick="sortBy('mpw','address')">Address <span class="sort-icon">↕</span></th>
+                    <th data-sort="prn" onclick="sortBy('mpw','prn')">PRN <span class="sort-icon">↕</span></th>
+                    <th data-sort="area" onclick="sortBy('mpw','area')">Area <span class="sort-icon">↕</span></th>
+                    <th data-sort="sorCode" onclick="sortBy('mpw','sorCode')">SOR Code <span class="sort-icon">↕</span></th>
+                    <th data-sort="amount" onclick="sortBy('mpw','amount')">Amount <span class="sort-icon">↕</span></th>
+                    <th data-sort="subbies" onclick="sortBy('mpw','subbies')">Subbies <span class="sort-icon">↕</span></th>
+                    <th data-sort="comments" onclick="sortBy('mpw','comments')">Comments <span class="sort-icon">↕</span></th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="mpw-tbody"></tbody>
+              </table>
+            </div>
+            <div id="mpw-empty" class="empty-state" style="display:none">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <p>No active MPW orders.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- legacy page-orders (hidden, kept for compat) -->
+      <div id="page-orders" class="page" style="display:none!important">
+        <div id="orders-count"></div>
+        <tbody id="orders-tbody"></tbody>
+        <div id="orders-empty"></div>
       </div>
 
       <!-- COMPLETED PAGE -->
@@ -2269,7 +2311,7 @@ function getDefaultSOR() {
 // ============================================================
 let currentPage = 'all';
 
-const PAGE_TITLES = { all:'All Orders', orders:'Orders', completed:'Completed', claims:'Claim', closed:'Closed', issues:'Issues', cancelled:'Cancelled', calendar:'Calendar', subbies:'Subbie Management', dashboard:'Dashboard', sor:'SOR Codes' };
+const PAGE_TITLES = { all:'All Orders', orders:'Orders', vac:'VAC Orders', mpw:'MPW Orders', completed:'Completed', claims:'Claim', closed:'Closed', issues:'Issues', cancelled:'Cancelled', calendar:'Calendar', subbies:'Subbie Management', dashboard:'Dashboard', sor:'SOR Codes' };
 
 function showPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -2286,6 +2328,8 @@ function showPage(page) {
 
   if (page === 'all')       { actions.innerHTML = csvBtn + importBtn + newBtn; renderAll(); }
   else if (page === 'orders')    { actions.innerHTML = csvBtn + importBtn + newBtn; renderOrders(); }
+  else if (page === 'vac')       { actions.innerHTML = csvBtn + importBtn + newBtn; renderVAC(); }
+  else if (page === 'mpw')       { actions.innerHTML = csvBtn + importBtn + newBtn; renderMPW(); }
   else if (page === 'completed') { actions.innerHTML = csvBtn; renderCompleted(); }
   else if (page === 'claims')    { actions.innerHTML = csvBtn; renderClaims(); }
   else if (page === 'closed')    { actions.innerHTML = csvBtn; renderClosed(); }
@@ -2831,7 +2875,7 @@ function setOrderStatus(id, newStatus) {
     if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
     cloudPush();
   }
-  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
+  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
   (renders[currentPage] || renderAll)();
   updateSidebar();
   const labels = { active:'moved back to Orders', completed:'marked Complete ✅', claim:'moved to Claim 📋', closed:'Closed 🔒', issue:'flagged as Issue ⚠️', cancelled:'Cancelled ❌' };
@@ -4010,7 +4054,7 @@ function toggleSubbiePaid(id) {
   else { delete o.subbiePaidAt; }
   o.updatedAt = _nowSafe();
   save();
-  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, subbies:renderSubbiesPage };
+  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, subbies:renderSubbiesPage };
   (renders[currentPage] || renderAll)();
   toast(o.subbiePaid === 'Y' ? 'Subbie marked as Settled 💵' : 'Subbie marked as Outstanding', 'success');
 }
@@ -4137,7 +4181,7 @@ function deleteOrder(id) {
   DB.tombstones.orders[id] = Date.now();
   DB.orders = DB.orders.filter(x => x.id !== id);
   save();
-  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
+  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
   (renders[currentPage] || renderAll)();
   updateSidebar();
   toast('Order deleted', 'success');
@@ -4194,7 +4238,7 @@ function sortBy(page, col) {
   const st = sortState[page];
   if (st.col === col) st.asc = !st.asc;
   else { st.col = col; st.asc = true; }
-  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
+  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
   renders[page]();
   updateSortIcons(page);
 }
@@ -4207,6 +4251,139 @@ function updateSortIcons(page) {
     if (th.dataset.sort === st.col) { th.classList.add('sorted'); icon.textContent = st.asc ? '↑' : '↓'; }
     else { th.classList.remove('sorted'); icon.textContent = '↕'; }
   });
+}
+
+// ── VAC / MPW category helpers ──
+function getOrderCategory(o) {
+  if (o.orderCategory) return o.orderCategory;
+  const sor = (o.sorCode || '').toUpperCase();
+  if (sor.includes('-VAC-')) return 'vac';
+  if (sor.includes('-RES-') || sor.includes('-PRO-')) return 'mpw';
+  const wt = (o.workType || '').toLowerCase();
+  return wt === 'vac' ? 'vac' : 'mpw';
+}
+
+function migrateOrderCategories() {
+  let changed = false;
+  DB.orders.forEach(o => {
+    if (!o.orderCategory) { o.orderCategory = getOrderCategory(o); changed = true; }
+  });
+  if (changed) save();
+}
+
+function moveOrderCategory(id, cat) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o) return;
+  o.orderCategory = cat;
+  save();
+  if (cat === 'vac') renderVAC(); else renderMPW();
+  updateSidebar();
+  toast('Moved to ' + (cat === 'vac' ? 'VAC Orders' : 'MPW Orders'), 'success');
+}
+
+function updateAreaFilterFor(page, areaId) {
+  const areas = [...new Set(DB.orders.filter(o => (!o.status || o.status === 'active') && getOrderCategory(o) === page).map(o => o.area).filter(Boolean))].sort();
+  const sel = document.getElementById(areaId);
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Areas</option>' + areas.map(a => `<option value="${a}" ${a===cur?'selected':''}>${a}</option>`).join('');
+}
+
+function updateMonthFilterFor(page, monthId) {
+  const months = [...new Set(DB.orders.filter(o => (!o.status || o.status === 'active') && getOrderCategory(o) === page).map(o => (o.orderDate||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  const sel = document.getElementById(monthId);
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Months</option>' + months.map(m => `<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
+}
+
+function renderVAC() {
+  updateAreaFilterFor('vac','filter-vac-area');
+  updateMonthFilterFor('vac','filter-vac-month');
+  const q = (document.getElementById('search-vac')?.value||'').toLowerCase();
+  const area = document.getElementById('filter-vac-area')?.value||'';
+  const month = document.getElementById('filter-vac-month')?.value||'';
+  let orders = DB.orders.filter(o => {
+    if (o.status && o.status !== 'active') return false;
+    if (getOrderCategory(o) !== 'vac') return false;
+    if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
+    if (area && o.area !== area) return false;
+    if (month && (!o.orderDate||!o.orderDate.startsWith(month))) return false;
+    return true;
+  });
+  orders = applySort(orders, 'vac');
+  renderOrdersTable(orders, 'vac-tbody', 'vac-empty', 'vac-count', 'mpw');
+  renderTabSummary('vac');
+}
+
+function renderMPW() {
+  updateAreaFilterFor('mpw','filter-mpw-area');
+  updateMonthFilterFor('mpw','filter-mpw-month');
+  const q = (document.getElementById('search-mpw')?.value||'').toLowerCase();
+  const area = document.getElementById('filter-mpw-area')?.value||'';
+  const month = document.getElementById('filter-mpw-month')?.value||'';
+  let orders = DB.orders.filter(o => {
+    if (o.status && o.status !== 'active') return false;
+    if (getOrderCategory(o) !== 'mpw') return false;
+    if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
+    if (area && o.area !== area) return false;
+    if (month && (!o.orderDate||!o.orderDate.startsWith(month))) return false;
+    return true;
+  });
+  orders = applySort(orders, 'mpw');
+  renderOrdersTable(orders, 'mpw-tbody', 'mpw-empty', 'mpw-count', 'vac');
+  renderTabSummary('mpw');
+}
+
+function renderOrdersTable(orders, tbodyId, emptyId, countId, moveTo) {
+  const tbody = document.getElementById(tbodyId);
+  const empty = document.getElementById(emptyId);
+  const countEl = document.getElementById(countId);
+  if (!tbody) return;
+  if (countEl) countEl.textContent = orders.length + ' order' + (orders.length !== 1 ? 's' : '');
+  if (empty) empty.style.display = orders.length ? 'none' : 'block';
+  tbody.style.display = orders.length ? '' : 'none';
+  const moveLabel = moveTo === 'mpw' ? '→ MPW' : '→ VAC';
+  const moveBtnStyle = moveTo === 'mpw'
+    ? 'background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3)'
+    : 'background:rgba(201,168,76,0.15);color:var(--gold-light);border:1px solid rgba(201,168,76,0.3)';
+  tbody.innerHTML = orders.map(o => {
+    const payment = DB.claims.find(c => c.orderNumber === o.orderNumber);
+    const hasClaim2 = payment && payment.status && payment.status !== 'none';
+    const sor = DB.sorCodes.find(s => s.code === o.sorCode);
+    const extraBadge = (o.extraItems && o.extraItems.length) ? ` <span class="badge badge-purple" title="${o.extraItems.length} extra">+${o.extraItems.length}</span>` : '';
+    const sorDisplay = o.sorCode ? `<span title="${sor ? sor.description : ''}" style="font-size:11px;font-family:monospace">${o.sorCode}</span>${extraBadge}` : '—';
+    const _subBg = o.subbies ? getSubbieStyle(o.subbies) : '';
+    return `<tr class="${hasClaim2 ? 'claim-row' : ''}" ${o.subbies ? `data-sub="${o.subbies}"` : ''} style="${_subBg}">
+      <td style="white-space:nowrap">${fmtDate(o.orderDate)}</td>
+      <td style="white-space:nowrap">${orderNumCell(o)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="addr-full">${esc(o.address)}</div>
+          <button onclick="event.stopPropagation();copyOrderDesktop('${o.id}')" id="dsk-copy-${o.id}" title="Copy" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:2px 4px;flex-shrink:0;line-height:1;opacity:0.55" onmouseenter="this.style.opacity='1';" onmouseleave="this.style.opacity='0.55';">⎘</button>
+        </div>
+      </td>
+      <td style="font-size:12px">${esc(o.prn)}</td>
+      <td><span class="area-tag">${esc(o.area)}</span></td>
+      <td>${sorDisplay}</td>
+      <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
+      <td style="font-size:12px">
+        ${esc(o.subbies)}
+        ${o.supervisor ? `<br>${supervisorLink(o.supervisor, o.area)}` : ''}
+      </td>
+      <td><div class="truncate" title="${esc(o.comments)}" style="max-width:140px">${esc(o.comments)}</div></td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-btn" title="Edit" onclick="openOrderModal('${o.id}')">✏️</button>
+          <button class="btn btn-sm" style="${moveBtnStyle};font-size:11px" onclick="moveOrderCategory('${o.id}','${moveTo}')">${moveLabel}</button>
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">Complete →</button>
+          <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="openIssueModal('${o.id}')">⚠️ Issue</button>
+          <button class="btn btn-sm" style="background:rgba(107,87,68,0.08);color:var(--text2);border:1px solid rgba(107,87,68,0.2);font-size:11px" onclick="setOrderStatus('${o.id}','cancelled')">✕ Cancel</button>
+          <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 function getFilteredOrders() {
@@ -5230,6 +5407,7 @@ function updateMonthFilter() {
 // STICKY TAB SUMMARY BAR
 // ============================================================
 function renderTabSummary(page) {
+  if (page === 'vac' || page === 'mpw') return; // VAC/MPW use their own count display
   const bar = document.getElementById('tab-summary');
   if (!bar) return;
 
@@ -5302,7 +5480,10 @@ function updateSidebar() {
 
   const setBadge = (id, n) => { const el = document.getElementById(id); if (el) { el.textContent = n; el.style.display = ''; } };
   const setBadgePlain = (id, n) => { const el = document.getElementById(id); if (el) { el.textContent = n.toLocaleString('en-AU'); el.style.display = ''; } };
-  setBadge('orders-badge',   DB.orders.filter(o => !o.status || o.status === 'active').length);
+  const activeOrders = DB.orders.filter(o => !o.status || o.status === 'active');
+  setBadge('vac-badge', activeOrders.filter(o => getOrderCategory(o) === 'vac').length);
+  setBadge('mpw-badge', activeOrders.filter(o => getOrderCategory(o) === 'mpw').length);
+  setBadge('orders-badge', activeOrders.length);
   setBadge('completed-badge', DB.orders.filter(o => o.status === 'completed').length);
   setBadge('claims-badge',    DB.orders.filter(o => o.status === 'claim').length);
   setBadgePlain('closed-badge',    DB.orders.filter(o => o.status === 'closed').length);
@@ -5413,6 +5594,7 @@ function parseAribaText(raw) {
   else if (sorCode.includes('-PRO-')) workType = 'pro';
   else if (/\bPROG\b/i.test(text)) workType = 'pro';
   else if (/\bRES\b|responsive/i.test(text)) workType = 'res';
+  const orderCategory = (workType === 'vac') ? 'vac' : 'mpw';
 
   // ── Amount (ex-GST unit price)
   const amtEx  = get(/\(DWL\)\s*\$([\d,]+\.?\d*)/i,
@@ -5433,7 +5615,7 @@ function parseAribaText(raw) {
     if (mo) orderDate = dm[3] + '-' + mo + '-' + dm[1].padStart(2,'0');
   }
 
-  return { orderNumber: won, suiId, prn, address, area, workType, sorCode, amount, orderDate };
+  return { orderNumber: won, suiId, prn, address, area, workType, orderCategory, sorCode, amount, orderDate };
 }
 
 function parseEmailText() {
@@ -5532,7 +5714,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 // Keyboard shortcut
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
-  if ((e.ctrlKey || e.metaKey) && e.key === 'n' && currentPage === 'orders') { e.preventDefault(); openOrderModal(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'n' && ['orders','vac','mpw'].includes(currentPage)) { e.preventDefault(); openOrderModal(); }
 });
 
 // ============================================================
@@ -5732,6 +5914,11 @@ function copyOrderDesktop(id) {
   doCopy(formatted);
 }
 function updateMobNav() {}
+
+// run category migration on startup
+(function() {
+  try { migrateOrderCategories(); } catch(e) {}
+})();
 
 </script>
 </body>
