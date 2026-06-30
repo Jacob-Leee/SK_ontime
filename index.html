@@ -5703,9 +5703,16 @@ if (document.readyState === 'loading') {
 function copyOrderDesktop(id) {
   const o = DB.orders.find(x => x.id === id);
   if (!o) return;
-  const text = [o.orderNumber, o.address, o.prn].filter(Boolean).join(',') + (o.prn ? '' : '');
-  // format: orderNumber,address-prn
-  const formatted = (o.orderNumber||'') + ',' + (o.address||'') + (o.prn ? '-' + o.prn : '');
+  const addr = o.address || '';
+  const slashIdx = addr.indexOf('/');
+  let formatted;
+  if (slashIdx !== -1) {
+    const unit = addr.slice(0, slashIdx);
+    const rest = addr.slice(slashIdx + 1);
+    formatted = (o.orderNumber||'') + '-' + unit + ', ' + rest + (o.prn ? '-' + o.prn : '');
+  } else {
+    formatted = (o.orderNumber||'') + ', ' + addr + (o.prn ? '-' + o.prn : '');
+  }
   const btn = document.getElementById('dsk-copy-' + id);
   const doCopy = (txt) => {
     if (navigator.clipboard && navigator.clipboard.writeText) {
