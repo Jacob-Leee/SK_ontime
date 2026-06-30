@@ -307,9 +307,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 #mob-hdr-row1 {
   display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 50px;
 }
-#mob-hdr-row2 {
-  padding: 0 12px 10px;
-}
+#mob-hdr-row2 { display:none; }
 .mob-logo { font-size: 15px; font-weight: 800; color: #111111; letter-spacing: 0.5px; flex: 1; }
 #mob-search-box {
   width: 100%; box-sizing: border-box;
@@ -367,15 +365,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 }
 .pin-key:active { background: var(--accent); color: #fff; }
 
-/* ── FAB ── */
-#mob-fab {
-  position: fixed; right: 16px; bottom: 72px;
-  width: 52px; height: 52px; border-radius: 50%;
-  background: var(--gold); border: none; color: #1a1000;
-  font-size: 28px; line-height: 1; cursor: pointer;
-  box-shadow: 0 4px 16px rgba(201,168,76,0.4); z-index: 150;
-  display: flex; align-items: center; justify-content: center;
-}
+/* FAB removed */
 
 /* ── CARDS ── */
 .mc {
@@ -544,10 +534,20 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
         <span id="mob-sync-dot" class="mob-dot"></span>Sync
       </button>
       <button class="mob-hdr-btn" id="mob-refresh-btn" onclick="mobRefreshPull()" title="Refresh">↻</button>
+      <button class="mob-hamburger" onclick="mobSearchOpen()" title="Search" aria-label="Search" style="font-size:18px">
+        <i class="ti ti-search"></i>
+      </button>
       <button id="mob-menu-btn" class="mob-hamburger" onclick="mobDrawerOpen()">☰</button>
     </div>
-    <div id="mob-hdr-row2">
-      <input id="mob-search-box" type="search" placeholder="🔍  Search order#, address…" oninput="mobSearch(this.value)" autocomplete="off"/>
+  </div>
+
+  <!-- Search Overlay -->
+  <div id="mob-search-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(200,210,230,0.35);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);padding:env(safe-area-inset-top) 0 0;" onclick="if(event.target===this)mobSearchClose()">
+    <div style="background:rgba(232,238,246,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid rgba(255,255,255,0.6);padding:12px 14px;display:flex;align-items:center;gap:10px;">
+      <i class="ti ti-search" style="color:#888;font-size:18px;flex-shrink:0;"></i>
+      <input id="mob-search-box" type="search" placeholder="Order #, address…" oninput="mobSearch(this.value)" autocomplete="off"
+        style="flex:1;background:transparent;border:none;outline:none;font-size:15px;color:#111;font-family:inherit;" autofocus/>
+      <button onclick="mobSearchClose()" style="background:rgba(0,0,0,0.07);border:none;border-radius:20px;padding:4px 12px;font-size:13px;color:#444;cursor:pointer;font-family:inherit;font-weight:500;">Cancel</button>
     </div>
   </div>
 
@@ -584,8 +584,6 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
 </div>
 
-<!-- FAB -->
-<button id="mob-fab" onclick="openOrderModal()">+</button>
 
 <!-- Drawer overlay -->
 <div id="mob-overlay" onclick="mobDrawerClose()"></div>
@@ -6101,6 +6099,18 @@ function mobNav(page) {
   mobRefresh();
 }
 
+function mobSearchOpen() {
+  const el = document.getElementById('mob-search-overlay');
+  if (!el) return;
+  el.style.display = 'block';
+  setTimeout(() => { const inp = document.getElementById('mob-search-box'); if(inp) inp.focus(); }, 80);
+}
+function mobSearchClose() {
+  const el = document.getElementById('mob-search-overlay');
+  if (el) el.style.display = 'none';
+  const inp = document.getElementById('mob-search-box');
+  if (inp) { inp.value = ''; mobSearch(''); }
+}
 function mobSearch(v) {
   _mobSearchQ = (v || '').toLowerCase().trim();
   mobRefresh();
