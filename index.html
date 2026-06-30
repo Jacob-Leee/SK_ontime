@@ -4899,7 +4899,7 @@ function renderDashWidgets() {
     const nextSize = size==='full' ? 'half' : size==='half' ? 'small' : 'full';
     const sizeLabel = size==='full' ? '&#8596; Half' : size==='half' ? '&#8596; Small' : '&#8596; Full';
     const bodyContent = id==='revenue'
-      ? `<div class="chart-wrap" style="height:200px"><canvas id="chart-revenue"></canvas></div>`
+      ? `<div id="dash-rev-stats" style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 2px 8px"></div><div class="chart-wrap" style="height:220px"><canvas id="chart-revenue"></canvas></div>`
       : id==='area'
       ? `<div id="dash-area-table"></div><div class="chart-wrap" style="height:140px;margin-top:6px"><canvas id="chart-area"></canvas></div>`
       : '';
@@ -5276,7 +5276,7 @@ function renderDashboard() {
   buildMonthlyTarget(base);      // ⑤ Monthly Target
   buildCompareWidget(cur,prev,w);// Period Revenue/Orders comparison
   buildAreaTableWidget(cur,prev,w,periodFiltered); // Area table
-  buildRevenueChart(periodFiltered);
+  buildRevenueChart(periodFiltered, base, w);
   buildAreaChart(periodFiltered);
   buildSubbiesDashSection(base);
   buildUpcomingCalWidget();
@@ -5351,23 +5351,90 @@ function buildChart(id, type, labels, datasets, opts = {}) {
   });
 }
 
-function buildRevenueChart(orders) {
-  // Granularity: week→daily, month→daily, year(FY)→monthly
-  const groups = {};
+function buildRevenueChart(orders, base, w) {
+  const isYear = dashPeriod === 'year';
+  const keyOf = o => isYear ? o.orderDate.slice(0,7) : o.orderDate;
+
+  // Current period — split by VAC / MPW
+  const vacG = {}, mpwG = {};
   orders.forEach(o => {
     if (!o.orderDate) return;
-    const key = dashPeriod === 'year' ? o.orderDate.slice(0, 7) : o.orderDate;
-    groups[key] = (groups[key] || 0) + (o.amount || 0);
+    const k = keyOf(o), v = o.amount || 0;
+    if (getOrderCategory(o) === 'vac') vacG[k] = (vacG[k]||0) + v;
+    else                                mpwG[k] = (mpwG[k]||0) + v;
   });
-  const keys = Object.keys(groups).sort();
-  buildChart('chart-revenue', 'bar', keys.map(k => dashPeriod === 'year' ? k : fmtDate(k)), [{
-    label: 'Revenue',
-    data: keys.map(k => groups[k]),
-    backgroundColor: 'rgba(79,126,248,0.5)',
-    borderColor: '#4f7ef8',
-    borderWidth: 1,
-    borderRadius: 4,
-  }]);
+  const keys = [...new Set([...Object.keys(vacG), ...Object.keys(mpwG)])].sort();
+
+  // Previous year — shift keys +1 year to align on same x-axis
+  const prevG = {};
+  if (w) {
+    const prevOrders = base.filter(o => o.orderDate && o.orderDate >= w.prevStart && o.orderDate <= w.prevEnd);
+    prevOrders.forEach(o => {
+      const origKey = keyOf(o);
+      const shifted = (parseInt(origKey.slice(0,4))+1) + origKey.slice(4);
+      prevG[shifted] = (prevG[shifted]||0) + (o.amount||0);
+    });
+  }
+
+  // Stats row
+  const statsEl = document.getElementById('dash-rev-stats');
+  if (statsEl) {
+    const total = orders.reduce((s,o)=>s+(o.amount||0),0);
+    const vals  = keys.map(k=>(vacG[k]||0)+(mpwG[k]||0));
+    const avg   = vals.length ? total / vals.length : 0;
+    const peak  = vals.length ? Math.max(...vals) : 0;
+    const prevTotal = Object.values(prevG).reduce((s,v)=>s+v,0);
+    const delta = prevTotal ? Math.round((total-prevTotal)/prevTotal*100) : null;
+    const pill = (label, val, col='var(--text2)') =>
+      `<div style="background:var(--cream2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text3)">${label} <strong style="color:${col}">${val}</strong></div>`;
+    statsEl.innerHTML =
+      pill('Total', '$'+fmtNum(total), 'var(--accent)') +
+      pill(isYear?'Monthly avg':'Daily avg', '$'+fmtNum(Math.round(avg))) +
+      pill('Peak', '$'+fmtNum(Math.round(peak))) +
+      (delta!==null ? pill('vs last year', (delta>=0?'▲':'▼')+Math.abs(delta)+'%', delta>=0?'var(--green)':'var(--red)') : '');
+  }
+
+  buildChart('chart-revenue', 'bar',
+    keys.map(k => isYear ? k : fmtDate(k)),
+    [
+      {
+        label: 'VAC',
+        data: keys.map(k => vacG[k]||0),
+        backgroundColor: 'rgba(79,126,248,0.7)',
+        borderColor: '#4f7ef8',
+        borderWidth: 1,
+        borderRadius: 3,
+        stack: 'cur',
+      },
+      {
+        label: 'MPW',
+        data: keys.map(k => mpwG[k]||0),
+        backgroundColor: 'rgba(167,139,250,0.7)',
+        borderColor: '#a78bfa',
+        borderWidth: 1,
+        borderRadius: 3,
+        stack: 'cur',
+      },
+      {
+        label: w ? w.prevLabel+' (last yr)' : 'Last year',
+        type: 'line',
+        data: keys.map(k => prevG[k]||0),
+        borderColor: '#C9A84C',
+        borderWidth: 2,
+        borderDash: [5,3],
+        pointRadius: 0,
+        fill: false,
+        tension: 0.35,
+        stack: undefined,
+      },
+    ],
+    {
+      scales: {
+        x: { stacked: true, ticks: { color:'#5a5f76', font:{size:10} }, grid: { color:'#2d3248' } },
+        y: { stacked: true, ticks: { color:'#5a5f76', font:{size:10}, callback: v=>'$'+fmtNum(v) }, grid: { color:'#2d3248' } },
+      }
+    }
+  );
 }
 
 function buildAreaChart(orders) {
