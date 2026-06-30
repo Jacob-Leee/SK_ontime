@@ -6141,7 +6141,7 @@ function mobSearchCardHtml(o) {
   const borderCol = subCol || col;
   const meta = [o.area, o.subbies].filter(Boolean).join(' · ');
   const subTag = subCol
-    ? `<div style="font-size:12px;font-weight:800;color:${subCol};margin-bottom:3px">${_esc(o.subbies)}</div>`
+    ? `<div style="font-size:14px;font-weight:800;color:${subCol};margin-bottom:4px;letter-spacing:-0.2px">${_esc(o.subbies)}</div>`
     : '';
   const cat = getOrderCategory(o);
   const catBadge = `<span style="font-size:10px;background:${cat==='vac'?'#eff6ff':'#f5f3ff'};color:${cat==='vac'?'#2563eb':'#7c3aed'};border-radius:8px;padding:1px 6px;font-weight:700;">${cat.toUpperCase()}</span>`;
@@ -6337,7 +6337,7 @@ function mobRefresh() {
     const borderCol = subCol || col;
     const meta = [o.area, o.subbies].filter(Boolean).join(' · ');
     const subTag = subCol
-      ? `<div style="font-size:12px;font-weight:800;color:${subCol};margin-bottom:3px">${_esc(o.subbies)}</div>`
+      ? `<div style="font-size:14px;font-weight:800;color:${subCol};margin-bottom:4px;letter-spacing:-0.2px">${_esc(o.subbies)}</div>`
       : '';
     return `<div class="mc" onclick="mobVOpen('${o.id}')" style="border-left-color:${borderCol};border-left-width:${subCol?'5':'4'}px;position:relative">
       ${subTag}
