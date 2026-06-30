@@ -543,13 +543,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   </div>
 
   <!-- Search Overlay -->
-  <div id="mob-search-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(200,210,230,0.35);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);padding:env(safe-area-inset-top) 0 0;" onclick="if(event.target===this)mobSearchClose()">
-    <div style="background:rgba(232,238,246,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid rgba(255,255,255,0.6);padding:12px 14px;display:flex;align-items:center;gap:10px;">
+  <div id="mob-search-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(232,238,246,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:env(safe-area-inset-top) 0 0;flex-direction:column;">
+    <div style="background:rgba(255,255,255,0.6);border-bottom:1px solid rgba(255,255,255,0.7);padding:12px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
       <i class="ti ti-search" style="color:#888;font-size:18px;flex-shrink:0;"></i>
-      <input id="mob-search-box" type="search" placeholder="Order #, address…" oninput="mobSearch(this.value)" autocomplete="off"
-        style="flex:1;background:transparent;border:none;outline:none;font-size:15px;color:#111;font-family:inherit;" autofocus/>
+      <input id="mob-search-box" type="search" placeholder="Order #, address, subbie…" oninput="mobSearch(this.value)" onkeyup="mobSearch(this.value)" autocomplete="off"
+        style="flex:1;background:transparent;border:none;outline:none;font-size:15px;color:#111;font-family:inherit;"/>
       <button onclick="mobSearchClose()" style="background:rgba(0,0,0,0.07);border:none;border-radius:20px;padding:4px 12px;font-size:13px;color:#444;cursor:pointer;font-family:inherit;font-weight:500;">Cancel</button>
     </div>
+    <div id="mob-search-results" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px;"></div>
   </div>
 
   <!-- Scrollable body -->
@@ -6103,8 +6104,13 @@ function mobNav(page) {
 function mobSearchOpen() {
   const el = document.getElementById('mob-search-overlay');
   if (!el) return;
-  el.style.display = 'block';
-  setTimeout(() => { const inp = document.getElementById('mob-search-box'); if(inp) inp.focus(); }, 80);
+  el.style.display = 'flex';
+  const resultsEl = document.getElementById('mob-search-results');
+  if (resultsEl) resultsEl.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#999;font-size:14px;">Type to search orders…</div>';
+  setTimeout(() => {
+    const inp = document.getElementById('mob-search-box');
+    if (inp) { inp.value = ''; inp.focus(); }
+  }, 80);
 }
 function mobSearchClose() {
   const el = document.getElementById('mob-search-overlay');
@@ -6112,9 +6118,60 @@ function mobSearchClose() {
   const inp = document.getElementById('mob-search-box');
   if (inp) { inp.value = ''; mobSearch(''); }
 }
+function mobSearchCardHtml(o) {
+  const _esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const st = o.status || 'active';
+  const col = _MOB_COL[st] || '#4f7ef8';
+  const lbl = _MOB_LBL[st] || st;
+  const subCol = (st === 'active' && o.subbies) ? _subbieColor(o.subbies) : null;
+  const borderCol = subCol || col;
+  const meta = [o.area, o.subbies].filter(Boolean).join(' · ');
+  const subTag = subCol
+    ? `<div style="font-size:12px;font-weight:800;color:${subCol};margin-bottom:3px">${_esc(o.subbies)}</div>`
+    : '';
+  const cat = getOrderCategory(o);
+  const catBadge = `<span style="font-size:10px;background:${cat==='vac'?'#eff6ff':'#f5f3ff'};color:${cat==='vac'?'#2563eb':'#7c3aed'};border-radius:8px;padding:1px 6px;font-weight:700;">${cat.toUpperCase()}</span>`;
+  const amt = o.amount ? `$${Number(o.amount).toLocaleString()}` : '';
+  return `<div class="mc" onclick="mobVOpen('${o.id}')" style="border-left-color:${borderCol};border-left-width:${subCol?'5':'4'}px;margin-bottom:8px;">
+    ${subTag}
+    <div class="mc-top">
+      <span class="mc-no">${_esc(o.orderNumber||'—')}</span>
+      ${catBadge}
+      <span class="mc-badge" style="background:${col}22;color:${col};margin-left:4px">${lbl}</span>
+    </div>
+    <div class="mc-addr">${_esc(o.address||'—')}</div>
+    <div class="mc-bot">
+      <span class="mc-meta">${_esc(meta)}</span>
+      ${amt ? `<span style="font-size:12px;font-weight:700;color:#374151">${amt}</span>` : ''}
+    </div>
+  </div>`;
+}
+
 function mobSearch(v) {
   _mobSearchQ = (v || '').toLowerCase().trim();
-  mobRefresh();
+  const resultsEl = document.getElementById('mob-search-results');
+  if (!resultsEl) { mobRefresh(); return; }
+
+  if (!_mobSearchQ) {
+    resultsEl.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#999;font-size:14px;">Type to search orders…</div>';
+    return;
+  }
+
+  const matches = (DB.orders || []).filter(o =>
+    (o.orderNumber||'').toLowerCase().includes(_mobSearchQ) ||
+    (o.address||'').toLowerCase().includes(_mobSearchQ) ||
+    (o.subbies||'').toLowerCase().includes(_mobSearchQ) ||
+    (o.area||'').toLowerCase().includes(_mobSearchQ)
+  );
+
+  if (!matches.length) {
+    resultsEl.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#999;font-size:14px;">No orders found for <strong>"' + _mobSearchQ + '"</strong></div>';
+    return;
+  }
+
+  matches.sort((a,b) => ((b.orderDate||'') > (a.orderDate||'') ? 1 : -1));
+  resultsEl.innerHTML = `<div style="font-size:11px;color:#888;padding:4px 4px 8px;font-weight:600;">${matches.length} result${matches.length===1?'':'s'}</div>` +
+    matches.slice(0, 100).map(mobSearchCardHtml).join('');
 }
 
 function mobDashboard() {
