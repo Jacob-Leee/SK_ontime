@@ -2702,8 +2702,8 @@ function saveOrder(e) {
   cloudPush(); // immediate — don't wait for debounce
 
   closeModal('order-modal');
-  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims,
-                     closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
+  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims,
+                     closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
   (renders[currentPage] || renderOrders)();
   updateSidebar();
 }
@@ -2878,7 +2878,7 @@ function setOrderStatus(id, newStatus) {
     if (CLOUD.pushTimer) { clearTimeout(CLOUD.pushTimer); CLOUD.pushTimer = null; }
     cloudPush();
   }
-  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
+  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
   (renders[currentPage] || renderAll)();
   updateSidebar();
   const labels = { active:'moved back to Orders', completed:'marked Complete ✅', claim:'moved to Claim 📋', closed:'Closed 🔒', issue:'flagged as Issue ⚠️', cancelled:'Cancelled ❌' };
@@ -2990,8 +2990,8 @@ function confirmIssueModal() {
   }
   o.status = 'issue';
   save();
-  const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted,
-    claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
+  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted,
+    claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
   (renders[currentPage] || renderAll)();
   updateSidebar();
   closeModal('issue-modal');
@@ -4184,7 +4184,7 @@ function deleteOrder(id) {
   DB.tombstones.orders[id] = Date.now();
   DB.orders = DB.orders.filter(x => x.id !== id);
   save();
-  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
+  const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
   (renders[currentPage] || renderAll)();
   updateSidebar();
   toast('Order deleted', 'success');
@@ -5000,19 +5000,21 @@ function buildClaimsPipeline(base) {
   // All 'completed' orders = work done, not yet moved to claim status
   const unclaimed = base.filter(o => o.status === 'completed');
   const unclaimedAmt = unclaimed.reduce((s,o)=>s+(o.amount||0),0);
-  const pending     = DB.claims.filter(c=>c.status!=='Closed'&&c.status!=='cancelled');
-  const pendingAmt  = pending.reduce((s,c)=>s+(c.amount||0),0);
+  // Use DB.orders as source of truth (DB.claims records can be stale)
+  const pendingOrders = DB.orders.filter(o => o.status === 'claim');
+  const pendingAmt    = pendingOrders.reduce((s,o)=>s+(o.amount||0),0);
+  const pending       = pendingOrders; // alias for count display
   const now=new Date();
   const mS=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
   const mE=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-31`;
-  // paidAt stamped from now on; fallback to updatedAt date for historical records
   const paidMo  = DB.claims.filter(c=>c.status==='Closed'&&(
     (c.paidAt&&c.paidAt>=mS&&c.paidAt<=mE) ||
     (!c.paidAt&&c.closedAt&&c.closedAt>=mS&&c.closedAt<=mE)
   ));
   const paidAmt = paidMo.reduce((s,c)=>s+(c.amtPaid||c.amount||0),0);
-  const allOut    = DB.claims.filter(c=>c.status!=='Closed'&&c.status!=='cancelled');
-  const allOutAmt = allOut.reduce((s,c)=>s+(c.amount||0),0);
+  // Outstanding = orders in claim status (not yet closed)
+  const allOut    = pendingOrders;
+  const allOutAmt = pendingAmt;
   const cols = [
     { label:'Work Done — Unclaimed', sub:'Completed, no claim yet',  count:unclaimed.length, amt:unclaimedAmt, color:'#4f7ef8', icon:'&#128296;' },
     { label:'Submitted — Awaiting',  sub:'Claimed, payment pending', count:pending.length,   amt:pendingAmt,   color:'#f39c12', icon:'&#9203;'   },
@@ -5941,6 +5943,22 @@ function updateMobNav() {}
 // run category migration on startup
 (function() {
   try { migrateOrderCategories(); } catch(e) {}
+})();
+
+// Fix stale DB.claims records: if corresponding order is 'closed', mark claim as 'Closed'
+(function migrateStaleClaimStatuses() {
+  try {
+    let changed = false;
+    const closedNums = new Set(DB.orders.filter(o=>o.status==='closed').map(o=>o.orderNumber));
+    DB.claims.forEach(c => {
+      if (closedNums.has(c.orderNumber) && c.status !== 'Closed') {
+        c.status = 'Closed';
+        if (!c.paid) c.paid = 'Y';
+        changed = true;
+      }
+    });
+    if (changed) { lsSet('hom_claims', JSON.stringify(DB.claims)); }
+  } catch(e) {}
 })();
 
 </script>
