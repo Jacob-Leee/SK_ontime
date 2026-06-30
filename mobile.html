@@ -334,6 +334,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   gap: 1px; font-size: 9px; cursor: pointer; transition: color 0.15s; padding: 0 2px;
 }
 .mob-tab .ti { font-size: 17px; line-height: 1; }
+.mob-sub-tab { background: var(--bg2); border: 1.5px solid var(--border); border-radius: 20px; color: var(--text2); font-size: 12px; font-weight: 600; padding: 5px 14px; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: all 0.15s; }
+.mob-sub-tab.active { background: #4f7ef822; border-color: #4f7ef8; color: #4f7ef8; }
+#mob-active-subtabs { display: none; padding: 8px 12px 4px; gap: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+#mob-active-subtabs::-webkit-scrollbar { display: none; }
 .mob-tab.active { color: var(--gold); }
 
 /* ── Admin PIN ── */
@@ -527,6 +531,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
   <!-- Scrollable body -->
   <div id="mob-body">
+    <!-- VAC/MPW sub-tabs (shown only when Active tab is selected) -->
+    <div id="mob-active-subtabs" style="display:none;padding:8px 12px 4px;gap:8px;flex-wrap:nowrap;overflow-x:auto">
+      <button class="mob-sub-tab active" id="mst-all" onclick="mobSetActiveFilter('all')">All Active</button>
+      <button class="mob-sub-tab" id="mst-vac" onclick="mobSetActiveFilter('vac')">🏠 VAC</button>
+      <button class="mob-sub-tab" id="mst-mpw" onclick="mobSetActiveFilter('mpw')">🔧 MPW</button>
+    </div>
     <div id="mob-summary" style="display:none"></div>
     <div id="mob-card-list"></div>
   </div>
@@ -6032,6 +6042,28 @@ const _MOB_FILTERS = {
 let _mobPage = 'orders';
 let _mobSearchQ = '';
 let _mobViewId = null;
+let _mobActiveFilter = 'all'; // 'all' | 'vac' | 'mpw'
+
+function getOrderCategory(o) {
+  if (o.orderCategory) return o.orderCategory;
+  const sor = (o.sorCode || '').toUpperCase();
+  if (sor.includes('-VAC-')) return 'vac';
+  if (sor.includes('-RES-') || sor.includes('-PRO-')) return 'mpw';
+  return (o.workType||'').toLowerCase() === 'vac' ? 'vac' : 'mpw';
+}
+
+function mobSetActiveFilter(f) {
+  _mobActiveFilter = f;
+  document.querySelectorAll('.mob-sub-tab').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('mst-' + f);
+  if (btn) btn.classList.add('active');
+  mobRefresh();
+}
+
+function mobShowActiveSubtabs(show) {
+  const el = document.getElementById('mob-active-subtabs');
+  if (el) el.style.display = show ? 'flex' : 'none';
+}
 
 function mobNav(page) {
   _mobPage = page;
@@ -6041,6 +6073,9 @@ function mobNav(page) {
   const tabKey = validTabs.includes(page) ? page : 'more';
   const tb = document.getElementById('mt-' + tabKey);
   if (tb) tb.classList.add('active');
+  // show/hide VAC/MPW sub-tabs only for Active
+  mobShowActiveSubtabs(page === 'orders');
+  if (page !== 'orders') _mobActiveFilter = 'all';
   mobRefresh();
 }
 
@@ -6159,6 +6194,11 @@ function mobRefresh() {
       (o.subbies||'').toLowerCase().includes(_mobSearchQ) ||
       (o.area||'').toLowerCase().includes(_mobSearchQ)
     );
+  }
+
+  // Apply VAC/MPW sub-filter when on Active tab
+  if (_mobPage === 'orders' && _mobActiveFilter !== 'all') {
+    list = list.filter(o => getOrderCategory(o) === _mobActiveFilter);
   }
 
   // For active orders: sort by subbie name, then by date within each subbie
