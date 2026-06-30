@@ -5115,15 +5115,9 @@ function buildCompareWidget(cur, prev, w) {
   const cards = [
     { label:'New orders',  icon:'&#128229;', cur:cur.count,
       ip:ipStats.count, yoy:prev.count, yoyLabel:w.prevLabel },
-    { label:'Completed',   icon:'&#9989;',   cur:countByDate('completedAt',w.pStart,w.pEnd),
-      ip:countByDate('completedAt',ip.start,ip.end),
-      yoy:countByDate('completedAt',w.prevStart,w.prevEnd), yoyLabel:w.prevLabel },
     { label:'Closed',      icon:'&#128274;', cur:countByDate('closedAt',w.pStart,w.pEnd),
       ip:countByDate('closedAt',ip.start,ip.end),
       yoy:countByDate('closedAt',w.prevStart,w.prevEnd), yoyLabel:w.prevLabel },
-    { label:'Issues',      icon:'&#9888;',   cur:countByDate('issueAt',w.pStart,w.pEnd),
-      ip:countByDate('issueAt',ip.start,ip.end),
-      yoy:countByDate('issueAt',w.prevStart,w.prevEnd), yoyLabel:w.prevLabel },
   ];
 
   const cardHtml = cards.map(c => `
@@ -5145,7 +5139,7 @@ function buildCompareWidget(cur, prev, w) {
     </div>`).join('');
 
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px">
       ${cardHtml}
     </div>
     <div style="background:var(--cream2);border-radius:8px;border:1px solid var(--border);padding:12px 14px;display:grid;grid-template-columns:2fr 1px 1fr 1px 1fr;gap:12px;align-items:start">
