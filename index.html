@@ -6022,6 +6022,20 @@ function updateMobNav() {}
   try { migrateOrderCategories(); } catch(e) {}
 })();
 
+// Fill missing status-date fields for imported orders (completedAt / closedAt / issueAt)
+(function migrateStatusDates() {
+  try {
+    let changed = false;
+    DB.orders.forEach(o => {
+      const d = o.orderDate || '';
+      if (o.status === 'completed' && !o.completedAt) { o.completedAt = d; changed = true; }
+      if (o.status === 'closed'    && !o.closedAt)    { o.closedAt    = d; changed = true; }
+      if (o.status === 'issues'    && !o.issueAt)     { o.issueAt     = d; changed = true; }
+    });
+    if (changed) save();
+  } catch(e) {}
+})();
+
 // Fix stale DB.claims records: if corresponding order is 'closed', mark claim as 'Closed'
 (function migrateStaleClaimStatuses() {
   try {
