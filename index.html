@@ -297,7 +297,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <div class="nav-item" onclick="showPage('vac')" id="nav-vac">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
         <span>VAC Orders</span>
-        <span class="nav-badge" id="vac-badge" style="background:var(--gold-light)">0</span>
+        <span class="nav-badge" id="vac-badge" style="background:#4f7ef8">0</span>
       </div>
       <div class="nav-item" onclick="showPage('mpw')" id="nav-mpw">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
@@ -1449,7 +1449,8 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Accent / brand color</label><input type="color" class="form-control" id="setcolor-accent" style="height:38px;padding:4px"></div>
         <div class="form-group"></div>
-        <div class="form-group"><label class="form-label">Orders badge</label><input type="color" class="form-control" id="setcolor-badgeOrders" style="height:38px;padding:4px"></div>
+        <div class="form-group"><label class="form-label">VAC Orders badge</label><input type="color" class="form-control" id="setcolor-badgeVac" style="height:38px;padding:4px"></div>
+        <div class="form-group"><label class="form-label">MPW Orders badge</label><input type="color" class="form-control" id="setcolor-badgeMpw" style="height:38px;padding:4px"></div>
         <div class="form-group"><label class="form-label">Completed badge</label><input type="color" class="form-control" id="setcolor-badgeCompleted" style="height:38px;padding:4px"></div>
         <div class="form-group"><label class="form-label">Claim badge</label><input type="color" class="form-control" id="setcolor-badgeClaims" style="height:38px;padding:4px"></div>
         <div class="form-group"><label class="form-label">Issues badge</label><input type="color" class="form-control" id="setcolor-badgeIssues" style="height:38px;padding:4px"></div>
@@ -1486,6 +1487,7 @@ const DEFAULT_UI_LABELS = {
 const DEFAULT_UI_COLORS = {
   accent: '#C9A84C',       // main brand/accent color — buttons, active states, calendar "today", focus rings
   badgeOrders: '#E8C96A', badgeCompleted: '#FACC15', badgeClaims: '#F97316', badgeIssues: '#DC2626',
+  badgeVac: '#4f7ef8', badgeMpw: '#a78bfa',
   // Closed/Cancelled badges stay intentionally plain (no color) — that was a deliberate
   // de-emphasis decision earlier, not exposed here on purpose.
 };
@@ -2179,6 +2181,7 @@ const COLOR_FIELDS = Object.keys(DEFAULT_UI_COLORS);
 const COLOR_BADGE_ELEMENT_ID = {
   badgeOrders: 'orders-badge', badgeCompleted: 'completed-badge',
   badgeClaims: 'claims-badge', badgeIssues: 'issues-badge',
+  badgeVac: 'vac-badge', badgeMpw: 'mpw-badge',
 };
 
 function applyUiColors() {
@@ -4668,23 +4671,42 @@ function renderSOR() {
   );
   const tbody = document.getElementById('sor-tbody');
   const typeColors = { VAC: 'badge-blue', RES: 'badge-purple', PRO: 'badge-yellow', EXT: 'badge-green' };
-  tbody.innerHTML = codes.map((s, i) => {
-    const realIdx = DB.sorCodes.indexOf(s);
-    return `<tr>
-      <td style="font-family:monospace;font-size:12px;font-weight:700">${esc(s.code)}</td>
-      <td style="max-width:400px">${esc(s.description)}</td>
-      <td><span class="badge ${typeColors[s.type] || 'badge-blue'}">${s.type}</span></td>
-      <td style="color:var(--text2)">${esc(s.unit)}</td>
-      <td class="amount-cell" style="color:var(--green)">$${Number(s.price).toFixed(2)}</td>
-      <td class="amount-cell" style="color:var(--text2)">$${(s.price/1.1).toFixed(2)}</td>
-      <td>
-        <div class="row-actions">
-          <button class="icon-btn" onclick="openSORModal(${realIdx})">✏️</button>
-          <button class="icon-btn" onclick="deleteSOR(${realIdx})">🗑️</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
+  const typeOrder = ['VAC', 'RES', 'PRO', 'EXT'];
+  const typeLabels = { VAC: '🏠 VAC — Vacant Property', RES: '🔧 RES — Responsive Maintenance', PRO: '📋 PRO — Programmed Works', EXT: '➕ EXT — Extra Items' };
+  const typeBg = { VAC: 'rgba(79,126,248,0.07)', RES: 'rgba(124,58,237,0.07)', PRO: 'rgba(180,83,9,0.07)', EXT: 'rgba(22,163,74,0.07)' };
+  const typeBorder = { VAC: '#4f7ef8', RES: '#7C3AED', PRO: '#B45309', EXT: '#16a34a' };
+
+  // Group by type, preserving typeOrder
+  const groups = {};
+  typeOrder.forEach(t => { groups[t] = []; });
+  codes.forEach(s => { const t = (s.type||'VAC').toUpperCase(); (groups[t] = groups[t]||[]).push(s); });
+
+  let rows = '';
+  typeOrder.forEach(type => {
+    const list = groups[type];
+    if (!list || !list.length) return;
+    const bg = typeBg[type] || 'rgba(0,0,0,0.03)';
+    const border = typeBorder[type] || '#ccc';
+    rows += `<tr><td colspan="7" style="padding:10px 14px 6px;background:${bg};border-left:3px solid ${border};font-size:11px;font-weight:800;color:${border};text-transform:uppercase;letter-spacing:0.8px">${typeLabels[type]||type} <span style="font-weight:400;color:var(--text3)">(${list.length})</span></td></tr>`;
+    list.forEach(s => {
+      const realIdx = DB.sorCodes.indexOf(s);
+      rows += `<tr style="background:${bg}">
+        <td style="font-family:monospace;font-size:12px;font-weight:700;border-left:3px solid ${border}">${esc(s.code)}</td>
+        <td style="max-width:400px">${esc(s.description)}</td>
+        <td><span class="badge ${typeColors[type] || 'badge-blue'}">${s.type}</span></td>
+        <td style="color:var(--text2)">${esc(s.unit)}</td>
+        <td class="amount-cell" style="color:var(--green)">$${Number(s.price).toFixed(2)}</td>
+        <td class="amount-cell" style="color:var(--text2)">$${(s.price/1.1).toFixed(2)}</td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" onclick="openSORModal(${realIdx})">✏️</button>
+            <button class="icon-btn" onclick="deleteSOR(${realIdx})">🗑️</button>
+          </div>
+        </td>
+      </tr>`;
+    });
+  });
+  tbody.innerHTML = rows;
 }
 
 // ============================================================
@@ -4949,28 +4971,27 @@ function dashDragEnd(e) {
 function buildStatusPipeline(base) {
   const el = document.getElementById('dash-w-pipeline'); if (!el) return;
   const sumAmt = arr => arr.reduce((s,o)=>s+(o.amount||0),0);
+  const activeAll = base.filter(o=>!o.status||o.status==='active');
+  const vacOrders = activeAll.filter(o=>getOrderCategory(o)==='vac');
+  const mpwOrders = activeAll.filter(o=>getOrderCategory(o)==='mpw');
   const stages = [
-    { label:'Active',     status:'active',    nav:'orders',    icon:'&#128203;', color:'#4f7ef8' },
-    { label:'Completed',  status:'completed', nav:'completed', icon:'&#9989;',   color:'#2ecc71' },
-    { label:'Claimed',    status:'claim',     nav:'claims',    icon:'&#128228;', color:'#f39c12' },
-    { label:'Closed',     status:'closed',    nav:'closed',    icon:'&#128274;', color:'#8b90a7' },
-    { label:'Issues',     status:'issue',     nav:'issues',    icon:'&#9888;',   color:'#e74c3c' },
+    { label:'VAC Orders',  arr:vacOrders,                                        nav:'vac',       icon:'&#127968;', color:'#4f7ef8' },
+    { label:'MPW Orders',  arr:mpwOrders,                                        nav:'mpw',       icon:'&#128295;', color:'#a78bfa' },
+    { label:'Completed',   arr:base.filter(o=>o.status==='completed'),           nav:'completed', icon:'&#9989;',   color:'#2ecc71' },
+    { label:'Claimed',     arr:base.filter(o=>o.status==='claim'),               nav:'claims',    icon:'&#128228;', color:'#f39c12' },
+    { label:'Closed',      arr:base.filter(o=>o.status==='closed'),              nav:'closed',    icon:'&#128274;', color:'#8b90a7' },
+    { label:'Issues',      arr:base.filter(o=>o.status==='issue'),               nav:'issues',    icon:'&#9888;',   color:'#e74c3c' },
   ];
-  const cards = stages.map(s => {
-    const arr = s.status==='active'
-      ? base.filter(o=>!o.status||o.status==='active')
-      : base.filter(o=>o.status===s.status);
-    return `
+  const cards = stages.map(s => `
       <div onclick="showPage('${s.nav}')" style="cursor:pointer;text-align:center;padding:8px 4px;border-radius:8px;background:var(--cream2);border:2px solid ${s.color}22;transition:all 0.15s"
         onmouseover="this.style.background='${s.color}18';this.style.borderColor='${s.color}'"
         onmouseout="this.style.background='var(--cream2)';this.style.borderColor='${s.color}22'">
         <div style="font-size:16px;margin-bottom:3px">${s.icon}</div>
-        <div style="font-size:22px;font-weight:800;color:${s.color};line-height:1">${arr.length}</div>
+        <div style="font-size:22px;font-weight:800;color:${s.color};line-height:1">${s.arr.length}</div>
         <div style="font-size:9px;font-weight:700;color:var(--text3);margin:2px 0;text-transform:uppercase;letter-spacing:0.5px">${s.label}</div>
-        <div style="font-size:10px;color:var(--text2);font-weight:600">$${fmtNum(sumAmt(arr))}</div>
-      </div>`;
-  }).join('');
-  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">${cards}</div>
+        <div style="font-size:10px;color:var(--text2);font-weight:600">$${fmtNum(sumAmt(s.arr))}</div>
+      </div>`).join('');
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">${cards}</div>
     <div style="margin-top:4px;text-align:right;font-size:9px;color:var(--text3)">Click to navigate · Excludes cancelled</div>`;
 }
 
