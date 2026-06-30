@@ -855,7 +855,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           </div>
         </div>
         <!-- Draggable Widget Grid -->
-        <div id="dash-widgets" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:start"></div>
+        <div id="dash-widgets" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:stretch"></div>
       </div>
 
       <!-- SOR PAGE -->
@@ -4905,7 +4905,7 @@ function renderDashWidgets() {
       : '';
     return `
     <div class="dash-widget" id="dash-widget-${id}" data-id="${id}"
-      style="grid-column:span ${sizeSpan};background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden"
+      style="grid-column:span ${sizeSpan};background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column"
       draggable="true"
       ondragstart="dashDragStart(event,this)" ondragover="dashDragOver(event,this)"
       ondrop="dashDragDrop(event,this)"       ondragend="dashDragEnd(event)">
@@ -4921,7 +4921,7 @@ function renderDashWidgets() {
           style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px;margin-left:2px"
           onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">&#8963;</button>
       </div>
-      <div id="dash-w-${id}" style="padding:10px">${bodyContent}</div>
+      <div id="dash-w-${id}" style="padding:10px;flex:1;overflow-y:auto;min-height:0">${bodyContent}</div>
     </div>`;
   }).join('');
 }
