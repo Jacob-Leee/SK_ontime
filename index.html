@@ -855,7 +855,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           </div>
         </div>
         <!-- Draggable Widget Grid -->
-        <div id="dash-widgets" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start"></div>
+        <div id="dash-widgets" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:start"></div>
       </div>
 
       <!-- SOR PAGE -->
@@ -4840,8 +4840,8 @@ function pctDelta(cur, prev) {
 // ── DASHBOARD LAYOUT ENGINE ──────────────────────────────────
 const DASH_WIDGETS_DEF = [
   { id:'pipeline', label:'Order Status Pipeline',     defaultSize:'full' },
-  { id:'claims',   label:'Claims Financial Pipeline', defaultSize:'full' },
-  { id:'target',   label:'Monthly Progress',          defaultSize:'half' },
+  { id:'claims',   label:'Claims Financial Pipeline', defaultSize:'small' },
+  { id:'target',   label:'Monthly Progress',          defaultSize:'small' },
   { id:'compare',  label:'Period Comparison',         defaultSize:'half' },
   { id:'area',     label:'Orders by Area',            defaultSize:'full' },
   { id:'revenue',  label:'Revenue Over Time',         defaultSize:'full' },
@@ -4895,7 +4895,9 @@ function renderDashWidgets() {
     const def = DASH_WIDGETS_DEF.find(w=>w.id===id);
     if (!def) return '';
     const size   = layout.sizes[id] || def.defaultSize;
-    const isFull = size === 'full';
+    const sizeSpan = size==='full' ? 4 : size==='half' ? 2 : 1;
+    const nextSize = size==='full' ? 'half' : size==='half' ? 'small' : 'full';
+    const sizeLabel = size==='full' ? '&#8596; Half' : size==='half' ? '&#8596; Small' : '&#8596; Full';
     const bodyContent = id==='revenue'
       ? `<div class="chart-wrap" style="height:200px"><canvas id="chart-revenue"></canvas></div>`
       : id==='area'
@@ -4903,17 +4905,17 @@ function renderDashWidgets() {
       : '';
     return `
     <div class="dash-widget" id="dash-widget-${id}" data-id="${id}"
-      style="grid-column:span ${isFull?2:1};background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden"
+      style="grid-column:span ${sizeSpan};background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden"
       draggable="true"
       ondragstart="dashDragStart(event,this)" ondragover="dashDragOver(event,this)"
       ondrop="dashDragDrop(event,this)"       ondragend="dashDragEnd(event)">
       <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--cream2);cursor:grab;user-select:none" title="Drag to reorder">
         <span style="font-size:15px;color:var(--text3)">&#8942;</span>
         <span style="font-size:12px;font-weight:700;color:var(--text);flex:1">${def.label}</span>
-        <button onclick="toggleWidgetSize('${id}')" title="${isFull?'Switch to half width':'Switch to full width'}"
+        <button onclick="toggleWidgetSize('${id}')" title="Cycle size: full → half → small"
           style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px"
           onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">
-          ${isFull?'&#8596; Half':'&#8596; Full'}
+          ${sizeLabel}
         </button>
         <button onclick="toggleWidgetCollapse('${id}')" id="dash-collapse-btn-${id}" title="Collapse/Expand"
           style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px;margin-left:2px"
@@ -4940,7 +4942,8 @@ function toggleWidgetCollapse(id) {
 
 function toggleWidgetSize(id) {
   const layout = loadDashLayout();
-  layout.sizes[id] = (layout.sizes[id]||'full') === 'full' ? 'half' : 'full';
+  const cur = layout.sizes[id] || 'full';
+  layout.sizes[id] = cur==='full' ? 'half' : cur==='half' ? 'small' : 'full';
   saveDashLayout(layout); renderDashboard();
 }
 function dashDragStart(e,el) {
