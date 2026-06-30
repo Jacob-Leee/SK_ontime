@@ -5573,20 +5573,23 @@ function updateMonthFilter() {
 // STICKY TAB SUMMARY BAR
 // ============================================================
 function renderTabSummary(page) {
-  if (page === 'vac' || page === 'mpw') return; // VAC/MPW use their own count display
   const bar = document.getElementById('tab-summary');
   if (!bar) return;
 
-  const statusMap = {
-    orders: 'active', completed: 'completed', claims: 'claim',
-    closed: 'closed', issues: 'issue', cancelled: 'cancelled',
-  };
-  const wantStatus = statusMap[page];
-
-  // Only show on the six order tabs
-  if (!wantStatus) { bar.classList.remove('show'); return; }
-
-  let list = DB.orders.filter(o => (o.status || 'active') === wantStatus);
+  let list;
+  if (page === 'vac') {
+    list = DB.orders.filter(o => (!o.status || o.status === 'active') && getOrderCategory(o) === 'vac');
+  } else if (page === 'mpw') {
+    list = DB.orders.filter(o => (!o.status || o.status === 'active') && getOrderCategory(o) === 'mpw');
+  } else {
+    const statusMap = {
+      orders: 'active', completed: 'completed', claims: 'claim',
+      closed: 'closed', issues: 'issue', cancelled: 'cancelled',
+    };
+    const wantStatus = statusMap[page];
+    if (!wantStatus) { bar.classList.remove('show'); return; }
+    list = DB.orders.filter(o => (o.status || 'active') === wantStatus);
+  }
 
   const total = list.reduce((s, o) => s + (o.amount || 0), 0);
   const count = list.length;
@@ -5604,7 +5607,7 @@ function renderTabSummary(page) {
       <span class="ts-area-amt">$${fmtNum(byArea[a].amt)}</span>
     </div>`).join('');
 
-  const labels = { orders:'Orders', completed:'Completed', claims:'Claim', closed:'Closed', issues:'Issues', cancelled:'Cancelled' };
+  const labels = { orders:'Orders', completed:'Completed', claims:'Claim', closed:'Closed', issues:'Issues', cancelled:'Cancelled', vac:'VAC Active', mpw:'MPW Active' };
 
   bar.innerHTML = `
     <div class="ts-wrap">
