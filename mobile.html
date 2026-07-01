@@ -6277,6 +6277,41 @@ function mobDashboard() {
   const todayStr = now.toISOString().slice(0, 10);
   const thisMonth = now.toISOString().slice(0, 7);
 
+  // Individual SK user → show calendar only
+  if (window._SK_USER) {
+    const _evFrom = new Date(now); _evFrom.setHours(0,0,0,0);
+    const _evTo   = calAddDays(_evFrom, 30);
+    const upcoming = (typeof getExpandedEvents === 'function')
+      ? getExpandedEvents(_evFrom, _evTo)
+          .filter(e => e.startDate >= todayStr)
+          .sort((a,b) => a.startDate > b.startDate ? 1 : (a.startTime||'') > (b.startTime||'') ? 1 : -1)
+          .slice(0, 15)
+      : [];
+    const _e = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    const evtHtml = upcoming.length ? upcoming.map(e => {
+      const daysAway = Math.round((new Date(e.startDate+'T00:00:00') - _evFrom) / 86400000);
+      const dayLabel = daysAway === 0 ? 'Today' : daysAway === 1 ? 'Tomorrow' : e.startDate;
+      const isUrgent = daysAway <= 1;
+      const cat = (typeof CAL_CATS !== 'undefined' && e.category) ? (CAL_CATS[e.category]||CAL_CATS.general) : {color:'#4f7ef8',label:e.category||''};
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="min-width:72px;text-align:center;background:${isUrgent?'#e74c3c22':cat.color+'18'};border-radius:8px;padding:4px 6px;border:1px solid ${isUrgent?'#e74c3c44':cat.color+'33'}">
+          <div style="font-size:10px;font-weight:700;color:${isUrgent?'#e74c3c':cat.color}">${dayLabel}</div>
+          ${e.startTime ? `<div style="font-size:9px;color:var(--text3)">${e.startTime}</div>` : ''}
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;color:var(--text);font-weight:600">${_e(e.title)}</div>
+          ${e.notes ? `<div style="font-size:11px;color:var(--text3);margin-top:1px">${_e(e.notes)}</div>` : ''}
+        </div>
+        <span style="font-size:9px;padding:2px 6px;border-radius:8px;background:${cat.color}22;color:${cat.color};font-weight:700;flex-shrink:0">${cat.label||''}</span>
+      </div>`;
+    }).join('') : '<div style="font-size:13px;color:var(--text3);padding:8px 0">No upcoming events in the next 30 days</div>';
+    el.innerHTML = `<div style="background:var(--surface);border-radius:12px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">📅 Upcoming Events</div>
+      ${evtHtml}
+    </div>`;
+    return;
+  }
+
   const active    = DB.orders.filter(o => !o.status || o.status === 'active');
   const completed = DB.orders.filter(o => o.status === 'completed');
   const claims    = DB.orders.filter(o => o.status === 'claim');
@@ -6875,29 +6910,36 @@ function mobApplySubbieUI() {
 }
 
 function mobApplyAdminUI() {
-  const NON_ADMIN_HIDDEN = ['mt-dashboard','mt-completed','mt-issues','mt-all'];
-  if (window._ADMIN_MODE) {
-    // Show all tabs
-    NON_ADMIN_HIDDEN.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = '';
-    });
-    // Show FAB
+  const isFullAdmin = window._ADMIN_MODE && !window._SK_USER;
+  const isSKUser    = window._ADMIN_MODE && !!window._SK_USER;
+
+  // Tab visibility
+  const allTabs     = ['mt-dashboard','mt-orders','mt-completed','mt-issues','mt-all'];
+  const skUserTabs  = ['mt-dashboard','mt-orders','mt-completed','mt-issues']; // no All Orders
+  const hiddenForSK = ['mt-all'];
+
+  if (isFullAdmin) {
+    // Admin — all tabs visible
+    allTabs.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
     const fab = document.getElementById('mob-fab');
-    if (fab && !window._SUBBIE_MODE) fab.style.display = '';
-    // Show Home button for admin too
+    if (fab) fab.style.display = '';
     const backBtn = document.getElementById('mob-back-btn');
     if (backBtn) { backBtn.style.display = 'inline-flex'; backBtn.style.alignItems = 'center'; backBtn.textContent = '⇄ Switch User'; }
-  } else {
-    // Non-admin: Active tab only
-    NON_ADMIN_HIDDEN.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = 'none';
-    });
-    // Hide FAB
+  } else if (isSKUser) {
+    // Individual SK — show Dashboard, Active, Completed, Issues; hide All Orders & FAB
+    skUserTabs.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+    hiddenForSK.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
     const fab = document.getElementById('mob-fab');
     if (fab) fab.style.display = 'none';
-    // Force page to Active
+    const backBtn = document.getElementById('mob-back-btn');
+    if (backBtn) { backBtn.style.display = 'inline-flex'; backBtn.style.alignItems = 'center'; backBtn.textContent = '⇄ Switch User'; }
+    _mobPage = 'orders';
+  } else {
+    // Subbie / non-admin: Active only
+    allTabs.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    document.getElementById('mt-orders') && (document.getElementById('mt-orders').style.display = '');
+    const fab = document.getElementById('mob-fab');
+    if (fab) fab.style.display = 'none';
     _mobPage = 'orders';
   }
 }
@@ -7017,11 +7059,10 @@ function fcmDrawerUpdateStatus() {
   const statusEl = document.getElementById('mob-notif-status');
   if (!statusEl) return;
   const isGranted = typeof Notification !== 'undefined' && Notification.permission === 'granted';
-  const isEnabled = localStorage.getItem('fcm_notif_enabled') !== 'off';
+  const group = (window._SK_USER || window._SELECTED_SUBBIE || 'admin').replace(/\s+/g,'_');
+  const isEnabled = localStorage.getItem('fcm_notif_' + group) !== 'off';
   if (isGranted && isEnabled) {
     statusEl.textContent = 'ON'; statusEl.style.color = '#34C759';
-  } else if (isGranted && !isEnabled) {
-    statusEl.textContent = 'OFF'; statusEl.style.color = '#FF3B30';
   } else {
     statusEl.textContent = 'OFF'; statusEl.style.color = '#FF3B30';
   }
@@ -7148,18 +7189,19 @@ async function fcmInit(userGroup) {
       window._fcmOnMessageSet = true;
       _fcmMessaging.onMessage((payload) => {
         console.log('[FCM] Foreground message:', payload);
-        const title = payload.notification?.title || 'New Order';
-        const body = payload.notification?.body || '';
-        // Show system notification via SW (consistent with background behaviour)
+        // Data-only push — read from payload.data
+        const title = payload.data?.title || payload.notification?.title || 'New Order';
+        const body  = payload.data?.body  || payload.notification?.body  || '';
+        // Show one system notification (same tag prevents duplicates)
         if ('serviceWorker' in navigator) {
           navigator.serviceWorker.ready.then(reg => {
             reg.showNotification(title, {
               body,
-              icon: '/SK_ontime/icon-192.png',
-              badge: '/SK_ontime/icon-192.png',
-              tag: 'new-order',
+              icon:               '/SK_ontime/icon-192.png',
+              badge:              '/SK_ontime/icon-192.png',
+              tag:                'sk-new-order',
               requireInteraction: false,
-              vibrate: [200, 100, 200]
+              vibrate:            [200, 100, 200]
             });
           });
         } else {
@@ -7232,7 +7274,8 @@ async function fcmDrawerToggle() {
   mobDrawerClose();
   const group = (window._SK_USER || window._SELECTED_SUBBIE || 'admin').replace(/\s+/g,'_');
   const deviceId = localStorage.getItem('fcm_device_id');
-  const isEnabled = localStorage.getItem('fcm_notif_enabled') !== 'off';
+  const notifKey = 'fcm_notif_' + group;   // per-user key
+  const isEnabled = localStorage.getItem(notifKey) !== 'off';
 
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
     // Not yet granted — request permission and enable
@@ -7249,12 +7292,12 @@ async function fcmDrawerToggle() {
         console.log('[FCM] Token removed — notifications OFF');
       }
     } catch(e) { console.warn('[FCM] remove error', e); }
-    localStorage.setItem('fcm_notif_enabled', 'off');
+    localStorage.setItem(notifKey, 'off');
     fcmDrawerUpdateStatus();
     toast('알림을 껐습니다 (Notifications OFF)', 'success');
   } else {
     // Currently OFF → turn ON: re-register token
-    localStorage.setItem('fcm_notif_enabled', 'on');
+    localStorage.setItem(notifKey, 'on');
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmInit(grp);
     fcmDrawerUpdateStatus();
