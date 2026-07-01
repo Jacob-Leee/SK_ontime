@@ -6969,10 +6969,24 @@ async function fcmInit() {
 
     console.log('[FCM] Token:', token);
 
-    // Save token to Firebase Realtime Database
-    const tokenKey = token.slice(-20); // use last 20 chars as unique key
-    await _fcmDB.ref('/fcmTokens/' + tokenKey).set(token);
-    console.log('[FCM] Token saved to RTDB.');
+    // Use a stable device ID stored in localStorage so re-registration always overwrites the same slot
+    let deviceId = localStorage.getItem('fcm_device_id');
+    if (!deviceId) {
+      deviceId = 'dev_' + Math.random().toString(36).slice(2, 12);
+      localStorage.setItem('fcm_device_id', deviceId);
+    }
+    // Remove all other tokens for this device first (cleanup duplicates)
+    const existingSnap = await _fcmDB.ref('/fcmTokens').once('value');
+    if (existingSnap.val()) {
+      const stored = existingSnap.val();
+      const removes = [];
+      Object.entries(stored).forEach(([k, v]) => {
+        if (v === token && k !== deviceId) removes.push(_fcmDB.ref('/fcmTokens/' + k).remove());
+      });
+      await Promise.all(removes);
+    }
+    await _fcmDB.ref('/fcmTokens/' + deviceId).set(token);
+    console.log('[FCM] Token saved to RTDB with key:', deviceId);
 
     // Handle foreground messages (app open)
     _fcmMessaging.onMessage((payload) => {
