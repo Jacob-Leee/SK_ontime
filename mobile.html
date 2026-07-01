@@ -7143,14 +7143,30 @@ async function fcmInit(userGroup) {
     await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
     console.log('[FCM] Token saved to RTDB at /fcmTokens/' + group + '/' + deviceId);
 
-    // Handle foreground messages (app open)
-    _fcmMessaging.onMessage((payload) => {
-      console.log('[FCM] Foreground message:', payload);
-      const title = payload.notification?.title || 'New Order';
-      const body = payload.notification?.body || '';
-      // Show in-app banner
-      _fcmShowBanner(title, body);
-    });
+    // Handle foreground messages — only register once
+    if (!window._fcmOnMessageSet) {
+      window._fcmOnMessageSet = true;
+      _fcmMessaging.onMessage((payload) => {
+        console.log('[FCM] Foreground message:', payload);
+        const title = payload.notification?.title || 'New Order';
+        const body = payload.notification?.body || '';
+        // Show system notification via SW (consistent with background behaviour)
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.ready.then(reg => {
+            reg.showNotification(title, {
+              body,
+              icon: '/SK_ontime/icon-192.png',
+              badge: '/SK_ontime/icon-192.png',
+              tag: 'new-order',
+              requireInteraction: false,
+              vibrate: [200, 100, 200]
+            });
+          });
+        } else {
+          _fcmShowBanner(title, body);
+        }
+      });
+    }
 
   } catch (err) {
     console.error('[FCM] Init error:', err);

@@ -1,7 +1,4 @@
 // firebase-messaging-sw.js
-// Place this file at the ROOT of your web directory (same level as mobile.html)
-// iOS 16.4+ required for PWA push notifications
-
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -17,25 +14,35 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Handle background push messages (phone locked / app closed)
 messaging.onBackgroundMessage(function(payload) {
   console.log('[SW] Background message received:', payload);
 
   const notificationTitle = payload.notification?.title || 'New Order';
   const notificationOptions = {
     body: payload.notification?.body || 'A new work order has been assigned.',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    tag: payload.data?.orderId || 'new-order',
+    icon: '/SK_ontime/icon-192.png',
+    badge: '/SK_ontime/icon-192.png',
+    tag: 'new-order',          // same tag → replaces any existing notification
     data: payload.data || {},
     requireInteraction: false,
     vibrate: [200, 100, 200]
   };
 
-  return self.registration.showNotification(notificationTitle, notificationOptions);
+  // If the app window is already open and focused, skip SW notification
+  // (the foreground onMessage handler will show it via reg.showNotification)
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then(function(clientList) {
+      const appOpen = clientList.some(function(c) {
+        return c.url.includes('/SK_ontime/') && (c.focused || c.visibilityState === 'visible');
+      });
+      if (appOpen) {
+        console.log('[SW] App is open — skipping SW notification (foreground handler covers it)');
+        return;
+      }
+      return self.registration.showNotification(notificationTitle, notificationOptions);
+    });
 });
 
-// Handle notification click — open/focus the mobile app
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   event.waitUntil(
