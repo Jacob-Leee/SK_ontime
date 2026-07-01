@@ -7097,7 +7097,7 @@ function _fcmShowBanner(title, body) {
   ].join(';');
 
   banner.innerHTML =
-    '<div style="width:32px;height:32px;border-radius:8px;back    '<div style="width:32px;height:32px;border-radius:8px;background:#007AFF;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+    '<div style="width:32px;height:32px;border-radius:8px;background:#007AFF;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
       '<i class="ti ti-bell-ringing" style="font-size:16px;color:#fff"></i>' +
     '</div>' +
     '<div style="flex:1;min-width:0">' +
@@ -7159,23 +7159,6 @@ function fcmDrawerUpdateStatus() {
   } else {
     statusEl.textContent = 'OFF'; statusEl.style.color = '#8A8A8E';
   }
-}
-
-</script>
-</body>
-</html>
-ission === 'granted') { statusEl.textContent = 'ON'; statusEl.style.color = '#34C759'; }
-  else if (Notification.permission === 'denied') { statusEl.textContent = 'BLOCKED'; statusEl.style.color = '#FF3B30'; }
-  else { statusEl.textContent = 'OFF'; statusEl.style.color = '#8A8A8E'; }
-}
-
-async function fcmRequestPermission(userGroup) {
-  // Hide banner immediately
-  const bar = document.getElementById('fcm-enable-bar');
-  if (bar) bar.style.display = 'none';
-  // Now run full FCM init (called directly from user tap = valid gesture)
-  const group = userGroup || window._SELECTED_SUBBIE || 'admin';
-  await fcmInit(group);
 }
 
 </script>
