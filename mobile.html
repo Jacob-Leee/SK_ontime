@@ -670,11 +670,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     <div class="mob-dl" onclick="mobNav('issues');mobDrawerClose()">
       <span class="dl-i" style="background:#FFF1F2"><i class="ti ti-alert-triangle" style="color:#EF4444"></i></span>Issues
     </div>
-    <div class="mob-drawer-title">Tools</div>
-    <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()">
+    <div class="mob-drawer-title" id="mob-drawer-tools-title">Tools</div>
+    <div class="mob-dl" id="mob-drawer-cloud" onclick="openCloudModal();mobDrawerClose()">
       <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-cloud" style="color:#3B82F6"></i></span>Cloud Sync
     </div>
-    <div class="mob-dl" onclick="openOrderModal();mobDrawerClose()">
+    <div class="mob-dl" id="mob-drawer-neworder" onclick="openOrderModal();mobDrawerClose()">
       <span class="dl-i" style="background:#ECFDF5"><i class="ti ti-plus" style="color:#10B981"></i></span>New Order
     </div>
     <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="mob-dl" style="text-decoration:none;color:inherit">
@@ -6596,7 +6596,7 @@ function mobBackToHome() {
   const backBtn = document.getElementById('mob-back-btn');
   if (backBtn) backBtn.style.display = 'none';
   // Restore header items
-  ['mob-fab','mob-sync-btn','mob-menu-btn','mob-hdr-row2'].forEach(id => {
+  ['mob-fab','mob-sync-btn','mob-hdr-row2'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = '';
   });
@@ -6842,7 +6842,7 @@ function mobRoleSubbiePick(name) {
   window._SELECTED_SUBBIE = name;
   document.getElementById('mob-pin-overlay').style.display = 'none';
   // Hide header extras for subbie
-  ['mob-fab','mob-sync-btn','mob-menu-btn','mob-hdr-row2'].forEach(id => {
+  ['mob-fab','mob-sync-btn','mob-hdr-row2'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -6904,6 +6904,14 @@ function mobApplySubbieUI() {
   });
   const fab = document.getElementById('mob-fab');
   if (fab) fab.style.display = 'none';
+  // Show menu button for subbies
+  const menuBtn = document.getElementById('mob-menu-btn');
+  if (menuBtn) menuBtn.style.display = '';
+  // Hide admin-only drawer items
+  ['mob-drawer-tools-title','mob-drawer-cloud','mob-drawer-neworder','mob-admin-status'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
   // Always show Home button in subbie mode
   const backBtn = document.getElementById('mob-back-btn');
   if (backBtn) { backBtn.style.display = 'inline-flex'; backBtn.style.alignItems = 'center'; }
@@ -7097,7 +7105,7 @@ function mobSubbieMode() {
   window._SUBBIE_MODE = true;
   window._SELECTED_SUBBIE = _SUBBIE_PARAM;
   // Hide header extras — subbie only needs logo + refresh
-  ['mob-fab','mob-sync-btn','mob-menu-btn','mob-hdr-row2'].forEach(id => {
+  ['mob-fab','mob-sync-btn','mob-hdr-row2'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
