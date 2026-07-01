@@ -7214,6 +7214,7 @@ async function fcmInit(userGroup) {
 
     await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
     console.log('[FCM] Token saved to RTDB at /fcmTokens/' + group + '/' + deviceId);
+    _fcmShowBanner('✅ 알림 등록됨', group + ' · ' + deviceId.slice(0,8));
 
     // Handle foreground messages — only register once
     if (!window._fcmOnMessageSet) {
@@ -7244,6 +7245,7 @@ async function fcmInit(userGroup) {
 
   } catch (err) {
     console.error('[FCM] Init error:', err);
+    _fcmShowBanner('❌ 알림 등록 실패', String(err.message || err).slice(0, 80));
   }
 }
 
