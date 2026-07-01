@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>SK Field App</title>
+  <link rel="manifest" href="/SK_ontime/manifest.json">
+  <link rel="apple-touch-icon" href="/SK_ontime/icon-192.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#F2F1EC;--card:#fff;--border:#E5E5E0;--text1:#1C1C1E;--text2:#3C3C43;
+      --text3:#8A8A8E;--blue:#007AFF;--green:#34C759;--orange:#FF9500;
+      --red:#FF3B30;--purple:#5856D6;--yellow:#FFCC00;
+    }
+    html,body{height:100%;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;color:var(--text1);overflow:hidden}
+
+    /* ── LOGIN ── */
+    #login-screen{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;padding-top:calc(52px + env(safe-area-inset-top))}
+    .login-logo{width:72px;height:72px;border-radius:20px;background:#1C1C1E;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+    .login-logo img{width:52px;height:52px;object-fit:contain}
+    .login-title{font-size:24px;font-weight:800;text-align:center;letter-spacing:-.4px;margin-bottom:4px}
+    .login-sub{font-size:13px;color:var(--text3);text-align:center;margin-bottom:36px}
+    .name-list{display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px}
+    .name-row{display:flex;align-items:center;gap:14px;padding:15px 16px;background:var(--card);border:1.5px solid var(--border);border-radius:16px;cursor:pointer;user-select:none;transition:border-color .15s,box-shadow .15s}
+    .name-row:active{box-shadow:0 0 0 3px rgba(88,86,214,.18);border-color:var(--purple)}
+    .name-av{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;flex-shrink:0}
+    .name-label{font-size:16px;font-weight:700;color:var(--text1)}
+
+    /* ── MAIN APP ── */
+    #app{display:none;flex-direction:column;height:100%}
+    #app.visible{display:flex}
+
+    /* Header */
+    #hdr{background:var(--card);border-bottom:1px solid var(--border);padding:0 16px;padding-top:env(safe-area-inset-top);display:flex;align-items:center;gap:10px;height:calc(56px + env(safe-area-inset-top));flex-shrink:0}
+    #hdr-name{font-size:16px;font-weight:800;color:var(--text1);flex:1}
+    #hdr-badge{background:var(--purple);color:#fff;font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px}
+    .hdr-btn{width:36px;height:36px;border-radius:10px;border:none;background:rgba(60,60,67,.08);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2)}
+
+    /* Tab bar */
+    #tabs{background:var(--card);border-top:1px solid var(--border);display:flex;flex-shrink:0;padding-bottom:env(safe-area-inset-bottom)}
+    .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;border:none;background:none;cursor:pointer;color:var(--text3);font-size:10px;font-weight:600;font-family:inherit}
+    .tab i{font-size:22px}
+    .tab.active{color:var(--purple)}
+
+    /* Content */
+    #content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px 24px}
+
+    /* Order cards */
+    .order-card{background:var(--card);border-radius:16px;padding:14px 16px;margin-bottom:10px;border:1px solid var(--border);cursor:pointer;transition:transform .1s}
+    .order-card:active{transform:scale(0.98)}
+    .order-num{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.3px;margin-bottom:4px}
+    .order-addr{font-size:15px;font-weight:700;color:var(--text1);margin-bottom:4px;line-height:1.3}
+    .order-meta{font-size:12px;color:var(--text3);display:flex;gap:8px;align-items:center}
+    .status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+    /* Status colours */
+    .s-active{background:var(--blue)}
+    .s-completed{background:var(--green)}
+    .s-invoiced{background:var(--orange)}
+    .s-paid{background:#AF52DE}
+    .s-cancelled{background:var(--red)}
+
+    /* Empty state */
+    .empty{text-align:center;padding:60px 24px;color:var(--text3)}
+    .empty i{font-size:48px;margin-bottom:12px;display:block}
+    .empty p{font-size:15px;font-weight:600}
+    .empty small{font-size:13px}
+
+    /* ── MODAL ── */
+    .modal-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.45);display:none;align-items:flex-end}
+    .modal-overlay.open{display:flex}
+    .modal-sheet{background:var(--card);border-radius:20px 20px 0 0;width:100%;max-height:92vh;overflow-y:auto;padding:0 0 calc(24px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
+    .modal-handle{width:36px;height:4px;border-radius:2px;background:rgba(60,60,67,.25);margin:10px auto}
+    .modal-hdr{padding:0 16px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .modal-close{background:rgba(60,60,67,.08);border:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:var(--text2)}
+    .modal-body{padding:16px}
+
+    /* Issue upload */
+    .issue-section{margin-top:20px;border-top:1px solid var(--border);padding-top:16px}
+    .issue-title{font-size:14px;font-weight:700;margin-bottom:10px;color:var(--text2);display:flex;align-items:center;gap:6px}
+    .upload-btn{width:100%;padding:13px;background:var(--bg);border:1.5px dashed var(--border);border-radius:12px;font-size:14px;font-weight:600;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit}
+    .upload-btn:active{background:#E8E8E0}
+    .issue-note{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;background:var(--bg);color:var(--text1);resize:none;margin-top:8px}
+    .issue-note:focus{outline:none;border-color:var(--purple)}
+    .submit-btn{width:100%;padding:14px;background:var(--purple);color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:10px}
+    .submit-btn:active{opacity:.85}
+    .submit-btn:disabled{background:var(--text3);cursor:not-allowed}
+    .photo-preview{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:12px;margin-top:8px;display:none}
+    .issue-list{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+    .issue-item{background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12px}
+    .issue-item img{width:100%;border-radius:8px;margin-top:6px}
+
+    /* Toast */
+    #toast{position:fixed;bottom:calc(90px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#1C1C1E;color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+    #toast.show{opacity:1}
+
+    /* FCM banner */
+    #fcm-bar{display:none;position:fixed;bottom:calc(80px + env(safe-area-inset-bottom));left:12px;right:12px;z-index:9998;background:#1C1C1E;border-radius:14px;padding:12px 14px;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.25)}
+    #fcm-bar span{flex:1;font-size:13px;color:#fff;font-weight:600}
+    #fcm-bar button{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0}
+
+    @keyframes fcmSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+    #fcm-notif-banner{position:fixed;top:calc(16px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:#1C1C1E;color:#fff;border-radius:14px;padding:12px 16px;z-index:99999;max-width:calc(100vw - 32px);width:340px;box-shadow:0 4px 20px rgba(0,0,0,.25);display:none;gap:10px;align-items:flex-start;animation:fcmSlideIn .3s ease}
+  </style>
+</head>
+<body>
+
+<!-- ── LOGIN SCREEN ── -->
+<div id="login-screen">
+  <div class="login-logo">
+    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%231C1C1E'/%3E%3Ctext x='24' y='34' text-anchor='middle' font-size='26' font-weight='900' fill='white' font-family='Arial'%3ESK%3C/text%3E%3C/svg%3E" alt="SK">
+  </div>
+  <div class="login-title">SK Field App</div>
+  <div class="login-sub">Select your name to continue</div>
+  <div class="name-list" id="name-list"></div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app">
+  <div id="hdr">
+    <div id="hdr-name">My Orders</div>
+    <span id="hdr-badge" style="display:none">0</span>
+    <button class="hdr-btn" onclick="sbLogout()" title="Switch user">
+      <i class="ti ti-logout" style="font-size:18px"></i>
+    </button>
+  </div>
+
+  <div id="content">
+    <div id="order-list"></div>
+  </div>
+
+  <div id="tabs">
+    <button class="tab active" id="tab-orders" onclick="sbTab('orders')">
+      <i class="ti ti-bolt"></i>Active
+    </button>
+    <button class="tab" id="tab-completed" onclick="sbTab('completed')">
+      <i class="ti ti-circle-check"></i>Done
+    </button>
+    <button class="tab" id="tab-issues" onclick="sbTab('issues')">
+      <i class="ti ti-camera"></i>Issues
+    </button>
+  </div>
+</div>
+
+<!-- ── ORDER DETAIL MODAL ── -->
+<div class="modal-overlay" id="detail-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-hdr">
+      <div>
+        <div id="dm-num" style="font-size:11px;font-weight:700;color:var(--text3)"></div>
+        <div id="dm-title" style="font-size:17px;font-weight:800;margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="dm-status" style="margin-bottom:12px"></div>
+      <div id="dm-area" style="font-size:13px;color:var(--text3);margin-bottom:8px"></div>
+      <div id="dm-worktype" style="font-size:13px;color:var(--text3);margin-bottom:12px"></div>
+      <div id="dm-description" style="font-size:14px;color:var(--text2);line-height:1.5;margin-bottom:8px"></div>
+      <div id="dm-scope" style="font-size:13px;color:var(--text2);background:var(--bg);border-radius:10px;padding:12px;white-space:pre-wrap;line-height:1.6;display:none"></div>
+
+      <!-- Issue upload section -->
+      <div class="issue-section">
+        <div class="issue-title">
+          <i class="ti ti-camera" style="color:var(--orange)"></i>
+          Report an Issue
+        </div>
+        <button class="upload-btn" onclick="sbPickPhoto()">
+          <i class="ti ti-photo-plus"></i> Add Photo
+        </button>
+        <img id="photo-preview" class="photo-preview" alt="preview">
+        <textarea id="issue-note" class="issue-note" rows="3" placeholder="Describe the issue (optional)..."></textarea>
+        <button class="submit-btn" id="submit-btn" onclick="sbSubmitIssue()">Submit Issue</button>
+      </div>
+
+      <!-- Past issues -->
+      <div id="past-issues" class="issue-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden file input -->
+<input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="sbPhotoChosen(this)">
+
+<!-- FCM enable bar -->
+<div id="fcm-bar">
+  <i class="ti ti-bell" style="font-size:20px;color:#fff;flex-shrink:0"></i>
+  <span>Enable push notifications to get new job alerts</span>
+  <button onclick="sbFcmEnable()">Enable</button>
+</div>
+
+<!-- FCM foreground banner -->
+<div id="fcm-notif-banner"></div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════
+const _FB_CONFIG = {
+  apiKey:            "AIzaSyBRzLQXpX_tWdJCpxKT7DI5m402KiaiCUA",
+  authDomain:        "homes-nsw.firebaseapp.com",
+  projectId:         "homes-nsw",
+  storageBucket:     "homes-nsw.firebasestorage.app",
+  messagingSenderId: "1064085096701",
+  appId:             "1:1064085096701:web:9463a7ccba801d9a9b5694",
+  databaseURL:       "https://homes-nsw-default-rtdb.firebaseio.com"
+};
+const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHjjGrYRs1v2V3HSSp-H1e3fcADA6Y";
+
+// Subbie names (must match exactly what's in DB.subbies on desktop)
+const SUBBIE_NAMES = ['Jake Lee', 'Sean Park', 'Chris Choi'];
+const SUBBIE_COLORS = { 'Jake Lee':'#FF6B35', 'Sean Park':'#007AFF', 'Chris Choi':'#34C759' };
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+let _app, _db, _storage, _messaging;
+let _user = null;          // logged-in name
+let _allOrders = [];       // orders from RTDB
+let _activeTab = 'orders'; // orders | completed | issues
+let _currentOrder = null;  // order open in modal
+let _photoFile = null;     // selected photo file
+let _ordersListener = null;
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+function _waitForFirebase(cb, attempts) {
+  if (typeof firebase !== 'undefined') { cb(); return; }
+  if (attempts > 0) { setTimeout(() => _waitForFirebase(cb, attempts - 1), 250); }
+}
+
+function sbInit() {
+  // Build login name list
+  const list = document.getElementById('name-list');
+  SUBBIE_NAMES.forEach(name => {
+    const initials = name.split(' ').map(w => w[0]).join('').toUpperCase();
+    const color = SUBBIE_COLORS[name] || '#5856D6';
+    const row = document.createElement('div');
+    row.className = 'name-row';
+    row.innerHTML =
+      '<div class="name-av" style="background:' + color + '">' + initials + '</div>' +
+      '<div class="name-label">' + name + '</div>' +
+      '<i class="ti ti-chevron-right" style="color:var(--text3);font-size:18px;margin-left:auto"></i>';
+    row.ontouchend = function(e) { e.preventDefault(); sbLogin(name); };
+    row.onclick = function() { sbLogin(name); };
+    list.appendChild(row);
+  });
+
+  // Auto-login if previously logged in
+  const saved = localStorage.getItem('sb_user');
+  if (saved && SUBBIE_NAMES.includes(saved)) {
+    sbLogin(saved, true);
+  }
+}
+
+function sbLogin(name, auto) {
+  _user = name;
+  localStorage.setItem('sb_user', name);
+
+  // Update header
+  document.getElementById('hdr-name').textContent = name.split(' ')[0] + "'s Orders";
+
+  // Show app, hide login
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+
+  // Init Firebase and load orders
+  _waitForFirebase(() => {
+    if (!firebase.apps.length) {
+      _app = firebase.initializeApp(_FB_CONFIG);
+    } else {
+      _app = firebase.apps[0];
+    }
+    _db      = firebase.database(_app);
+    _storage = firebase.storage(_app);
+
+    sbLoadOrders();
+    sbFcmSetup();
+  }, 30);
+
+  if (!auto) sbShowToast('Welcome, ' + name.split(' ')[0] + '!');
+}
+
+function sbLogout() {
+  if (!confirm('Switch user?')) return;
+  localStorage.removeItem('sb_user');
+  if (_ordersListener) { _db.ref('/orders').off('value', _ordersListener); _ordersListener = null; }
+  _user = null;
+  _allOrders = [];
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+// ══════════════════════════════════════════
+// ORDERS — real-time from RTDB
+// ══════════════════════════════════════════
+function sbLoadOrders() {
+  if (!_db || !_user) return;
+  // Listen to all orders, filter client-side (RTDB can't filter by child on free plan without index)
+  _ordersListener = _db.ref('/orders').on('value', snap => {
+    const data = snap.val() || {};
+    _allOrders = Object.values(data).filter(o => o.subbies === _user);
+    sbRender();
+    // Update badge
+    const active = _allOrders.filter(o => (o.status||'active') === 'active').length;
+    const badge = document.getElementById('hdr-badge');
+    if (active > 0) { badge.textContent = active; badge.style.display = ''; }
+    else { badge.style.display = 'none'; }
+  });
+}
+
+function sbTab(tab) {
+  _activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  sbRender();
+}
+
+function sbRender() {
+  const list = document.getElementById('order-list');
+  let orders;
+  if (_activeTab === 'orders') {
+    orders = _allOrders.filter(o => !['completed','invoiced','paid','cancelled'].includes(o.status||'active'));
+  } else if (_activeTab === 'completed') {
+    orders = _allOrders.filter(o => ['completed','invoiced','paid'].includes(o.status||''));
+  } else {
+    // Issues tab — show all orders (to report issues against)
+    orders = [..._allOrders].sort((a,b) => (b.updatedAt||0)-(a.updatedAt||0));
+  }
+
+  if (!orders.length) {
+    list.innerHTML =
+      '<div class="empty">' +
+        '<i class="ti ti-' + (_activeTab === 'issues' ? 'camera-off' : 'clipboard-off') + '"></i>' +
+        '<p>' + (_activeTab === 'orders' ? 'No active orders' : _activeTab === 'completed' ? 'No completed orders' : 'No orders yet') + '</p>' +
+        '<small style="margin-top:6px;display:block">Orders assigned to you will appear here</small>' +
+      '</div>';
+    return;
+  }
+
+  list.innerHTML = orders.map(o => {
+    const st = o.status || 'active';
+    const stClass = 's-' + st;
+    const stLabel = st.charAt(0).toUpperCase() + st.slice(1);
+    return '<div class="order-card" onclick="sbOpenOrder(\'' + o.id + '\')">' +
+      '<div class="order-num">' + esc(o.orderNumber || '') + '</div>' +
+      '<div class="order-addr">' + esc(o.address || 'No address') + '</div>' +
+      '<div class="order-meta">' +
+        '<div class="status-dot ' + stClass + '"></div>' +
+        '<span>' + stLabel + '</span>' +
+        (o.area ? '<span>·</span><span>' + esc(o.area) + '</span>' : '') +
+        (o.workType ? '<span>·</span><span>' + esc(o.workType) + '</span>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ══════════════════════════════════════════
+// ORDER DETAIL
+// ══════════════════════════════════════════
+function sbOpenOrder(id) {
+  _currentOrder = _allOrders.find(o => o.id === id);
+  if (!_currentOrder) return;
+  const o = _currentOrder;
+  const st = o.status || 'active';
+
+  document.getElementById('dm-num').textContent = o.orderNumber || '';
+  document.getElementById('dm-title').textContent = o.address || 'No address';
+
+  const stColors = {active:'#007AFF',completed:'#34C759',invoiced:'#FF9500',paid:'#AF52DE',cancelled:'#FF3B30'};
+  document.getElementById('dm-status').innerHTML =
+    '<span style="display:inline-flex;align-items:center;gap:6px;background:' + (stColors[st]||'#007AFF') + '18;color:' + (stColors[st]||'#007AFF') + ';font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px">' +
+    '<div style="width:6px;height:6px;border-radius:50%;background:' + (stColors[st]||'#007AFF') + '"></div>' +
+    st.charAt(0).toUpperCase() + st.slice(1) + '</span>';
+
+  document.getElementById('dm-area').textContent = o.area ? '📍 ' + o.area : '';
+  document.getElementById('dm-worktype').textContent = o.workType ? '🔧 ' + o.workType : '';
+  document.getElementById('dm-description').textContent = o.description || '';
+
+  const scopeEl = document.getElementById('dm-scope');
+  if (o.scope) { scopeEl.textContent = o.scope; scopeEl.style.display = 'block'; }
+  else { scopeEl.style.display = 'none'; }
+
+  // Reset upload UI
+  _photoFile = null;
+  document.getElementById('photo-preview').style.display = 'none';
+  document.getElementById('photo-preview').src = '';
+  document.getElementById('issue-note').value = '';
+  document.getElementById('submit-btn').disabled = false;
+  document.getElementById('submit-btn').textContent = 'Submit Issue';
+
+  // Load past issues for this order
+  sbLoadIssues(id);
+
+  document.getElementById('detail-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('detail-modal').classList.remove('open');
+  _currentOrder = null;
+  _photoFile = null;
+}
+
+// ══════════════════════════════════════════
+// ISSUE UPLOAD
+// ══════════════════════════════════════════
+function sbPickPhoto() {
+  document.getElementById('photo-input').click();
+}
+
+function sbPhotoChosen(input) {
+  const file = input.files[0];
+  if (!file) return;
+  _photoFile = file;
+  const preview = document.getElementById('photo-preview');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+}
+
+async function sbSubmitIssue() {
+  if (!_currentOrder) return;
+  const note = document.getElementById('issue-note').value.trim();
+  if (!_photoFile && !note) { sbShowToast('Add a photo or note first'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading...';
+
+  try {
+    const ts = Date.now();
+    const orderId = _currentOrder.id;
+    let photoUrl = '';
+
+    // Upload photo to Firebase Storage if selected
+    if (_photoFile && _storage) {
+      const ext = _photoFile.name.split('.').pop() || 'jpg';
+      const path = 'issues/' + orderId + '/' + ts + '.' + ext;
+      const ref = _storage.ref(path);
+      await ref.put(_photoFile);
+      photoUrl = await ref.getDownloadURL();
+    }
+
+    // Write issue record to RTDB
+    const issueRef = _db.ref('/issues/' + orderId + '/' + ts);
+    await issueRef.set({
+      note:      note || '',
+      photoUrl:  photoUrl,
+      createdAt: ts,
+      createdBy: _user
+    });
+
+    sbShowToast('Issue reported ✓');
+    btn.textContent = 'Submit Issue';
+    btn.disabled = false;
+    document.getElementById('issue-note').value = '';
+    _photoFile = null;
+    document.getElementById('photo-preview').style.display = 'none';
+    document.getElementById('photo-input').value = '';
+
+    // Reload issues
+    sbLoadIssues(orderId);
+
+  } catch (err) {
+    console.error('[Issue] Upload error:', err);
+    sbShowToast('Upload failed — try again');
+    btn.disabled = false;
+    btn.textContent = 'Submit Issue';
+  }
+}
+
+function sbLoadIssues(orderId) {
+  if (!_db) return;
+  const container = document.getElementById('past-issues');
+  _db.ref('/issues/' + orderId).once('value', snap => {
+    const data = snap.val() || {};
+    const items = Object.entries(data).sort((a,b) => Number(b[0])-Number(a[0]));
+    if (!items.length) { container.innerHTML = ''; return; }
+    container.innerHTML =
+      '<div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:8px;margin-top:12px">Previous Issues (' + items.length + ')</div>' +
+      items.map(([ts, issue]) =>
+        '<div class="issue-item">' +
+          '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">' +
+            new Date(Number(ts)).toLocaleDateString('en-AU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) +
+            ' · ' + esc(issue.createdBy || '') +
+          '</div>' +
+          (issue.note ? '<div style="color:var(--text1);margin-bottom:4px">' + esc(issue.note) + '</div>' : '') +
+          (issue.photoUrl ? '<img src="' + issue.photoUrl + '" alt="issue photo" onclick="window.open(this.src)" style="width:100%;border-radius:8px;cursor:zoom-in">' : '') +
+        '</div>'
+      ).join('');
+  });
+}
+
+// ══════════════════════════════════════════
+// FCM PUSH NOTIFICATIONS
+// ══════════════════════════════════════════
+function sbFcmSetup() {
+  if (!('serviceWorker' in navigator)) return;
+  if (typeof Notification === 'undefined') return;
+
+  if (Notification.permission === 'granted') {
+    sbFcmRegister();
+    return;
+  }
+  if (Notification.permission !== 'denied') {
+    // Show enable bar after a short delay
+    setTimeout(() => {
+      document.getElementById('fcm-bar').style.display = 'flex';
+    }, 1500);
+  }
+}
+
+async function sbFcmEnable() {
+  document.getElementById('fcm-bar').style.display = 'none';
+  const permission = await Notification.requestPermission();
+  if (permission === 'granted') sbFcmRegister();
+}
+
+async function sbFcmRegister() {
+  try {
+    if (!firebase || !_user) return;
+    if (!_messaging) _messaging = firebase.messaging(_app);
+
+    const reg = await navigator.serviceWorker.register('/SK_ontime/firebase-messaging-sw.js');
+    const token = await _messaging.getToken({ vapidKey: _FCM_VAPID, serviceWorkerRegistration: reg });
+    if (!token) return;
+
+    // Stable device ID
+    let deviceId = localStorage.getItem('fcm_device_id');
+    if (!deviceId) {
+      deviceId = 'dev_' + Math.random().toString(36).slice(2, 12);
+      localStorage.setItem('fcm_device_id', deviceId);
+    }
+
+    // Normalise name for RTDB key ("Jake Lee" → "Jake_Lee")
+    const fcmKey = _user.replace(/\s+/g, '_');
+    await _db.ref('/fcmTokens/' + fcmKey + '/' + deviceId).set(token);
+    console.log('[FCM] Registered as', fcmKey);
+
+    // Foreground messages
+    _messaging.onMessage(payload => {
+      const title = payload.notification?.title || 'New Order';
+      const body  = payload.notification?.body  || '';
+      sbShowFcmBanner(title, body);
+    });
+
+  } catch (err) {
+    console.error('[FCM] Error:', err);
+  }
+}
+
+function sbShowFcmBanner(title, body) {
+  const el = document.getElementById('fcm-notif-banner');
+  el.innerHTML =
+    '<div style="width:32px;height:32px;border-radius:8px;background:var(--orange);display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+      '<i class="ti ti-bell-ringing" style="font-size:16px;color:#fff"></i>' +
+    '</div>' +
+    '<div style="flex:1;min-width:0;margin-left:10px">' +
+      '<div style="font-size:13px;font-weight:700;margin-bottom:2px">' + esc(title) + '</div>' +
+      '<div style="font-size:12px;color:rgba(255,255,255,.7);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(body) + '</div>' +
+    '</div>' +
+    '<button onclick="this.parentElement.style.display=\'none\'" style="background:none;border:none;color:rgba(255,255,255,.5);font-size:20px;cursor:pointer;padding:0 0 0 10px">&times;</button>';
+  el.style.display = 'flex';
+  setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let _toastTimer;
+function sbShowToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Close modal on overlay tap
+document.getElementById('detail-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Kick off
+document.addEventListener('DOMContentLoaded', sbInit);
+</script>
+</body>
+</html>

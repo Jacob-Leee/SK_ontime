@@ -2669,12 +2669,15 @@ function saveOrder(e) {
     const idx = DB.orders.findIndex(x => x.id === editingOrderId);
     DB.orders[idx] = order;
     toast('Order updated successfully', 'success');
+    // Sync to RTDB so subbie app reflects latest data
+    _rtdbSyncOrder(order);
   } else {
     DB.orders.push(order);
     historyPush(`New order: ${order.orderNumber}`, [{ id: order.id, _wasAbsent: true }], []);
     toast('Order saved successfully', 'success');
-    // Trigger FCM push to mobile devices
+    // Trigger FCM push + sync order to RTDB
     _rtdbNotify(order);
+    _rtdbSyncOrder(order);
   }
 
   // Keep the linked claim/payment record's claimed amount and supervisor in sync.
@@ -6156,21 +6159,39 @@ function _rtdbInit() {
 }
 
 function _rtdbNotify(order) {
-  if (!_rtdbDB) {
-    // Try initialising on-demand if not done yet
-    _rtdbInit();
-    if (!_rtdbDB) return;
-  }
+  if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
   const payload = {
     orderNumber: order.orderNumber || '',
-    address: order.address || '',
-    area: order.area || '',
-    subbies: order.subbies || '',
-    createdAt: Date.now()
+    address:     order.address     || '',
+    area:        order.area        || '',
+    subbies:     order.subbies     || '',
+    createdAt:   Date.now()
   };
   _rtdbDB.ref('/notifications').push(payload)
     .then(() => console.log('[RTDB] Notification queued for order:', order.orderNumber))
     .catch(err => console.error('[RTDB] Write error:', err));
+}
+
+// Sync order key fields to RTDB so subbie.html can read them in real-time.
+// Called on every create AND update so subbies always see current data.
+function _rtdbSyncOrder(order) {
+  if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
+  if (!order || !order.id) return;
+  const rec = {
+    id:          order.id,
+    orderNumber: order.orderNumber || '',
+    address:     order.address     || '',
+    area:        order.area        || '',
+    subbies:     order.subbies     || '',
+    status:      order.status      || 'active',
+    workType:    order.workType    || '',
+    description: order.description || '',
+    scope:       order.scope       || '',
+    updatedAt:   order.updatedAt   || Date.now()
+  };
+  _rtdbDB.ref('/orders/' + order.id).set(rec)
+    .then(() => console.log('[RTDB] Order synced:', order.orderNumber))
+    .catch(err => console.error('[RTDB] Order sync error:', err));
 }
 
 // Init on page load

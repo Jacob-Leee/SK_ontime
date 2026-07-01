@@ -519,6 +519,17 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     <div id="mob-subbie-list" style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:320px;overflow-y:auto;max-height:50vh"></div>
   </div>
 
+  <!-- ── Phase 4: SK name picker (after PIN) ── -->
+  <div id="mob-sk-pick" style="display:none;flex-direction:column;align-items:center;width:100%;max-width:400px;margin:0 auto;">
+    <div style="width:44px;height:44px;border-radius:12px;background:#007AFF;display:flex;align-items:center;justify-content:center;margin-bottom:12px;flex-shrink:0">
+      <i class="ti ti-user-check" style="font-size:22px;color:#fff"></i>
+    </div>
+    <div style="font-size:18px;font-weight:700;color:#1C1C1E;margin-bottom:4px;flex-shrink:0">Who are you?</div>
+    <div style="font-size:13px;color:#8A8A8E;margin-bottom:24px;flex-shrink:0">Select your name to receive notifications</div>
+    <div id="mob-sk-list" style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:320px"></div>
+    <button onclick="mobSkSkip()" style="margin-top:16px;background:none;border:none;color:#AEAAA6;font-size:13px;cursor:pointer;padding:8px">Skip for now</button>
+  </div>
+
   <!-- ── Phase 2: PIN entry ── -->
   <div id="mob-pin-entry" style="display:none;flex-direction:column;align-items:center;width:100%;max-width:400px;margin:0 auto;">
     <button onclick="mobRoleBack()"
@@ -6869,13 +6880,8 @@ function mobPinCheck() {
   const correct = lsGet('mob_admin_pin') || '1234';
   if (_pinBuf === correct) {
     window._ADMIN_MODE = true;
-    document.getElementById('mob-pin-overlay').style.display = 'none';
-    mobApplyAdminUI();
-    mobRefresh();
-    // Auto-init FCM for admin after login
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      fcmInit('admin');
-    }
+    // Show SK name picker so FCM token is registered per-person
+    mobShowSkPicker();
   } else {
     const err = document.getElementById('mob-pin-err');
     if (err) { err.textContent = 'Incorrect PIN'; setTimeout(() => { err.textContent = ''; }, 1500); }
@@ -6885,6 +6891,75 @@ function mobPinCheck() {
 }
 function mobPinSkip() {
   window._ADMIN_MODE = false;
+  document.getElementById('mob-pin-overlay').style.display = 'none';
+  mobApplyAdminUI();
+  mobRefresh();
+}
+
+const _SK_NAMES = ['SK_June', 'SK_Jacob', 'SK_Jay', 'SK_Mo'];
+
+function mobShowSkPicker() {
+  document.getElementById('mob-pin-entry').style.display = 'none';
+  const listEl = document.getElementById('mob-sk-list');
+  if (listEl) {
+    listEl.innerHTML = '';
+    _SK_NAMES.forEach(function(name) {
+      const initials = name.replace('SK_','').slice(0,2).toUpperCase();
+      const colors = {SK_June:'#FF6B35',SK_Jacob:'#007AFF',SK_Jay:'#34C759',SK_Mo:'#AF52DE'};
+      const color = colors[name] || '#007AFF';
+      const row = document.createElement('div');
+      row.setAttribute('data-skname', name);
+      row.style.cssText = 'display:flex;align-items:center;gap:14px;padding:14px 16px;background:#fff;border:1.5px solid #E5E5E0;border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0.05);user-select:none;';
+      const av = document.createElement('div');
+      av.style.cssText = 'width:42px;height:42px;border-radius:50%;background:'+color+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0;pointer-events:none';
+      av.textContent = initials;
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'font-size:16px;font-weight:700;color:#1C1C1E;pointer-events:none';
+      lbl.textContent = name;
+      row.appendChild(av);
+      row.appendChild(lbl);
+      listEl.appendChild(row);
+    });
+    listEl.ontouchend = function(e) {
+      e.preventDefault();
+      var el = e.target;
+      while (el && el !== listEl) {
+        var n = el.getAttribute('data-skname');
+        if (n) { mobSkPick(n); return; }
+        el = el.parentElement;
+      }
+    };
+    listEl.onclick = function(e) {
+      var el = e.target;
+      while (el && el !== listEl) {
+        var n = el.getAttribute('data-skname');
+        if (n) { mobSkPick(n); return; }
+        el = el.parentElement;
+      }
+    };
+  }
+  document.getElementById('mob-sk-pick').style.display = 'flex';
+}
+
+function mobSkPick(name) {
+  window._SK_USER = name;
+  lsSet('mob_sk_user', name);
+  document.getElementById('mob-pin-overlay').style.display = 'none';
+  mobApplyAdminUI();
+  mobRefresh();
+  // Register FCM under this person's name
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    const waitForFirebase = (n) => {
+      if (typeof firebase !== 'undefined') { setTimeout(() => fcmInit(name), 500); }
+      else if (n > 0) { setTimeout(() => waitForFirebase(n - 1), 300); }
+    };
+    waitForFirebase(20);
+  }
+  setTimeout(fcmDrawerUpdateStatus, 800);
+}
+
+function mobSkSkip() {
+  window._SK_USER = lsGet('mob_sk_user') || 'admin';
   document.getElementById('mob-pin-overlay').style.display = 'none';
   mobApplyAdminUI();
   mobRefresh();
@@ -6987,8 +7062,8 @@ async function fcmInit(userGroup) {
       deviceId = 'dev_' + Math.random().toString(36).slice(2, 12);
       localStorage.setItem('fcm_device_id', deviceId);
     }
-    // No cross-group dedup needed (each group is separate)
-    const group = userGroup || 'admin';
+    // Normalise name for RTDB key ("Jake Lee" → "Jake_Lee")
+    const group = (userGroup || 'admin').replace(/\s+/g, '_');
     await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
     console.log('[FCM] Token saved to RTDB at /fcmTokens/' + group + '/' + deviceId);
 
@@ -7022,63 +7097,54 @@ function _fcmShowBanner(title, body) {
   ].join(';');
 
   banner.innerHTML =
-    '<div style="width:32px;height:32px;border-radius:8px;background:#007AFF;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
+    '<div style="width:32px;height:32px;border-radius:8px;back    '<div style="width:32px;height:32px;border-radius:8px;background:#007AFF;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
       '<i class="ti ti-bell-ringing" style="font-size:16px;color:#fff"></i>' +
     '</div>' +
     '<div style="flex:1;min-width:0">' +
       '<div style="font-size:13px;font-weight:700;margin-bottom:2px">' + title + '</div>' +
       '<div style="font-size:12px;color:rgba(255,255,255,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + body + '</div>' +
     '</div>' +
-    '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;padding:0;line-height:1;flex-shrink:0">&times;</button>';
-
-  // Add animation keyframe if not already added
-  if (!document.getElementById('fcm-styles')) {
-    const style = document.createElement('style');
-    style.id = 'fcm-styles';
-    style.textContent = '@keyframes fcmSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
-    document.head.appendChild(style);
-  }
+    '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:20px;cursor:pointer;padding:0 0 0 8px;line-height:1;flex-shrink:0">&times;</button>';
 
   document.body.appendChild(banner);
-  // Auto-dismiss after 5 seconds
-  setTimeout(() => { if (banner.parentElement) banner.remove(); }, 5000);
-
-  // Refresh order list
-  setTimeout(() => mobRefresh(), 500);
+  setTimeout(() => { if (banner.parentElement) banner.remove(); }, 6000);
 }
 
-// Auto-init FCM after DOM ready (Admin-only — not for subbie)
 function fcmInitIfAdmin() {
   if (window._SUBBIE_MODE) return;
-  // If already granted, init silently in background
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    const skUser = window._SK_USER || lsGet('mob_sk_user') || 'admin';
     const waitForFirebase = (attempts) => {
-      if (typeof firebase !== 'undefined') { setTimeout(() => fcmInit('admin'), 500); }
+      if (typeof firebase !== 'undefined') { setTimeout(() => fcmInit(skUser), 500); }
       else if (attempts > 0) { setTimeout(() => waitForFirebase(attempts - 1), 300); }
     };
     waitForFirebase(20);
+    setTimeout(fcmDrawerUpdateStatus, 500);
     return;
   }
-  // Show banner prompting user to enable (iOS requires user gesture)
   setTimeout(() => {
-    // Show banner unless already granted
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return;
     const bar = document.getElementById('fcm-enable-bar');
     if (bar) bar.style.display = 'flex';
   }, 1000);
 }
 
+async function fcmRequestPermission(userGroup) {
+  const bar = document.getElementById('fcm-enable-bar');
+  if (bar) bar.style.display = 'none';
+  const group = userGroup || window._SK_USER || window._SELECTED_SUBBIE || 'admin';
+  await fcmInit(group);
+}
+
 async function fcmDrawerToggle() {
   mobDrawerClose();
   const statusEl = document.getElementById('mob-notif-status');
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    if (statusEl) statusEl.textContent = 'Already ON';
+    if (statusEl) { statusEl.textContent = 'ON'; statusEl.style.color = '#34C759'; }
     return;
   }
-  // This is called from user tap — valid gesture for iOS permission request
-  const group = window._SELECTED_SUBBIE || 'admin';
+  const group = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
   await fcmRequestPermission(group);
-  // Update status label
   setTimeout(fcmDrawerUpdateStatus, 1000);
 }
 
@@ -7086,7 +7152,19 @@ function fcmDrawerUpdateStatus() {
   const statusEl = document.getElementById('mob-notif-status');
   if (!statusEl) return;
   if (typeof Notification === 'undefined') { statusEl.textContent = 'N/A'; return; }
-  if (Notification.permission === 'granted') { statusEl.textContent = 'ON'; statusEl.style.color = '#34C759'; }
+  if (Notification.permission === 'granted') {
+    statusEl.textContent = 'ON'; statusEl.style.color = '#34C759';
+  } else if (Notification.permission === 'denied') {
+    statusEl.textContent = 'Blocked'; statusEl.style.color = '#FF3B30';
+  } else {
+    statusEl.textContent = 'OFF'; statusEl.style.color = '#8A8A8E';
+  }
+}
+
+</script>
+</body>
+</html>
+ission === 'granted') { statusEl.textContent = 'ON'; statusEl.style.color = '#34C759'; }
   else if (Notification.permission === 'denied') { statusEl.textContent = 'BLOCKED'; statusEl.style.color = '#FF3B30'; }
   else { statusEl.textContent = 'OFF'; statusEl.style.color = '#8A8A8E'; }
 }
