@@ -7153,9 +7153,13 @@ async function fcmInit(userGroup) {
     _fcmMessaging = firebase.messaging(_fcmApp);
     _fcmDB = firebase.database(_fcmApp);
 
-    // Register service worker
+    // Register service worker and wait until it's active
     const reg = await navigator.serviceWorker.register('/SK_ontime/firebase-messaging-sw.js');
     console.log('[FCM] Service worker registered:', reg.scope);
+
+    // Must wait for SW to be active before PushManager.subscribe
+    const activeReg = await navigator.serviceWorker.ready;
+    console.log('[FCM] Service worker active:', activeReg.scope);
 
     // Request notification permission
     const permission = await Notification.requestPermission();
@@ -7167,7 +7171,7 @@ async function fcmInit(userGroup) {
     // Get FCM token
     const token = await _fcmMessaging.getToken({
       vapidKey: _FCM_VAPID,
-      serviceWorkerRegistration: reg
+      serviceWorkerRegistration: activeReg
     });
 
     if (!token) {
@@ -7186,15 +7190,16 @@ async function fcmInit(userGroup) {
     // Normalise name for RTDB key ("Jake Lee" → "Jake_Lee")
     const group = (userGroup || 'admin').replace(/\s+/g, '_');
 
-    // Remove token from any previously registered group (prevents cross-user notifications)
-    const prevGroup = localStorage.getItem('fcm_prev_group');
-    if (prevGroup && prevGroup !== group) {
-      try {
-        await _fcmDB.ref('/fcmTokens/' + prevGroup + '/' + deviceId).remove();
-        console.log('[FCM] Removed old token from', prevGroup);
-      } catch(e) { console.warn('[FCM] Could not remove old group token', e); }
-    }
+    // Remove this device's token from ALL known groups first — prevents cross-user notifications
+    // when a device was previously registered under a different name
+    const ALL_GROUPS = ['admin', 'SK_Jacob', 'SK_Mo', 'SK_June', 'SK_Jay', 'Jake_Lee', 'Chris_Choi', 'Sean_Park'];
+    await Promise.all(
+      ALL_GROUPS.filter(g => g !== group).map(g =>
+        _fcmDB.ref('/fcmTokens/' + g + '/' + deviceId).remove().catch(() => {})
+      )
+    );
     localStorage.setItem('fcm_prev_group', group);
+    console.log('[FCM] Cleaned device token from all other groups');
 
     await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
     console.log('[FCM] Token saved to RTDB at /fcmTokens/' + group + '/' + deviceId);
