@@ -7016,8 +7016,12 @@ function mobSkSkip() {
 function fcmDrawerUpdateStatus() {
   const statusEl = document.getElementById('mob-notif-status');
   if (!statusEl) return;
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+  const isGranted = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  const isEnabled = localStorage.getItem('fcm_notif_enabled') !== 'off';
+  if (isGranted && isEnabled) {
     statusEl.textContent = 'ON'; statusEl.style.color = '#34C759';
+  } else if (isGranted && !isEnabled) {
+    statusEl.textContent = 'OFF'; statusEl.style.color = '#FF3B30';
   } else {
     statusEl.textContent = 'OFF'; statusEl.style.color = '#FF3B30';
   }
@@ -7210,13 +7214,36 @@ async function fcmRequestPermission(userGroup) {
 
 async function fcmDrawerToggle() {
   mobDrawerClose();
-  const statusEl = document.getElementById('mob-notif-status');
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    if (statusEl) { statusEl.textContent = 'ON'; statusEl.style.color = '#34C759'; }
+  const group = (window._SK_USER || window._SELECTED_SUBBIE || 'admin').replace(/\s+/g,'_');
+  const deviceId = localStorage.getItem('fcm_device_id');
+  const isEnabled = localStorage.getItem('fcm_notif_enabled') !== 'off';
+
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+    // Not yet granted — request permission and enable
+    const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
+    await fcmRequestPermission(grp);
     return;
   }
-  const group = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
-  await fcmRequestPermission(group);
+
+  if (isEnabled && deviceId) {
+    // Currently ON → turn OFF: remove token from RTDB
+    try {
+      if (_fcmDB) {
+        await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).remove();
+        console.log('[FCM] Token removed — notifications OFF');
+      }
+    } catch(e) { console.warn('[FCM] remove error', e); }
+    localStorage.setItem('fcm_notif_enabled', 'off');
+    fcmDrawerUpdateStatus();
+    toast('알림을 껐습니다 (Notifications OFF)', 'success');
+  } else {
+    // Currently OFF → turn ON: re-register token
+    localStorage.setItem('fcm_notif_enabled', 'on');
+    const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
+    await fcmInit(grp);
+    fcmDrawerUpdateStatus();
+    toast('알림을 켰습니다 (Notifications ON)', 'success');
+  }
 }
 </script>
 </body>
