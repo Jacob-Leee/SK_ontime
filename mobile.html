@@ -7224,9 +7224,10 @@ async function fcmInit(userGroup) {
         const title = payload.data?.title || payload.notification?.title || 'New Order';
         const body  = payload.data?.body  || payload.notification?.body  || '';
         // Show one system notification (same tag prevents duplicates)
+        // MUST return the promise so Firebase doesn't close the message channel early
         if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then(reg => {
-            reg.showNotification(title, {
+          return navigator.serviceWorker.ready.then(reg => {
+            return reg.showNotification(title, {
               body,
               icon:               '/SK_ontime/icon-192.png',
               badge:              '/SK_ontime/icon-192.png',
