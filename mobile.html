@@ -6910,8 +6910,9 @@ function mobApplySubbieUI() {
 }
 
 function mobApplyAdminUI() {
-  const isFullAdmin = window._ADMIN_MODE && !window._SK_USER;
-  const isSKUser    = window._ADMIN_MODE && !!window._SK_USER;
+  const _skVal     = window._SK_USER;
+  const isFullAdmin = window._ADMIN_MODE && (!_skVal || _skVal === 'admin');
+  const isSKUser    = window._ADMIN_MODE && !!_skVal && _skVal !== 'admin';
 
   // Tab visibility
   const allTabs     = ['mt-dashboard','mt-orders','mt-completed','mt-issues','mt-all'];
@@ -6964,7 +6965,7 @@ function mobPinSkip() {
   mobRefresh();
 }
 
-const _SK_NAMES = ['SK_Jacob', 'SK_Mo', 'SK_June', 'SK_Jay', 'Jake Lee', 'Chris Choi', 'Sean Park'];
+const _SK_NAMES = ['SK_Jacob', 'SK_Mo', 'SK_June', 'SK_Jay'];
 
 function mobShowSkPicker() {
   document.getElementById('mob-pin-entry').style.display = 'none';
@@ -7051,7 +7052,8 @@ function mobSkPickBack() {
 }
 
 function mobSkSkip() {
-  window._SK_USER = lsGet('mob_sk_user') || 'admin';
+  const _saved = lsGet('mob_sk_user') || 'admin';
+  window._SK_USER = (_saved === 'admin') ? null : _saved;
   document.getElementById('mob-pin-overlay').style.display = 'none';
   mobApplyAdminUI();
   mobRefresh();
@@ -7183,6 +7185,17 @@ async function fcmInit(userGroup) {
     }
     // Normalise name for RTDB key ("Jake Lee" → "Jake_Lee")
     const group = (userGroup || 'admin').replace(/\s+/g, '_');
+
+    // Remove token from any previously registered group (prevents cross-user notifications)
+    const prevGroup = localStorage.getItem('fcm_prev_group');
+    if (prevGroup && prevGroup !== group) {
+      try {
+        await _fcmDB.ref('/fcmTokens/' + prevGroup + '/' + deviceId).remove();
+        console.log('[FCM] Removed old token from', prevGroup);
+      } catch(e) { console.warn('[FCM] Could not remove old group token', e); }
+    }
+    localStorage.setItem('fcm_prev_group', group);
+
     await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
     console.log('[FCM] Token saved to RTDB at /fcmTokens/' + group + '/' + deviceId);
 
@@ -7249,9 +7262,17 @@ function _fcmShowBanner(title, body) {
 function fcmInitIfAdmin() {
   if (window._SUBBIE_MODE) return;
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    const skUser = window._SK_USER || lsGet('mob_sk_user') || 'admin';
+    // Only re-register if we already know who this user is (name was previously picked)
+    const saved = lsGet('mob_sk_user');
+    if (!saved) {
+      // No user picked yet — don't auto-register (would create phantom admin tokens)
+      setTimeout(fcmDrawerUpdateStatus, 500);
+      return;
+    }
+    const skUser = (saved === 'admin') ? null : saved;
+    const groupName = skUser || 'admin';
     const waitForFirebase = (attempts) => {
-      if (typeof firebase !== 'undefined') { setTimeout(() => fcmInit(skUser), 500); }
+      if (typeof firebase !== 'undefined') { setTimeout(() => fcmInit(groupName), 500); }
       else if (attempts > 0) { setTimeout(() => waitForFirebase(attempts - 1), 300); }
     };
     waitForFirebase(20);
