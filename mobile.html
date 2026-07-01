@@ -6910,6 +6910,9 @@ function mobApplySubbieUI() {
 }
 
 function mobApplyAdminUI() {
+  // Subbie mode is handled separately — never apply admin UI logic to subbies
+  if (window._SUBBIE_MODE) { mobApplySubbieUI(); return; }
+
   const _skVal     = window._SK_USER;
   const isFullAdmin = window._ADMIN_MODE && (!_skVal || _skVal === 'admin');
   const isSKUser    = window._ADMIN_MODE && !!_skVal && _skVal !== 'admin';
