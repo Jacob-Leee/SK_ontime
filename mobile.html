@@ -6779,7 +6779,15 @@ function mobRoleSubbiePick(name) {
   if (backBtn) backBtn.style.display = '';
   mobApplySubbieUI();
   mobNav('orders');
-  fcmInitIfAdmin();
+  // FCM for subbie: auto-register if already granted, else show banner
+  setTimeout(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      fcmInit(name);
+    } else if (typeof Notification !== 'undefined' && Notification.permission !== 'denied') {
+      const bar = document.getElementById('fcm-enable-bar');
+      if (bar) bar.style.display = 'flex';
+    }
+  }, 800);
 }
 function mobRoleBack() {
   document.getElementById('mob-pin-entry').style.display = 'none';
@@ -6864,6 +6872,10 @@ function mobPinCheck() {
     document.getElementById('mob-pin-overlay').style.display = 'none';
     mobApplyAdminUI();
     mobRefresh();
+    // Auto-init FCM for admin after login
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      fcmInit('admin');
+    }
   } else {
     const err = document.getElementById('mob-pin-err');
     if (err) { err.textContent = 'Incorrect PIN'; setTimeout(() => { err.textContent = ''; }, 1500); }
@@ -6928,7 +6940,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 let _fcmApp, _fcmMessaging, _fcmDB;
 
-async function fcmInit() {
+async function fcmInit(userGroup) {
   try {
     // Only run in browser with service worker support (PWA)
     if (!('serviceWorker' in navigator)) {
@@ -6975,18 +6987,10 @@ async function fcmInit() {
       deviceId = 'dev_' + Math.random().toString(36).slice(2, 12);
       localStorage.setItem('fcm_device_id', deviceId);
     }
-    // Remove all other tokens for this device first (cleanup duplicates)
-    const existingSnap = await _fcmDB.ref('/fcmTokens').once('value');
-    if (existingSnap.val()) {
-      const stored = existingSnap.val();
-      const removes = [];
-      Object.entries(stored).forEach(([k, v]) => {
-        if (v === token && k !== deviceId) removes.push(_fcmDB.ref('/fcmTokens/' + k).remove());
-      });
-      await Promise.all(removes);
-    }
-    await _fcmDB.ref('/fcmTokens/' + deviceId).set(token);
-    console.log('[FCM] Token saved to RTDB with key:', deviceId);
+    // No cross-group dedup needed (each group is separate)
+    const group = userGroup || 'admin';
+    await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
+    console.log('[FCM] Token saved to RTDB at /fcmTokens/' + group + '/' + deviceId);
 
     // Handle foreground messages (app open)
     _fcmMessaging.onMessage((payload) => {
@@ -7049,7 +7053,7 @@ function fcmInitIfAdmin() {
   // If already granted, init silently in background
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     const waitForFirebase = (attempts) => {
-      if (typeof firebase !== 'undefined') { setTimeout(fcmInit, 500); }
+      if (typeof firebase !== 'undefined') { setTimeout(() => fcmInit('admin'), 500); }
       else if (attempts > 0) { setTimeout(() => waitForFirebase(attempts - 1), 300); }
     };
     waitForFirebase(20);
@@ -7072,7 +7076,8 @@ async function fcmDrawerToggle() {
     return;
   }
   // This is called from user tap — valid gesture for iOS permission request
-  await fcmRequestPermission();
+  const group = window._SELECTED_SUBBIE || 'admin';
+  await fcmRequestPermission(group);
   // Update status label
   setTimeout(fcmDrawerUpdateStatus, 1000);
 }
@@ -7086,12 +7091,13 @@ function fcmDrawerUpdateStatus() {
   else { statusEl.textContent = 'OFF'; statusEl.style.color = '#8A8A8E'; }
 }
 
-async function fcmRequestPermission() {
+async function fcmRequestPermission(userGroup) {
   // Hide banner immediately
   const bar = document.getElementById('fcm-enable-bar');
   if (bar) bar.style.display = 'none';
   // Now run full FCM init (called directly from user tap = valid gesture)
-  await fcmInit();
+  const group = userGroup || window._SELECTED_SUBBIE || 'admin';
+  await fcmInit(group);
 }
 
 </script>
