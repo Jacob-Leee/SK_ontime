@@ -6977,6 +6977,20 @@ function mobSkSkip() {
   mobRefresh();
 }
 
+async function mobForceRefresh() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch(e) {}
+  location.reload(true);
+}
+
 // ── Subbie URL mode ───────────────────────────────────────────────
 const _SUBBIE_PARAM = new URLSearchParams(location.search).get('subbie') || '';
 
@@ -7155,4 +7169,9 @@ async function fcmDrawerToggle() {
     if (statusEl) { statusEl.textContent = 'ON'; statusEl.style.color = '#34C759'; }
     return;
   }
-  const 
+  const group = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
+  await fcmRequestPermission(group);
+}
+</script>
+</body>
+</html>
