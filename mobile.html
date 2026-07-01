@@ -7003,7 +7003,8 @@ function fcmInitIfAdmin() {
   }
   // Show banner prompting user to enable (iOS requires user gesture)
   setTimeout(() => {
-    if (typeof Notification === 'undefined' || Notification.permission === 'granted') return;
+    // Show banner unless already granted
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return;
     const bar = document.getElementById('fcm-enable-bar');
     if (bar) bar.style.display = 'flex';
   }, 1000);
