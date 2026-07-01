@@ -466,6 +466,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       </div>
       <div style="font-size:24px;font-weight:700;color:#1C1C1E;letter-spacing:-.4px">Homes NSW</div>
       <div style="font-size:13px;color:#8A8A8E;margin-top:4px">Field operations portal</div>
+      <button onclick="mobForceRefresh()" style="margin-top:10px;background:none;border:1px solid #D1D1D6;border-radius:20px;padding:5px 14px;font-size:11px;color:#8A8A8E;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:inherit">
+        <i class="ti ti-refresh" style="font-size:13px"></i> Force Update
+      </button>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px" id="mob-role-cards">
       <button onclick="_mobRoleSelectToggle('admin')"
@@ -3274,7 +3277,7 @@ function renderCompleted() {
   const q = (document.getElementById('search-completed')?.value || '').toLowerCase();
   const area = document.getElementById('filter-completed-area')?.value || '';
 
-  const orders = DB.orders.filter(o => {
+  const orders = _myOrdersPool().filter(o => {
     if (o.status !== 'completed') return false;
     if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
     if (area && o.area !== area) return false;
@@ -4471,7 +4474,7 @@ function renderIssues() {
   const q = (document.getElementById('search-issues')?.value || '').toLowerCase();
   const area = document.getElementById('filter-issues-area')?.value || '';
 
-  const orders = DB.orders.filter(o => {
+  const orders = _myOrdersPool().filter(o => {
     if (o.status !== 'issue') return false;
     if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
     if (area && o.area !== area) return false;
@@ -4516,7 +4519,7 @@ function renderCancelled() {
   const q = (document.getElementById('search-cancelled')?.value || '').toLowerCase();
   const area = document.getElementById('filter-cancelled-area')?.value || '';
 
-  const orders = DB.orders.filter(o => {
+  const orders = _myOrdersPool().filter(o => {
     if (o.status !== 'cancelled') return false;
     if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
     if (area && o.area !== area) return false;
@@ -4635,6 +4638,15 @@ function updateSortIcons(page) {
   });
 }
 
+// Returns the order pool visible to the current user.
+// Admin (_ADMIN_MODE with no _SK_USER or _SK_USER='admin') → all orders.
+// SK staff with name selected → only orders assigned to them.
+function _myOrdersPool() {
+  const user = window._SK_USER;
+  if (!user || user === 'admin') return DB.orders;
+  return DB.orders.filter(o => o.subbies === user);
+}
+
 function getFilteredOrders() {
   const q = document.getElementById('search-orders').value.toLowerCase();
   const area = document.getElementById('filter-area').value;
@@ -4642,7 +4654,7 @@ function getFilteredOrders() {
   const paid = document.getElementById('filter-paid').value;
   const month = document.getElementById('filter-month').value;
 
-  return DB.orders.filter(o => {
+  return _myOrdersPool().filter(o => {
     if (o.status && o.status !== 'active') return false;   // active only
     if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
     if (area && o.area !== area) return false;
@@ -4752,7 +4764,7 @@ function renderClaims() {
   const claimMap = {};
   DB.claims.forEach(c => { claimMap[c.orderNumber] = c; });
 
-  const orders = DB.orders.filter(o => {
+  const orders = _myOrdersPool().filter(o => {
     if (o.status !== 'claim') return false;
     if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
     if (area && o.area !== area) return false;
@@ -4800,7 +4812,7 @@ function renderClosed() {
   const claimMap = {};
   DB.claims.forEach(c => { claimMap[c.orderNumber] = c; });
 
-  const orders = DB.orders.filter(o => {
+  const orders = _myOrdersPool().filter(o => {
     if (o.status !== 'closed') return false;
     if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
     if (area && o.area !== area) return false;
@@ -4850,7 +4862,7 @@ function renderAll() {
   const statusLabels = { active:'Orders', completed:'Completed', claim:'Claim', closed:'Closed', issue:'⚠️ Issue', cancelled:'❌ Cancelled' };
   const statusColors = { active:'badge-blue', completed:'badge-green', claim:'badge-yellow', closed:'badge-purple', issue:'badge-red', cancelled:'badge-red' };
 
-  const orders = DB.orders.filter(o => {
+  const orders = _myOrdersPool().filter(o => {
     if (statusFilter && o.status !== statusFilter) return false;
     if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
     if (area && o.area !== area) return false;
@@ -5663,7 +5675,7 @@ function renderTabSummary(page) {
   // Only show on the six order tabs
   if (!wantStatus) { bar.classList.remove('show'); return; }
 
-  let list = DB.orders.filter(o => (o.status || 'active') === wantStatus);
+  let list = _myOrdersPool().filter(o => (o.status || 'active') === wantStatus);
 
   const total = list.reduce((s, o) => s + (o.amount || 0), 0);
   const count = list.length;
@@ -5723,12 +5735,12 @@ function updateSidebar() {
 
   const setBadge = (id, n) => { const el = document.getElementById(id); if (el) { el.textContent = n; el.style.display = ''; } };
   const setBadgePlain = (id, n) => { const el = document.getElementById(id); if (el) { el.textContent = n.toLocaleString('en-AU'); el.style.display = ''; } };
-  setBadge('orders-badge',   DB.orders.filter(o => !o.status || o.status === 'active').length);
-  setBadge('completed-badge', DB.orders.filter(o => o.status === 'completed').length);
-  setBadge('claims-badge',    DB.orders.filter(o => o.status === 'claim').length);
-  setBadgePlain('closed-badge',    DB.orders.filter(o => o.status === 'closed').length);
-  setBadge('issues-badge',    DB.orders.filter(o => o.status === 'issue').length);
-  setBadgePlain('cancelled-badge', DB.orders.filter(o => o.status === 'cancelled').length);
+  setBadge('orders-badge',   _myOrdersPool().filter(o => !o.status || o.status === 'active').length);
+  setBadge('completed-badge', _myOrdersPool().filter(o => o.status === 'completed').length);
+  setBadge('claims-badge',    _myOrdersPool().filter(o => o.status === 'claim').length);
+  setBadgePlain('closed-badge',    _myOrdersPool().filter(o => o.status === 'closed').length);
+  setBadge('issues-badge',    _myOrdersPool().filter(o => o.status === 'issue').length);
+  setBadgePlain('cancelled-badge', _myOrdersPool().filter(o => o.status === 'cancelled').length);
 
   // Calendar & Subbies nav badges used to only refresh once you'd actually opened those
   // pages (updateCalBadge() lived inside renderCalendar(), the subbies count inside
@@ -6341,7 +6353,7 @@ function _subbieColor(name) {
 function mobRefresh() {
   if (_mobPage === 'dashboard') { mobDashboard(); return; }
   const filterFn = _MOB_FILTERS[_mobPage] || _MOB_FILTERS.all;
-  let list = DB.orders.filter(filterFn);
+  let list = _myOrdersPool().filter(filterFn);
 
   // Filter by selected subbie name (role-selection subbie mode)
   if (window._SELECTED_SUBBIE) {
@@ -7143,24 +7155,4 @@ async function fcmDrawerToggle() {
     if (statusEl) { statusEl.textContent = 'ON'; statusEl.style.color = '#34C759'; }
     return;
   }
-  const group = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
-  await fcmRequestPermission(group);
-  setTimeout(fcmDrawerUpdateStatus, 1000);
-}
-
-function fcmDrawerUpdateStatus() {
-  const statusEl = document.getElementById('mob-notif-status');
-  if (!statusEl) return;
-  if (typeof Notification === 'undefined') { statusEl.textContent = 'N/A'; return; }
-  if (Notification.permission === 'granted') {
-    statusEl.textContent = 'ON'; statusEl.style.color = '#34C759';
-  } else if (Notification.permission === 'denied') {
-    statusEl.textContent = 'Blocked'; statusEl.style.color = '#FF3B30';
-  } else {
-    statusEl.textContent = 'OFF'; statusEl.style.color = '#8A8A8E';
-  }
-}
-
-</script>
-</body>
-</html>
+  const 
