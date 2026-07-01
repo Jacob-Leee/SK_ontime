@@ -7290,6 +7290,12 @@ function fcmInitIfAdmin() {
     }
     const skUser = (saved === 'admin') ? null : saved;
     const groupName = skUser || 'admin';
+    // Respect user's notification preference — don't re-register if explicitly turned OFF
+    const notifKey = 'fcm_notif_' + groupName.replace(/\s+/g, '_');
+    if (localStorage.getItem(notifKey) === 'off') {
+      setTimeout(fcmDrawerUpdateStatus, 500);
+      return;
+    }
     const waitForFirebase = (attempts) => {
       if (typeof firebase !== 'undefined') { setTimeout(() => fcmInit(groupName), 500); }
       else if (attempts > 0) { setTimeout(() => waitForFirebase(attempts - 1), 300); }
