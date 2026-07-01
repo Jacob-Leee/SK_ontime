@@ -271,6 +271,9 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
 
 </style>
+<!-- Firebase SDK (for push notification triggers) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -2670,6 +2673,8 @@ function saveOrder(e) {
     DB.orders.push(order);
     historyPush(`New order: ${order.orderNumber}`, [{ id: order.id, _wasAbsent: true }], []);
     toast('Order saved successfully', 'success');
+    // Trigger FCM push to mobile devices
+    _rtdbNotify(order);
   }
 
   // Keep the linked claim/payment record's claimed amount and supervisor in sync.
@@ -6118,6 +6123,58 @@ function updateMobNav() {}
     if (changed) { lsSet('hom_claims', JSON.stringify(DB.claims)); }
   } catch(e) {}
 })();
+
+// ══════════════════════════════════════════════════════════
+// FIREBASE RTDB — Push notification trigger (desktop → mobile)
+// ══════════════════════════════════════════════════════════
+
+const _RTDB_CONFIG = {
+  apiKey: "AIzaSyBRzLQXpX_tWdJCpxKT7DI5m402KiaiCUA",
+  authDomain: "homes-nsw.firebaseapp.com",
+  projectId: "homes-nsw",
+  storageBucket: "homes-nsw.firebasestorage.app",
+  messagingSenderId: "1064085096701",
+  appId: "1:1064085096701:web:9463a7ccba801d9a9b5694",
+  databaseURL: "https://homes-nsw-default-rtdb.firebaseio.com"
+};
+
+let _rtdbApp, _rtdbDB;
+
+function _rtdbInit() {
+  try {
+    if (typeof firebase === 'undefined') return;
+    if (firebase.apps.length === 0) {
+      _rtdbApp = firebase.initializeApp(_RTDB_CONFIG);
+    } else {
+      _rtdbApp = firebase.apps[0];
+    }
+    _rtdbDB = firebase.database(_rtdbApp);
+    console.log('[RTDB] Firebase Realtime Database connected.');
+  } catch (err) {
+    console.error('[RTDB] Init error:', err);
+  }
+}
+
+function _rtdbNotify(order) {
+  if (!_rtdbDB) {
+    // Try initialising on-demand if not done yet
+    _rtdbInit();
+    if (!_rtdbDB) return;
+  }
+  const payload = {
+    orderNumber: order.orderNumber || '',
+    address: order.address || '',
+    area: order.area || '',
+    subbies: order.subbies || '',
+    createdAt: Date.now()
+  };
+  _rtdbDB.ref('/notifications').push(payload)
+    .then(() => console.log('[RTDB] Notification queued for order:', order.orderNumber))
+    .catch(err => console.error('[RTDB] Write error:', err));
+}
+
+// Init on page load
+window.addEventListener('load', _rtdbInit);
 
 </script>
 </body>

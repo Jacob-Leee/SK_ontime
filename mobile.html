@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SK Ontime">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <title>SK Ontime — Holmes Order Manager</title>
 <script>
@@ -434,6 +436,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 .mob-sum-area { background: #EAEAE5; border: 1px solid #D1CFC8; border-radius: 4px;
   padding: 2px 7px; font-size: 11px; color: #8A8A8E; font-weight: 700; }
 </style>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -6726,6 +6732,7 @@ function mobRoleSubbiePick(name) {
   if (backBtn) backBtn.style.display = '';
   mobApplySubbieUI();
   mobNav('orders');
+  fcmInitIfAdmin();
 }
 function mobRoleBack() {
   document.getElementById('mob-pin-entry').style.display = 'none';
@@ -6854,6 +6861,134 @@ function mobInit() {
   }
 
   mobNav('orders');
+}
+
+// ══════════════════════════════════════════════════════════
+// FIREBASE PUSH NOTIFICATIONS (FCM)
+// ══════════════════════════════════════════════════════════
+
+const _FCM_CONFIG = {
+  apiKey: "AIzaSyBRzLQXpX_tWdJCpxKT7DI5m402KiaiCUA",
+  authDomain: "homes-nsw.firebaseapp.com",
+  projectId: "homes-nsw",
+  storageBucket: "homes-nsw.firebasestorage.app",
+  messagingSenderId: "1064085096701",
+  appId: "1:1064085096701:web:9463a7ccba801d9a9b5694",
+  databaseURL: "https://homes-nsw-default-rtdb.firebaseio.com"
+};
+
+const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHjjGrYRs1v2V3HSSp-H1e3fcADA6Y";
+
+let _fcmApp, _fcmMessaging, _fcmDB;
+
+async function fcmInit() {
+  try {
+    // Only run in browser with service worker support (PWA)
+    if (!('serviceWorker' in navigator)) {
+      console.log('[FCM] Service workers not supported — skipping push setup.');
+      return;
+    }
+
+    // Init Firebase
+    if (!firebase.apps.length) {
+      _fcmApp = firebase.initializeApp(_FCM_CONFIG);
+    } else {
+      _fcmApp = firebase.apps[0];
+    }
+    _fcmMessaging = firebase.messaging(_fcmApp);
+    _fcmDB = firebase.database(_fcmApp);
+
+    // Register service worker
+    const reg = await navigator.serviceWorker.register('/SK_ontime/firebase-messaging-sw.js');
+    console.log('[FCM] Service worker registered:', reg.scope);
+
+    // Request notification permission
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.log('[FCM] Notification permission denied.');
+      return;
+    }
+
+    // Get FCM token
+    const token = await _fcmMessaging.getToken({
+      vapidKey: _FCM_VAPID,
+      serviceWorkerRegistration: reg
+    });
+
+    if (!token) {
+      console.log('[FCM] No token received — check VAPID key and Firebase config.');
+      return;
+    }
+
+    console.log('[FCM] Token:', token);
+
+    // Save token to Firebase Realtime Database
+    const tokenKey = token.slice(-20); // use last 20 chars as unique key
+    await _fcmDB.ref('/fcmTokens/' + tokenKey).set(token);
+    console.log('[FCM] Token saved to RTDB.');
+
+    // Handle foreground messages (app open)
+    _fcmMessaging.onMessage((payload) => {
+      console.log('[FCM] Foreground message:', payload);
+      const title = payload.notification?.title || 'New Order';
+      const body = payload.notification?.body || '';
+      // Show in-app banner
+      _fcmShowBanner(title, body);
+    });
+
+  } catch (err) {
+    console.error('[FCM] Init error:', err);
+  }
+}
+
+function _fcmShowBanner(title, body) {
+  // Remove any existing banner
+  const existing = document.getElementById('fcm-banner');
+  if (existing) existing.remove();
+
+  const banner = document.createElement('div');
+  banner.id = 'fcm-banner';
+  banner.style.cssText = [
+    'position:fixed;top:calc(16px + env(safe-area-inset-top));left:50%;transform:translateX(-50%)',
+    'background:#1C1C1E;color:#fff;border-radius:14px;padding:12px 18px',
+    'z-index:999999;max-width:calc(100vw - 32px);width:340px',
+    'box-shadow:0 4px 20px rgba(0,0,0,0.25);display:flex;gap:10px;align-items:flex-start',
+    'animation:fcmSlideIn 0.3s ease'
+  ].join(';');
+
+  banner.innerHTML = \`
+    <div style="width:32px;height:32px;border-radius:8px;background:#007AFF;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <i class="ti ti-bell-ringing" style="font-size:16px;color:#fff"></i>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:700;margin-bottom:2px">\${title}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">\${body}</div>
+    </div>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:18px;cursor:pointer;padding:0;line-height:1;flex-shrink:0">&times;</button>
+  \`;
+
+  // Add animation keyframe if not already added
+  if (!document.getElementById('fcm-styles')) {
+    const style = document.createElement('style');
+    style.id = 'fcm-styles';
+    style.textContent = '@keyframes fcmSlideIn{from{opacity:0;transform:translateX(-50%) translateY(-16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(banner);
+  // Auto-dismiss after 5 seconds
+  setTimeout(() => { if (banner.parentElement) banner.remove(); }, 5000);
+
+  // Refresh order list
+  setTimeout(() => mobRefresh(), 500);
+}
+
+// Auto-init FCM after DOM ready (Admin-only — not for subbie)
+function fcmInitIfAdmin() {
+  // Only init FCM for admin users
+  if (window._SUBBIE_MODE) return;
+  // Slight delay so login completes first
+  setTimeout(fcmInit, 1500);
 }
 
 </script>
