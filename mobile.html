@@ -631,6 +631,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
      class="mob-dl" style="text-decoration:none;color:inherit"><span class="dl-i">🌐</span>DCJ Portal</a>
   <div class="mob-drawer-title">Settings</div>
   <div class="mob-dl" id="mob-admin-status" onclick="mobDrawerChangePIN();mobDrawerClose()"><span class="dl-i">🔐</span><span id="mob-admin-label">Admin PIN</span></div>
+  <div class="mob-dl" id="mob-notif-row" onclick="fcmDrawerToggle()"><span class="dl-i">🔔</span><span id="mob-notif-label">Push Notifications</span><span id="mob-notif-status" style="margin-left:auto;font-size:11px;font-weight:700;color:#8A8A8E">OFF</span></div>
 </div>
 
 <!-- View Sheet -->
@@ -7008,6 +7009,28 @@ function fcmInitIfAdmin() {
     const bar = document.getElementById('fcm-enable-bar');
     if (bar) bar.style.display = 'flex';
   }, 1000);
+}
+
+async function fcmDrawerToggle() {
+  mobDrawerClose();
+  const statusEl = document.getElementById('mob-notif-status');
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    if (statusEl) statusEl.textContent = 'Already ON';
+    return;
+  }
+  // This is called from user tap — valid gesture for iOS permission request
+  await fcmRequestPermission();
+  // Update status label
+  setTimeout(fcmDrawerUpdateStatus, 1000);
+}
+
+function fcmDrawerUpdateStatus() {
+  const statusEl = document.getElementById('mob-notif-status');
+  if (!statusEl) return;
+  if (typeof Notification === 'undefined') { statusEl.textContent = 'N/A'; return; }
+  if (Notification.permission === 'granted') { statusEl.textContent = 'ON'; statusEl.style.color = '#34C759'; }
+  else if (Notification.permission === 'denied') { statusEl.textContent = 'BLOCKED'; statusEl.style.color = '#FF3B30'; }
+  else { statusEl.textContent = 'OFF'; statusEl.style.color = '#8A8A8E'; }
 }
 
 async function fcmRequestPermission() {
