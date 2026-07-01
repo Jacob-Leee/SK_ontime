@@ -28,11 +28,13 @@ messaging.onBackgroundMessage(function(payload) {
   const title = payload.data?.title || 'New Order';
   const body  = payload.data?.body  || 'A new work order has been assigned.';
 
+  // Unique tag per order — prevents second notification silently replacing first
+  const tag = 'sk-order-' + (payload.data?.orderNumber || Date.now());
   return self.registration.showNotification(title, {
     body,
     icon:               '/SK_ontime/icon-192.png',
     badge:              '/SK_ontime/icon-192.png',
-    tag:                'sk-new-order',   // replaces any previous notification
+    tag,
     data:               payload.data || {},
     requireInteraction: false,
     vibrate:            [200, 100, 200]

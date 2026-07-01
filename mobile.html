@@ -7146,16 +7146,16 @@ const _FCM_CONFIG = {
 const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHjjGrYRs1v2V3HSSp-H1e3fcADA6Y";
 
 let _fcmApp, _fcmMessaging, _fcmDB;
+let _fcmInitInProgress = false;   // concurrency guard
 
 async function fcmInit(userGroup) {
-  try {
-    // Only run in browser with service worker support (PWA)
-    if (!('serviceWorker' in navigator)) {
-      console.log('[FCM] Service workers not supported — skipping push setup.');
-      return;
-    }
+  // Prevent concurrent calls — double-init corrupts RTDB state
+  if (_fcmInitInProgress) { console.log('[FCM] Init already running — skipped'); return; }
+  _fcmInitInProgress = true;
 
-    // Init Firebase
+  try {
+    if (!('serviceWorker' in navigator)) return;
+
     if (!firebase.apps.length) {
       _fcmApp = firebase.initializeApp(_FCM_CONFIG);
     } else {
@@ -7164,87 +7164,62 @@ async function fcmInit(userGroup) {
     _fcmMessaging = firebase.messaging(_fcmApp);
     _fcmDB = firebase.database(_fcmApp);
 
-    // Register service worker and wait until it's active
     const reg = await navigator.serviceWorker.register('/SK_ontime/firebase-messaging-sw.js');
-    console.log('[FCM] Service worker registered:', reg.scope);
-
-    // Must wait for SW to be active before PushManager.subscribe
+    console.log('[FCM] SW registered:', reg.scope);
     const activeReg = await navigator.serviceWorker.ready;
-    console.log('[FCM] Service worker active:', activeReg.scope);
+    console.log('[FCM] SW active:', activeReg.scope);
 
-    // Request notification permission
     const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      console.log('[FCM] Notification permission denied.');
-      return;
-    }
+    if (permission !== 'granted') { console.log('[FCM] Permission denied'); return; }
 
-    // Get FCM token
     const token = await _fcmMessaging.getToken({
       vapidKey: _FCM_VAPID,
       serviceWorkerRegistration: activeReg
     });
+    if (!token) { console.log('[FCM] No token received'); return; }
 
-    if (!token) {
-      console.log('[FCM] No token received — check VAPID key and Firebase config.');
-      return;
-    }
-
-    console.log('[FCM] Token:', token);
-
-    // Use a stable device ID stored in localStorage so re-registration always overwrites the same slot
     let deviceId = localStorage.getItem('fcm_device_id');
     if (!deviceId) {
       deviceId = 'dev_' + Math.random().toString(36).slice(2, 12);
       localStorage.setItem('fcm_device_id', deviceId);
     }
-    // Normalise name for RTDB key ("Jake Lee" → "Jake_Lee")
     const group = (userGroup || 'admin').replace(/\s+/g, '_');
 
-    // Remove this device's token from ALL known groups first — prevents cross-user notifications
-    // when a device was previously registered under a different name
-    const ALL_GROUPS = ['admin', 'SK_Jacob', 'SK_Mo', 'SK_June', 'SK_Jay', 'Jake_Lee', 'Chris_Choi', 'Sean_Park'];
-    await Promise.all(
-      ALL_GROUPS.filter(g => g !== group).map(g =>
-        _fcmDB.ref('/fcmTokens/' + g + '/' + deviceId).remove().catch(() => {})
-      )
-    );
-    localStorage.setItem('fcm_prev_group', group);
-    console.log('[FCM] Cleaned device token from all other groups');
+    const cachedToken = localStorage.getItem('fcm_cached_token');
+    const cachedGroup = localStorage.getItem('fcm_prev_group');
 
-    await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
-    console.log('[FCM] Token saved to RTDB at /fcmTokens/' + group + '/' + deviceId);
+    if (cachedToken !== token || cachedGroup !== group) {
+      // Token or group changed — write FIRST (no gap), then remove stale entries
+      await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
+      const ALL_GROUPS = ['admin', 'SK_Jacob', 'SK_Mo', 'SK_June', 'SK_Jay', 'Jake_Lee', 'Chris_Choi', 'Sean_Park'];
+      await Promise.all(
+        ALL_GROUPS.filter(g => g !== group).map(g =>
+          _fcmDB.ref('/fcmTokens/' + g + '/' + deviceId).remove().catch(() => {})
+        )
+      );
+      localStorage.setItem('fcm_cached_token', token);
+      localStorage.setItem('fcm_prev_group', group);
+      console.log('[FCM] Token registered for', group);
+    } else {
+      console.log('[FCM] Token unchanged — RTDB update skipped');
+    }
 
-    // Handle foreground messages — only register once
+    // Foreground message handler — set up once only
+    // Use in-app banner (reliable on mobile); SW handles background
     if (!window._fcmOnMessageSet) {
       window._fcmOnMessageSet = true;
       _fcmMessaging.onMessage((payload) => {
         console.log('[FCM] Foreground message:', payload);
-        // Data-only push — read from payload.data
         const title = payload.data?.title || payload.notification?.title || 'New Order';
         const body  = payload.data?.body  || payload.notification?.body  || '';
-        // Show one system notification (same tag prevents duplicates)
-        // MUST return the promise so Firebase doesn't close the message channel early
-        if ('serviceWorker' in navigator) {
-          return navigator.serviceWorker.ready.then(reg => {
-            return reg.showNotification(title, {
-              body,
-              icon:               '/SK_ontime/icon-192.png',
-              badge:              '/SK_ontime/icon-192.png',
-              tag:                'sk-new-order',
-              requireInteraction: false,
-              vibrate:            [200, 100, 200]
-            });
-          });
-        } else {
-          _fcmShowBanner(title, body);
-        }
+        _fcmShowBanner(title, body);
       });
     }
 
   } catch (err) {
     console.error('[FCM] Init error:', err);
-    _fcmShowBanner('❌ 알림 등록 실패', String(err.message || err).slice(0, 80));
+  } finally {
+    _fcmInitInProgress = false;
   }
 }
 
