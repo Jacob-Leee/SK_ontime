@@ -2671,12 +2671,13 @@ function saveOrder(e) {
     toast('Order updated successfully', 'success');
     // Sync to RTDB so subbie app reflects latest data
     _rtdbSyncOrder(order);
+    _rtdbNotify(order, 'update');   // push notification on update
   } else {
     DB.orders.push(order);
     historyPush(`New order: ${order.orderNumber}`, [{ id: order.id, _wasAbsent: true }], []);
     toast('Order saved successfully', 'success');
     // Trigger FCM push + sync order to RTDB
-    _rtdbNotify(order);
+    _rtdbNotify(order, 'new');
     _rtdbSyncOrder(order);
   }
 
@@ -6158,13 +6159,15 @@ function _rtdbInit() {
   }
 }
 
-function _rtdbNotify(order) {
+function _rtdbNotify(order, type) {
   if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
+  if (!order.subbies) return;   // no assignee — skip
   const payload = {
     orderNumber: order.orderNumber || '',
     address:     order.address     || '',
     area:        order.area        || '',
     subbies:     order.subbies     || '',
+    type:        type || 'new',
     createdAt:   Date.now()
   };
   _rtdbDB.ref('/notifications').push(payload)
