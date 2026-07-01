@@ -391,19 +391,31 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 /* ── DRAWER ── */
 #mob-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; }
 #mob-drawer {
-  display: none; position: fixed; top: 0; left: 0; bottom: 0; width: 260px;
-  background: #F2F1EC;
+  display: none; position: fixed; top: 0; left: 0; bottom: 0; width: 272px;
+  background: #ffffff;
   border-right: 1px solid #E5E5E0;
-  z-index: 210; padding: 20px 0; overflow-y: auto;
+  z-index: 210; padding: 0; overflow-y: auto;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.08);
+}
+#mob-drawer-header {
+  padding: calc(env(safe-area-inset-top) + 20px) 20px 16px;
+  background: #1C1C1E;
 }
 .mob-dl {
-  padding: 13px 20px; font-size: 14px; color: var(--text); cursor: pointer;
-  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px; font-size: 14px; font-weight: 500; color: #1C1C1E; cursor: pointer;
+  display: flex; align-items: center; gap: 12px; border-radius: 10px; margin: 2px 8px;
+  transition: background 0.15s;
 }
-.mob-dl:active { background: var(--bg); }
-.dl-i { font-size: 18px; }
-.mob-drawer-title { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase;
-  letter-spacing: 1px; padding: 12px 20px 6px; margin-top: 8px; border-top: 1px solid var(--border); }
+.mob-dl:active { background: #F2F1EC; }
+.dl-i {
+  width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center;
+  justify-content: center; flex-shrink: 0; font-size: 0;
+}
+.dl-i i { font-size: 17px; }
+.mob-drawer-title {
+  font-size: 10px; font-weight: 700; color: #AEAAA6; text-transform: uppercase;
+  letter-spacing: 1.2px; padding: 16px 24px 6px; margin-top: 4px;
+}
 
 /* ── VIEW SHEET ── */
 #mob-vbg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; }
@@ -617,21 +629,48 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 <!-- Drawer overlay -->
 <div id="mob-overlay" onclick="mobDrawerClose()"></div>
 <div id="mob-drawer">
-  <div style="padding:16px 20px 8px;font-size:16px;font-weight:800;color:var(--gold)">SK ONTIME</div>
-  <div class="mob-dl" onclick="mobNav('orders');mobDrawerClose()"><span class="dl-i">⚡</span>Active Orders</div>
-  <div class="mob-dl" onclick="mobNav('all');mobDrawerClose()"><span class="dl-i">📋</span>All Orders</div>
-  <div class="mob-dl" onclick="mobNav('completed');mobDrawerClose()"><span class="dl-i">✅</span>Completed</div>
-  <div class="mob-dl" onclick="mobNav('claims');mobDrawerClose()"><span class="dl-i">🛡️</span>Claims</div>
-  <div class="mob-dl" onclick="mobNav('closed');mobDrawerClose()"><span class="dl-i">🔒</span>Closed</div>
-  <div class="mob-dl" onclick="mobNav('issues');mobDrawerClose()"><span class="dl-i">⚠️</span>Issues</div>
-  <div class="mob-drawer-title">Tools</div>
-  <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()"><span class="dl-i">☁️</span>Cloud Sync</div>
-  <div class="mob-dl" onclick="openOrderModal();mobDrawerClose()"><span class="dl-i">➕</span>New Order</div>
-  <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener"
-     class="mob-dl" style="text-decoration:none;color:inherit"><span class="dl-i">🌐</span>DCJ Portal</a>
-  <div class="mob-drawer-title">Settings</div>
-  <div class="mob-dl" id="mob-admin-status" onclick="mobDrawerChangePIN();mobDrawerClose()"><span class="dl-i">🔐</span><span id="mob-admin-label">Admin PIN</span></div>
-  <div class="mob-dl" id="mob-notif-row" onclick="fcmDrawerToggle()"><span class="dl-i">🔔</span><span id="mob-notif-label">Push Notifications</span><span id="mob-notif-status" style="margin-left:auto;font-size:11px;font-weight:700;color:#8A8A8E">OFF</span></div>
+  <div id="mob-drawer-header">
+    <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.45);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">SK Ontime</div>
+    <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.4px">Homes NSW</div>
+  </div>
+  <div style="padding:8px 0 4px">
+    <div class="mob-drawer-title">Navigation</div>
+    <div class="mob-dl" onclick="mobNav('orders');mobDrawerClose()">
+      <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-bolt" style="color:#3B82F6"></i></span>Active Orders
+    </div>
+    <div class="mob-dl" onclick="mobNav('all');mobDrawerClose()">
+      <span class="dl-i" style="background:#F5F3FF"><i class="ti ti-list" style="color:#8B5CF6"></i></span>All Orders
+    </div>
+    <div class="mob-dl" onclick="mobNav('completed');mobDrawerClose()">
+      <span class="dl-i" style="background:#ECFDF5"><i class="ti ti-circle-check" style="color:#10B981"></i></span>Completed
+    </div>
+    <div class="mob-dl" onclick="mobNav('claims');mobDrawerClose()">
+      <span class="dl-i" style="background:#FFF7ED"><i class="ti ti-shield-check" style="color:#F59E0B"></i></span>Claims
+    </div>
+    <div class="mob-dl" onclick="mobNav('closed');mobDrawerClose()">
+      <span class="dl-i" style="background:#F1F5F9"><i class="ti ti-lock" style="color:#64748B"></i></span>Closed
+    </div>
+    <div class="mob-dl" onclick="mobNav('issues');mobDrawerClose()">
+      <span class="dl-i" style="background:#FFF1F2"><i class="ti ti-alert-triangle" style="color:#EF4444"></i></span>Issues
+    </div>
+    <div class="mob-drawer-title">Tools</div>
+    <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()">
+      <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-cloud" style="color:#3B82F6"></i></span>Cloud Sync
+    </div>
+    <div class="mob-dl" onclick="openOrderModal();mobDrawerClose()">
+      <span class="dl-i" style="background:#ECFDF5"><i class="ti ti-plus" style="color:#10B981"></i></span>New Order
+    </div>
+    <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="mob-dl" style="text-decoration:none;color:inherit">
+      <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-world" style="color:#16A34A"></i></span>DCJ Portal
+    </a>
+    <div class="mob-drawer-title">Settings</div>
+    <div class="mob-dl" id="mob-admin-status" onclick="mobDrawerChangePIN();mobDrawerClose()">
+      <span class="dl-i" style="background:#1C1C1E"><i class="ti ti-key" style="color:#ffffff"></i></span><span id="mob-admin-label">Admin PIN</span>
+    </div>
+    <div class="mob-dl" id="mob-notif-row" onclick="fcmDrawerToggle()">
+      <span class="dl-i" style="background:#FFF7ED"><i class="ti ti-bell" style="color:#F59E0B"></i></span><span id="mob-notif-label">Push Notifications</span><span id="mob-notif-status" style="margin-left:auto;font-size:11px;font-weight:700;color:#8A8A8E">OFF</span>
+    </div>
+  </div>
 </div>
 
 <!-- View Sheet -->
