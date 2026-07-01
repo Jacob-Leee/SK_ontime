@@ -5884,9 +5884,19 @@ function importParsedEmail() {
 }
 
 // ============================================================
-// Close modal on overlay click
+// Close modal on overlay click — but NOT on drag (track mouse movement)
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  let _dragStartX, _dragStartY;
+  overlay.addEventListener('mousedown', e => {
+    if (e.target !== overlay) return;
+    _dragStartX = e.clientX; _dragStartY = e.clientY;
+  });
+  overlay.addEventListener('click', e => {
+    if (e.target !== overlay) return;
+    const dx = e.clientX - (_dragStartX ?? e.clientX);
+    const dy = e.clientY - (_dragStartY ?? e.clientY);
+    if (Math.hypot(dx, dy) < 6) overlay.classList.remove('open');
+  });
 });
 
 // Keyboard shortcut
