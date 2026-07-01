@@ -563,6 +563,13 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   </div>
 
   <!-- Search Overlay -->
+  <!-- FCM notification enable banner (shown once, dismissed after permission granted) -->
+  <div id="fcm-enable-bar" style="display:none;background:#007AFF;padding:10px 16px;align-items:center;gap:10px;flex-shrink:0">
+    <i class="ti ti-bell" style="color:#fff;font-size:18px;flex-shrink:0"></i>
+    <div style="flex:1;color:#fff;font-size:13px;font-weight:600">Tap to enable push notifications</div>
+    <button onclick="fcmRequestPermission()" style="background:#fff;color:#007AFF;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">Enable</button>
+    <button onclick="document.getElementById('fcm-enable-bar').style.display='none'" style="background:none;border:none;color:rgba(255,255,255,0.7);font-size:20px;cursor:pointer;padding:0;line-height:1">&times;</button>
+  </div>
   <div id="mob-search-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(242,241,236,0.98);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);padding:env(safe-area-inset-top) 0 0;flex-direction:column;">
     <div style="background:#F2F1EC;border-bottom:1px solid #E5E5E0;padding:12px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
       <i class="ti ti-search" style="color:#888;font-size:18px;flex-shrink:0;"></i>
@@ -6984,19 +6991,30 @@ function _fcmShowBanner(title, body) {
 
 // Auto-init FCM after DOM ready (Admin-only — not for subbie)
 function fcmInitIfAdmin() {
-  // Only init FCM for admin users
   if (window._SUBBIE_MODE) return;
-  // Wait for Firebase SDK (deferred) + login to complete
-  const waitForFirebase = (attempts) => {
-    if (typeof firebase !== 'undefined') {
-      setTimeout(fcmInit, 500);
-    } else if (attempts > 0) {
-      setTimeout(() => waitForFirebase(attempts - 1), 300);
-    } else {
-      console.log('[FCM] Firebase SDK not loaded — skipping push setup.');
-    }
-  };
-  waitForFirebase(20); // wait up to 6 seconds
+  // If already granted, init silently in background
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    const waitForFirebase = (attempts) => {
+      if (typeof firebase !== 'undefined') { setTimeout(fcmInit, 500); }
+      else if (attempts > 0) { setTimeout(() => waitForFirebase(attempts - 1), 300); }
+    };
+    waitForFirebase(20);
+    return;
+  }
+  // Show banner prompting user to enable (iOS requires user gesture)
+  setTimeout(() => {
+    if (typeof Notification === 'undefined' || Notification.permission === 'granted') return;
+    const bar = document.getElementById('fcm-enable-bar');
+    if (bar) bar.style.display = 'flex';
+  }, 1000);
+}
+
+async function fcmRequestPermission() {
+  // Hide banner immediately
+  const bar = document.getElementById('fcm-enable-bar');
+  if (bar) bar.style.display = 'none';
+  // Now run full FCM init (called directly from user tap = valid gesture)
+  await fcmInit();
 }
 
 </script>
