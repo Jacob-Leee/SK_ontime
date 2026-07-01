@@ -6538,6 +6538,17 @@ function mobVEdit() {
 
 // ── Drawer ──────────────────────────────────────────────────────
 function mobBackToHome() {
+  // If in SK admin mode, just go back to name picker (no PIN re-entry needed)
+  if (window._ADMIN_MODE && !window._SUBBIE_MODE) {
+    const overlay = document.getElementById('mob-pin-overlay');
+    if (overlay) overlay.style.display = 'flex';
+    document.getElementById('mob-role-select').style.display = 'none';
+    document.getElementById('mob-pin-entry').style.display = 'none';
+    const sp = document.getElementById('mob-subbie-pick');
+    if (sp) sp.style.display = 'none';
+    mobShowSkPicker();
+    return;
+  }
   // Reset all subbie state
   window._SUBBIE_MODE = false;
   window._SELECTED_SUBBIE = null;
@@ -6873,7 +6884,7 @@ function mobApplyAdminUI() {
     if (fab && !window._SUBBIE_MODE) fab.style.display = '';
     // Show Home button for admin too
     const backBtn = document.getElementById('mob-back-btn');
-    if (backBtn) { backBtn.style.display = 'inline-flex'; backBtn.style.alignItems = 'center'; }
+    if (backBtn) { backBtn.style.display = 'inline-flex'; backBtn.style.alignItems = 'center'; backBtn.textContent = '⇄ Switch User'; }
   } else {
     // Non-admin: Active tab only
     NON_ADMIN_HIDDEN.forEach(id => {
@@ -6975,6 +6986,16 @@ function mobSkSkip() {
   document.getElementById('mob-pin-overlay').style.display = 'none';
   mobApplyAdminUI();
   mobRefresh();
+}
+
+function fcmDrawerUpdateStatus() {
+  const statusEl = document.getElementById('mob-notif-status');
+  if (!statusEl) return;
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    statusEl.textContent = 'ON'; statusEl.style.color = '#34C759';
+  } else {
+    statusEl.textContent = 'OFF'; statusEl.style.color = '#FF3B30';
+  }
 }
 
 async function mobForceRefresh() {
