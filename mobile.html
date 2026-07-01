@@ -524,6 +524,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
   <!-- ── Phase 4: SK name picker (after PIN) ── -->
   <div id="mob-sk-pick" style="display:none;flex-direction:column;align-items:center;width:100%;max-width:400px;margin:0 auto;">
+    <button onclick="mobSkPickBack()" style="align-self:flex-start;background:none;border:none;color:#8A8A8E;font-size:14px;cursor:pointer;margin-bottom:16px;padding:4px 0;display:flex;align-items:center;gap:4px">
+      <i class="ti ti-chevron-left" style="font-size:16px"></i> Back
+    </button>
     <div style="width:44px;height:44px;border-radius:12px;background:#007AFF;display:flex;align-items:center;justify-content:center;margin-bottom:12px;flex-shrink:0">
       <i class="ti ti-user-check" style="font-size:22px;color:#fff"></i>
     </div>
@@ -6993,6 +6996,14 @@ function mobSkPick(name) {
     waitForFirebase(20);
   }
   setTimeout(fcmDrawerUpdateStatus, 800);
+}
+
+function mobSkPickBack() {
+  // Back to role selection — hide SK picker, reset admin mode, show role select
+  document.getElementById('mob-sk-pick').style.display = 'none';
+  window._ADMIN_MODE = false;
+  window._SK_USER = null;
+  document.getElementById('mob-role-select').style.display = 'flex';
 }
 
 function mobSkSkip() {
