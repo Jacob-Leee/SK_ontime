@@ -6964,7 +6964,7 @@ function mobPinSkip() {
   mobRefresh();
 }
 
-const _SK_NAMES = ['SK_June', 'SK_Jacob', 'SK_Jay', 'SK_Mo'];
+const _SK_NAMES = ['SK_Jacob', 'SK_Mo', 'SK_June', 'SK_Jay', 'Jake Lee', 'Chris Choi', 'Sean Park'];
 
 function mobShowSkPicker() {
   document.getElementById('mob-pin-entry').style.display = 'none';
@@ -6986,9 +6986,11 @@ function mobShowSkPicker() {
     listEl.appendChild(adminRow);
 
     _SK_NAMES.forEach(function(name) {
-      const initials = name.replace('SK_','').slice(0,2).toUpperCase();
-      const colors = {SK_June:'#FF6B35',SK_Jacob:'#007AFF',SK_Jay:'#34C759',SK_Mo:'#AF52DE'};
-      const color = colors[name] || '#007AFF';
+      const bare = name.replace(/^SK_/,'');
+      const parts = bare.split(' ');
+      const initials = parts.length > 1 ? (parts[0][0]+parts[parts.length-1][0]).toUpperCase() : bare.slice(0,2).toUpperCase();
+      const colors = {SK_Jacob:'#007AFF',SK_Mo:'#AF52DE',SK_June:'#FF6B35',SK_Jay:'#34C759','Jake Lee':'#0D9488','Chris Choi':'#CA8A04','Sean Park':'#DB2777'};
+      const color = colors[name] || '#8E8E93';
       const row = document.createElement('div');
       row.setAttribute('data-skname', name);
       row.style.cssText = 'display:flex;align-items:center;gap:14px;padding:14px 16px;background:#fff;border:1.5px solid #E5E5E0;border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0.05);user-select:none;';
