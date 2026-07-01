@@ -7315,11 +7315,13 @@ async function fcmDrawerToggle() {
       }
     } catch(e) { console.warn('[FCM] remove error', e); }
     localStorage.setItem(notifKey, 'off');
+    localStorage.removeItem('fcm_cached_token');  // force re-registration on next enable
     fcmDrawerUpdateStatus();
     toast('알림을 껐습니다 (Notifications OFF)', 'success');
   } else {
     // Currently OFF → turn ON: re-register token
     localStorage.setItem(notifKey, 'on');
+    localStorage.removeItem('fcm_cached_token');  // ensure RTDB write happens
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmInit(grp);
     fcmDrawerUpdateStatus();
