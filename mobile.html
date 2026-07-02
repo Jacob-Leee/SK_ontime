@@ -6628,6 +6628,8 @@ function mobDrawerOpen() {
   if (lbl) lbl.textContent = window._ADMIN_MODE ? 'Admin Mode: ON  (change PIN)' : 'Admin PIN (locked)';
   document.getElementById('mob-drawer').style.display = 'block';
   document.getElementById('mob-overlay').style.display = 'block';
+  // Always refresh notification toggle to reflect current user/subbie
+  fcmDrawerUpdateStatus();
 }
 function mobDrawerClose() {
   document.getElementById('mob-drawer').style.display = 'none';
@@ -7081,8 +7083,11 @@ function fcmDrawerUpdateStatus() {
   const isGranted = typeof Notification !== 'undefined' && Notification.permission === 'granted';
   const isDenied  = typeof Notification !== 'undefined' && Notification.permission === 'denied';
   const group = (window._SK_USER || window._SELECTED_SUBBIE || 'admin').replace(/\s+/g,'_');
-  const isEnabled = localStorage.getItem('fcm_notif_' + group) !== 'off';
-  const isOn = isGranted && isEnabled;
+  // MUST match toggle logic exactly — explicitly 'on' + recently registered = truly ON
+  const isExplicitlyOn = localStorage.getItem('fcm_notif_' + group) === 'on';
+  const lastReg = parseInt(localStorage.getItem('fcm_last_reg_' + group) || '0');
+  const recentlyRegistered = Date.now() - lastReg < 7 * 24 * 60 * 60 * 1000;
+  const isOn = isGranted && isExplicitlyOn && recentlyRegistered;
 
   // Text status
   if (isDenied) {
@@ -7236,7 +7241,7 @@ async function fcmInit(userGroup) {
     );
 
     localStorage.setItem('fcm_prev_group',    group);
-    localStorage.setItem('fcm_last_registered', Date.now().toString());
+    localStorage.setItem('fcm_last_reg_' + group, Date.now().toString());
     console.log('[FCM] Token registered for', group);
 
     // Attach foreground handler
@@ -7286,11 +7291,11 @@ function fcmInitIfAdmin() {
     localStorage.setItem('fcm_prev_perm', 'granted');
     if (prevPerm === 'denied') {
       console.log('[FCM] Permission unblocked — forcing re-registration');
-      localStorage.removeItem('fcm_last_registered');
+      localStorage.removeItem('fcm_last_reg_' + groupName);
     }
 
     // Full re-registration: once per day OR if never registered
-    const last = parseInt(localStorage.getItem('fcm_last_registered') || '0');
+    const last = parseInt(localStorage.getItem('fcm_last_reg_' + groupName) || '0');
     const oneDayMs = 24 * 60 * 60 * 1000;
     if (Date.now() - last > oneDayMs) {
       console.log('[FCM] Token refresh');
@@ -7322,7 +7327,7 @@ async function fcmDrawerToggle() {
   // explicitly 'on' = ON; anything else (null / 'off') = OFF/needs setup
   const isExplicitlyOn = localStorage.getItem(notifKey) === 'on';
   // Also treat as "truly on" only if token was registered recently (within 7 days)
-  const lastReg = parseInt(localStorage.getItem('fcm_last_registered') || '0');
+  const lastReg = parseInt(localStorage.getItem('fcm_last_reg_' + group) || '0');
   const recentlyRegistered = Date.now() - lastReg < 7 * 24 * 60 * 60 * 1000;
   const isOn = isExplicitlyOn && recentlyRegistered;
 
@@ -7349,13 +7354,13 @@ async function fcmDrawerToggle() {
       catch(e) { console.warn('[FCM] remove error', e); }
     }
     localStorage.setItem(notifKey, 'off');
-    localStorage.removeItem('fcm_last_registered');
+    localStorage.removeItem('fcm_last_reg_' + group);
     fcmDrawerUpdateStatus();
     toast('알림을 껐습니다 (Notifications OFF)', 'success');
   } else {
     // Turn ON (or re-register) — full registration
     localStorage.setItem(notifKey, 'on');
-    localStorage.removeItem('fcm_last_registered'); // force fresh token write
+    localStorage.removeItem('fcm_last_reg_' + group); // force fresh token write
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmInit(grp);
     fcmDrawerUpdateStatus();
@@ -7384,7 +7389,7 @@ function _fcmShowBlockedModal() {
           4. 이 앱으로 돌아오기 (자동 감지)
         </div>
       </div>
-      <button onclick="localStorage.removeItem('fcm_last_registered');localStorage.setItem('fcm_prev_perm','denied');window.location.reload()"
+      <button onclick="Object.keys(localStorage).filter(k=>k.startsWith('fcm_last_reg_')).forEach(k=>localStorage.removeItem(k));localStorage.setItem('fcm_prev_perm','denied');window.location.reload()"
         style="width:100%;padding:14px;background:#34C759;border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
         설정 변경 후 새로고침
       </button>
