@@ -685,7 +685,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span class="dl-i" style="background:#1C1C1E"><i class="ti ti-key" style="color:#ffffff"></i></span><span id="mob-admin-label">Admin PIN</span>
     </div>
     <div class="mob-dl" id="mob-notif-row" onclick="fcmDrawerToggle()">
-      <span class="dl-i" style="background:#FFF7ED"><i class="ti ti-bell" style="color:#F59E0B"></i></span><span id="mob-notif-label">Push Notifications</span><span id="mob-notif-status" style="margin-left:auto;font-size:11px;font-weight:700;color:#8A8A8E">OFF</span>
+      <span class="dl-i" style="background:#FFF7ED"><i class="ti ti-bell" style="color:#F59E0B"></i></span>
+      <span id="mob-notif-label" style="flex:1">알림 (Push)</span>
+      <span id="mob-notif-toggle" style="display:inline-flex;align-items:center;gap:6px;margin-left:auto">
+        <span id="mob-notif-status" style="font-size:11px;font-weight:700;color:#8A8A8E">OFF</span>
+        <span id="mob-notif-pill" style="width:40px;height:22px;border-radius:11px;background:#ccc;position:relative;display:inline-block;transition:background .2s"><span id="mob-notif-knob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></span></span>
+      </span>
     </div>
   </div>
 </div>
@@ -7074,12 +7079,26 @@ function fcmDrawerUpdateStatus() {
   const statusEl = document.getElementById('mob-notif-status');
   if (!statusEl) return;
   const isGranted = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  const isDenied  = typeof Notification !== 'undefined' && Notification.permission === 'denied';
   const group = (window._SK_USER || window._SELECTED_SUBBIE || 'admin').replace(/\s+/g,'_');
   const isEnabled = localStorage.getItem('fcm_notif_' + group) !== 'off';
-  if (isGranted && isEnabled) {
+  const isOn = isGranted && isEnabled;
+
+  // Text status
+  if (isDenied) {
+    statusEl.textContent = '차단됨'; statusEl.style.color = '#FF9500';
+  } else if (isOn) {
     statusEl.textContent = 'ON'; statusEl.style.color = '#34C759';
   } else {
     statusEl.textContent = 'OFF'; statusEl.style.color = '#FF3B30';
+  }
+
+  // Toggle pill visual
+  const pill = document.getElementById('mob-notif-pill');
+  const knob = document.getElementById('mob-notif-knob');
+  if (pill && knob) {
+    pill.style.background = isOn ? '#34C759' : (isDenied ? '#FF9500' : '#ccc');
+    knob.style.left = isOn ? '20px' : '2px';
   }
 }
 
@@ -7187,7 +7206,13 @@ async function fcmInit(userGroup) {
 
     // Ensure permission
     const perm = await Notification.requestPermission();
-    if (perm !== 'granted') { console.log('[FCM] Permission denied'); return; }
+    if (perm !== 'granted') {
+      console.log('[FCM] Permission denied');
+      if (perm === 'denied') {
+        _fcmShowBanner('🔕 알림 차단됨', 'Chrome 설정 → 사이트 설정 → 알림에서 허용 후 재시도');
+      }
+      return;
+    }
 
     // Get FCM token (also refreshes if rotated)
     const token = await _fcmMessaging.getToken({ vapidKey: _FCM_VAPID, serviceWorkerRegistration: activeReg });
@@ -7232,6 +7257,12 @@ function fcmInitIfAdmin() {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
     setTimeout(() => {
       if (Notification.permission === 'granted') return;
+      if (Notification.permission === 'denied') {
+        // Blocked by browser — show settings guidance instead
+        _fcmShowBanner('🔕 알림 차단됨', 'Chrome 설정 → 사이트 설정 → 알림에서 허용해주세요');
+        return;
+      }
+      // 'default' — show the enable bar
       const bar = document.getElementById('fcm-enable-bar');
       if (bar) bar.style.display = 'flex';
     }, 1000);
@@ -7282,7 +7313,16 @@ async function fcmDrawerToggle() {
   const notifKey = 'fcm_notif_' + group;
   const isOn     = localStorage.getItem(notifKey) !== 'off';
 
-  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+  if (typeof Notification === 'undefined') { return; }
+
+  if (Notification.permission === 'denied') {
+    // Browser blocked — show guidance modal
+    _fcmShowBlockedModal();
+    return;
+  }
+
+  if (Notification.permission !== 'granted') {
+    // Not yet asked — request permission
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmRequestPermission(grp);
     return;
@@ -7307,6 +7347,38 @@ async function fcmDrawerToggle() {
     fcmDrawerUpdateStatus();
     toast('알림을 켰습니다 (Notifications ON)', 'success');
   }
-}</script>
+}
+// ─── Blocked notification guidance modal ─────────────────────
+function _fcmShowBlockedModal() {
+  const existing = document.getElementById('fcm-blocked-modal');
+  if (existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'fcm-blocked-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.6);display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:#1C1C1E;border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;color:#fff">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:36px">\u{1F515}</div>
+        <div style="font-size:17px;font-weight:700;margin-top:8px">알림이 차단돼 있어요</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:6px">브라우저 설정에서 허용해주세요</div>
+      </div>
+      <div style="background:#2C2C2E;border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="font-size:13px;color:rgba(255,255,255,0.85);line-height:2">
+          1. 주소창 왼쪽 <b>자물쇠 아이콘</b> 탭<br>
+          2. <b>사이트 설정</b> 선택<br>
+          3. <b>알림</b> → <b>허용</b> 으로 변경<br>
+          4. 페이지 새로고침 후 다시 켜기
+        </div>
+      </div>
+      <button onclick="document.getElementById('fcm-blocked-modal').remove()"
+        style="width:100%;padding:14px;background:#007AFF;border:none;border-radius:12px;color:#fff;font-size:16px;font-weight:700;cursor:pointer">
+        확인
+      </button>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+</script>
 </body>
 </html>
