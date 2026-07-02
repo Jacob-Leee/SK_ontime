@@ -6210,6 +6210,29 @@ function _rtdbSyncOrder(order) {
 // Init on page load
 window.addEventListener('load', _rtdbInit);
 
+// ============================================================
+// SUI Import — auto-fill New Order modal from URL params
+// Triggered by the SUI bookmarklet on the Homes NSW portal
+// ============================================================
+(function() {
+  const p = new URLSearchParams(window.location.search);
+  if (!p.get('suiImport')) return;
+  // Wait for app (SOR codes, subbies) to finish initialising
+  setTimeout(function() {
+    openOrderModal();          // opens blank New Order modal
+    const set = (id, val) => { if (val) document.getElementById(id).value = val; };
+    set('f-orderNumber', p.get('orderNumber'));
+    set('f-prn',         p.get('prn'));
+    set('f-address',     p.get('address'));
+    set('f-area',        p.get('area'));
+    set('f-workType',    p.get('workType'));
+    set('f-suiId',       p.get('suiId'));
+    if (p.get('orderDate')) set('f-orderDate', p.get('orderDate'));
+    // Clean params from URL bar without reloading
+    window.history.replaceState({}, '', window.location.pathname);
+  }, 1200);
+})();
+
 </script>
 </body>
 </html>
