@@ -7258,7 +7258,7 @@ function fcmInitIfAdmin() {
     setTimeout(() => {
       if (Notification.permission === 'granted') return;
       if (Notification.permission === 'denied') {
-        // Blocked by browser — show settings guidance instead
+        localStorage.setItem('fcm_prev_perm', 'denied'); // track for transition detection
         _fcmShowBanner('🔕 알림 차단됨', 'Chrome 설정 → 사이트 설정 → 알림에서 허용해주세요');
         return;
       }
@@ -7281,11 +7281,19 @@ function fcmInitIfAdmin() {
     _fcmSetupOnMessage();
     setTimeout(fcmDrawerUpdateStatus, 300);
 
-    // Once-per-day full re-registration to handle token rotation
+    // If permission just transitioned from denied → granted, force fresh registration
+    const prevPerm = localStorage.getItem('fcm_prev_perm');
+    localStorage.setItem('fcm_prev_perm', 'granted');
+    if (prevPerm === 'denied') {
+      console.log('[FCM] Permission unblocked — forcing re-registration');
+      localStorage.removeItem('fcm_last_registered');
+    }
+
+    // Full re-registration: once per day OR if never registered
     const last = parseInt(localStorage.getItem('fcm_last_registered') || '0');
     const oneDayMs = 24 * 60 * 60 * 1000;
     if (Date.now() - last > oneDayMs) {
-      console.log('[FCM] Daily token refresh');
+      console.log('[FCM] Token refresh');
       fcmInit(groupName);
     }
   };
@@ -7307,22 +7315,27 @@ async function fcmRequestPermission(userGroup) {
 }
 
 async function fcmDrawerToggle() {
-  mobDrawerClose();
+  // NOTE: drawer stays open so user can see the result
   const group    = (window._SK_USER || window._SELECTED_SUBBIE || 'admin').replace(/\s+/g, '_');
   const deviceId = localStorage.getItem('fcm_device_id');
   const notifKey = 'fcm_notif_' + group;
-  const isOn     = localStorage.getItem(notifKey) !== 'off';
+  // explicitly 'on' = ON; anything else (null / 'off') = OFF/needs setup
+  const isExplicitlyOn = localStorage.getItem(notifKey) === 'on';
+  // Also treat as "truly on" only if token was registered recently (within 7 days)
+  const lastReg = parseInt(localStorage.getItem('fcm_last_registered') || '0');
+  const recentlyRegistered = Date.now() - lastReg < 7 * 24 * 60 * 60 * 1000;
+  const isOn = isExplicitlyOn && recentlyRegistered;
 
   if (typeof Notification === 'undefined') { return; }
 
   if (Notification.permission === 'denied') {
-    // Browser blocked — show guidance modal
+    mobDrawerClose();
     _fcmShowBlockedModal();
     return;
   }
 
   if (Notification.permission !== 'granted') {
-    // Not yet asked — request permission
+    mobDrawerClose();
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmRequestPermission(grp);
     return;
@@ -7330,18 +7343,19 @@ async function fcmDrawerToggle() {
 
   if (isOn && deviceId) {
     // Turn OFF — remove token from RTDB
-    if (!_fcmDB && _fcmSetupFirebase()) { /* initialised now */ }
+    if (!_fcmDB) _fcmSetupFirebase();
     if (_fcmDB) {
       try { await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).remove(); }
       catch(e) { console.warn('[FCM] remove error', e); }
     }
     localStorage.setItem(notifKey, 'off');
-    localStorage.removeItem('fcm_last_registered'); // force full re-init on next enable
+    localStorage.removeItem('fcm_last_registered');
     fcmDrawerUpdateStatus();
     toast('알림을 껐습니다 (Notifications OFF)', 'success');
   } else {
-    // Turn ON — full registration
+    // Turn ON (or re-register) — full registration
     localStorage.setItem(notifKey, 'on');
+    localStorage.removeItem('fcm_last_registered'); // force fresh token write
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmInit(grp);
     fcmDrawerUpdateStatus();
@@ -7370,7 +7384,7 @@ function _fcmShowBlockedModal() {
           4. 이 앱으로 돌아오기 (자동 감지)
         </div>
       </div>
-      <button onclick="window.location.reload()"
+      <button onclick="localStorage.removeItem('fcm_last_registered');localStorage.setItem('fcm_prev_perm','denied');window.location.reload()"
         style="width:100%;padding:14px;background:#34C759;border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
         설정 변경 후 새로고침
       </button>
