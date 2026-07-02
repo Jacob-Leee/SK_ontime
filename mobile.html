@@ -7142,192 +7142,171 @@ const _FCM_CONFIG = {
   appId: "1:1064085096701:web:9463a7ccba801d9a9b5694",
   databaseURL: "https://homes-nsw-default-rtdb.firebaseio.com"
 };
-
 const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHjjGrYRs1v2V3HSSp-H1e3fcADA6Y";
 
 let _fcmApp, _fcmMessaging, _fcmDB;
-let _fcmInitInProgress = false;   // concurrency guard
+let _fcmInitInProgress = false;
 
+// ─── internal: init Firebase objects (idempotent) ─────────────────────────────
+function _fcmSetupFirebase() {
+  if (_fcmMessaging) return true;
+  if (typeof firebase === 'undefined') return false;
+  try {
+    _fcmApp = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(_FCM_CONFIG);
+    _fcmMessaging = firebase.messaging(_fcmApp);
+    _fcmDB        = firebase.database(_fcmApp);
+    return true;
+  } catch(e) { console.warn('[FCM] Firebase setup error:', e); return false; }
+}
+
+// ─── internal: attach onMessage once ──────────────────────────────────────────
+function _fcmSetupOnMessage() {
+  if (!_fcmMessaging || window._fcmOnMessageSet) return;
+  window._fcmOnMessageSet = true;
+  _fcmMessaging.onMessage((payload) => {
+    console.log('[FCM] Foreground message:', payload);
+    const title = payload.data?.title || payload.notification?.title || 'New Order';
+    const body  = payload.data?.body  || payload.notification?.body  || '';
+    _fcmShowBanner(title, body);
+  });
+}
+
+// ─── FULL INIT: register SW + get token + write to RTDB ──────────────────────
+// Called ONLY when user explicitly enables, or once-per-day refresh
 async function fcmInit(userGroup) {
-  // Prevent concurrent calls — double-init corrupts RTDB state
-  if (_fcmInitInProgress) { console.log('[FCM] Init already running — skipped'); return; }
+  if (_fcmInitInProgress) { console.log('[FCM] Already running'); return; }
   _fcmInitInProgress = true;
-
   try {
     if (!('serviceWorker' in navigator)) return;
+    if (!_fcmSetupFirebase()) return;
 
-    if (!firebase.apps.length) {
-      _fcmApp = firebase.initializeApp(_FCM_CONFIG);
-    } else {
-      _fcmApp = firebase.apps[0];
-    }
-    _fcmMessaging = firebase.messaging(_fcmApp);
-    _fcmDB = firebase.database(_fcmApp);
-
-    const reg = await navigator.serviceWorker.register('/SK_ontime/firebase-messaging-sw.js');
-    console.log('[FCM] SW registered:', reg.scope);
+    // Register SW and wait for active state
+    await navigator.serviceWorker.register('/SK_ontime/firebase-messaging-sw.js');
     const activeReg = await navigator.serviceWorker.ready;
-    console.log('[FCM] SW active:', activeReg.scope);
+    console.log('[FCM] SW active');
 
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') { console.log('[FCM] Permission denied'); return; }
+    // Ensure permission
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { console.log('[FCM] Permission denied'); return; }
 
-    const token = await _fcmMessaging.getToken({
-      vapidKey: _FCM_VAPID,
-      serviceWorkerRegistration: activeReg
-    });
-    if (!token) { console.log('[FCM] No token received'); return; }
+    // Get FCM token (also refreshes if rotated)
+    const token = await _fcmMessaging.getToken({ vapidKey: _FCM_VAPID, serviceWorkerRegistration: activeReg });
+    if (!token) { console.log('[FCM] No token'); return; }
 
+    // Stable device ID
     let deviceId = localStorage.getItem('fcm_device_id');
     if (!deviceId) {
       deviceId = 'dev_' + Math.random().toString(36).slice(2, 12);
       localStorage.setItem('fcm_device_id', deviceId);
     }
+
     const group = (userGroup || 'admin').replace(/\s+/g, '_');
 
-    const cachedToken = localStorage.getItem('fcm_cached_token');
-    const cachedGroup = localStorage.getItem('fcm_prev_group');
+    // Write token FIRST (no gap), then clean other groups
+    await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
+    const ALL_GROUPS = ['admin','SK_Jacob','SK_Mo','SK_June','SK_Jay','Jake_Lee','Chris_Choi','Sean_Park'];
+    await Promise.all(
+      ALL_GROUPS.filter(g => g !== group)
+                .map(g => _fcmDB.ref('/fcmTokens/' + g + '/' + deviceId).remove().catch(() => {}))
+    );
 
-    if (cachedToken !== token || cachedGroup !== group) {
-      // Token or group changed — write FIRST (no gap), then remove stale entries
-      await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
-      const ALL_GROUPS = ['admin', 'SK_Jacob', 'SK_Mo', 'SK_June', 'SK_Jay', 'Jake_Lee', 'Chris_Choi', 'Sean_Park'];
-      await Promise.all(
-        ALL_GROUPS.filter(g => g !== group).map(g =>
-          _fcmDB.ref('/fcmTokens/' + g + '/' + deviceId).remove().catch(() => {})
-        )
-      );
-      localStorage.setItem('fcm_cached_token', token);
-      localStorage.setItem('fcm_prev_group', group);
-      console.log('[FCM] Token registered for', group);
-    } else {
-      console.log('[FCM] Token unchanged — RTDB update skipped');
-    }
+    localStorage.setItem('fcm_prev_group',    group);
+    localStorage.setItem('fcm_last_registered', Date.now().toString());
+    console.log('[FCM] Token registered for', group);
 
-    // Foreground message handler — set up once only
-    // Use in-app banner (reliable on mobile); SW handles background
-    if (!window._fcmOnMessageSet) {
-      window._fcmOnMessageSet = true;
-      _fcmMessaging.onMessage((payload) => {
-        console.log('[FCM] Foreground message:', payload);
-        const title = payload.data?.title || payload.notification?.title || 'New Order';
-        const body  = payload.data?.body  || payload.notification?.body  || '';
-        _fcmShowBanner(title, body);
-      });
-    }
+    // Attach foreground handler
+    _fcmSetupOnMessage();
 
-  } catch (err) {
+  } catch(err) {
     console.error('[FCM] Init error:', err);
   } finally {
     _fcmInitInProgress = false;
   }
 }
 
-function _fcmShowBanner(title, body) {
-  // Remove any existing banner
-  const existing = document.getElementById('fcm-banner');
-  if (existing) existing.remove();
-
-  const banner = document.createElement('div');
-  banner.id = 'fcm-banner';
-  banner.style.cssText = [
-    'position:fixed;top:calc(16px + env(safe-area-inset-top));left:50%;transform:translateX(-50%)',
-    'background:#1C1C1E;color:#fff;border-radius:14px;padding:12px 18px',
-    'z-index:999999;max-width:calc(100vw - 32px);width:340px',
-    'box-shadow:0 4px 20px rgba(0,0,0,0.25);display:flex;gap:10px;align-items:flex-start',
-    'animation:fcmSlideIn 0.3s ease'
-  ].join(';');
-
-  banner.innerHTML =
-    '<div style="width:32px;height:32px;border-radius:8px;background:#007AFF;display:flex;align-items:center;justify-content:center;flex-shrink:0">' +
-      '<i class="ti ti-bell-ringing" style="font-size:16px;color:#fff"></i>' +
-    '</div>' +
-    '<div style="flex:1;min-width:0">' +
-      '<div style="font-size:13px;font-weight:700;margin-bottom:2px">' + title + '</div>' +
-      '<div style="font-size:12px;color:rgba(255,255,255,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + body + '</div>' +
-    '</div>' +
-    '<button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:20px;cursor:pointer;padding:0 0 0 8px;line-height:1;flex-shrink:0">&times;</button>';
-
-  document.body.appendChild(banner);
-  setTimeout(() => { if (banner.parentElement) banner.remove(); }, 6000);
-}
-
+// ─── PAGE LOAD: lightweight — foreground handler only ─────────────────────────
+// Does NOT re-register SW or call getToken on every load.
+// Full fcmInit runs: (a) on explicit enable, or (b) once per day to refresh token.
 function fcmInitIfAdmin() {
   if (window._SUBBIE_MODE) return;
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    // Only re-register if we already know who this user is (name was previously picked)
-    const saved = lsGet('mob_sk_user');
-    if (!saved) {
-      // No user picked yet — don't auto-register (would create phantom admin tokens)
-      setTimeout(fcmDrawerUpdateStatus, 500);
-      return;
-    }
-    const skUser = (saved === 'admin') ? null : saved;
-    const groupName = skUser || 'admin';
-    // Respect user's notification preference — don't re-register if explicitly turned OFF
-    const notifKey = 'fcm_notif_' + groupName.replace(/\s+/g, '_');
-    if (localStorage.getItem(notifKey) === 'off') {
-      setTimeout(fcmDrawerUpdateStatus, 500);
-      return;
-    }
-    const waitForFirebase = (attempts) => {
-      if (typeof firebase !== 'undefined') { setTimeout(() => fcmInit(groupName), 500); }
-      else if (attempts > 0) { setTimeout(() => waitForFirebase(attempts - 1), 300); }
-    };
-    waitForFirebase(20);
-    setTimeout(fcmDrawerUpdateStatus, 500);
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+    setTimeout(() => {
+      if (Notification.permission === 'granted') return;
+      const bar = document.getElementById('fcm-enable-bar');
+      if (bar) bar.style.display = 'flex';
+    }, 1000);
     return;
   }
-  setTimeout(() => {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return;
-    const bar = document.getElementById('fcm-enable-bar');
-    if (bar) bar.style.display = 'flex';
-  }, 1000);
+
+  const saved = lsGet('mob_sk_user');
+  if (!saved) { setTimeout(fcmDrawerUpdateStatus, 500); return; }
+
+  const groupName  = (saved === 'admin') ? 'admin' : saved;
+  const notifKey   = 'fcm_notif_' + groupName.replace(/\s+/g, '_');
+  if (localStorage.getItem(notifKey) === 'off') { setTimeout(fcmDrawerUpdateStatus, 500); return; }
+
+  const doSetup = () => {
+    if (!_fcmSetupFirebase()) return;
+    _fcmSetupOnMessage();
+    setTimeout(fcmDrawerUpdateStatus, 300);
+
+    // Once-per-day full re-registration to handle token rotation
+    const last = parseInt(localStorage.getItem('fcm_last_registered') || '0');
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    if (Date.now() - last > oneDayMs) {
+      console.log('[FCM] Daily token refresh');
+      fcmInit(groupName);
+    }
+  };
+
+  // Wait for Firebase SDK to be ready
+  let attempts = 15;
+  const wait = () => {
+    if (typeof firebase !== 'undefined') { doSetup(); }
+    else if (--attempts > 0) { setTimeout(wait, 300); }
+  };
+  wait();
 }
 
 async function fcmRequestPermission(userGroup) {
   const bar = document.getElementById('fcm-enable-bar');
   if (bar) bar.style.display = 'none';
-  const group = userGroup || window._SK_USER || window._SELECTED_SUBBIE || 'admin';
-  await fcmInit(group);
+  const grp = userGroup || window._SK_USER || window._SELECTED_SUBBIE || 'admin';
+  await fcmInit(grp);
 }
 
 async function fcmDrawerToggle() {
   mobDrawerClose();
-  const group = (window._SK_USER || window._SELECTED_SUBBIE || 'admin').replace(/\s+/g,'_');
+  const group    = (window._SK_USER || window._SELECTED_SUBBIE || 'admin').replace(/\s+/g, '_');
   const deviceId = localStorage.getItem('fcm_device_id');
-  const notifKey = 'fcm_notif_' + group;   // per-user key
-  const isEnabled = localStorage.getItem(notifKey) !== 'off';
+  const notifKey = 'fcm_notif_' + group;
+  const isOn     = localStorage.getItem(notifKey) !== 'off';
 
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
-    // Not yet granted — request permission and enable
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmRequestPermission(grp);
     return;
   }
 
-  if (isEnabled && deviceId) {
-    // Currently ON → turn OFF: remove token from RTDB
-    try {
-      if (_fcmDB) {
-        await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).remove();
-        console.log('[FCM] Token removed — notifications OFF');
-      }
-    } catch(e) { console.warn('[FCM] remove error', e); }
+  if (isOn && deviceId) {
+    // Turn OFF — remove token from RTDB
+    if (!_fcmDB && _fcmSetupFirebase()) { /* initialised now */ }
+    if (_fcmDB) {
+      try { await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).remove(); }
+      catch(e) { console.warn('[FCM] remove error', e); }
+    }
     localStorage.setItem(notifKey, 'off');
-    localStorage.removeItem('fcm_cached_token');  // force re-registration on next enable
+    localStorage.removeItem('fcm_last_registered'); // force full re-init on next enable
     fcmDrawerUpdateStatus();
     toast('알림을 껐습니다 (Notifications OFF)', 'success');
   } else {
-    // Currently OFF → turn ON: re-register token
+    // Turn ON — full registration
     localStorage.setItem(notifKey, 'on');
-    localStorage.removeItem('fcm_cached_token');  // ensure RTDB write happens
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmInit(grp);
     fcmDrawerUpdateStatus();
     toast('알림을 켰습니다 (Notifications ON)', 'success');
   }
-}
-</script>
+}</script>
 </body>
 </html>
