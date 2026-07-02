@@ -7358,25 +7358,47 @@ function _fcmShowBlockedModal() {
   modal.innerHTML = `
     <div style="background:#1C1C1E;border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;color:#fff">
       <div style="text-align:center;margin-bottom:16px">
-        <div style="font-size:36px">\u{1F515}</div>
+        <div style="font-size:36px">&#128276;</div>
         <div style="font-size:17px;font-weight:700;margin-top:8px">알림이 차단돼 있어요</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:6px">브라우저 설정에서 허용해주세요</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:6px">아래 순서대로 허용 후 돌아오면 자동으로 켜져요</div>
       </div>
-      <div style="background:#2C2C2E;border-radius:12px;padding:16px;margin-bottom:20px">
-        <div style="font-size:13px;color:rgba(255,255,255,0.85);line-height:2">
-          1. 주소창 왼쪽 <b>자물쇠 아이콘</b> 탭<br>
-          2. <b>사이트 설정</b> 선택<br>
-          3. <b>알림</b> → <b>허용</b> 으로 변경<br>
-          4. 페이지 새로고침 후 다시 켜기
+      <div style="background:#2C2C2E;border-radius:12px;padding:16px;margin-bottom:16px">
+        <div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:2.2">
+          1. 주소창 왼쪽 <b style="color:#fff">&#128274; 자물쇠</b> 탭<br>
+          2. <b style="color:#fff">사이트 설정</b> 선택<br>
+          3. <b style="color:#fff">알림 → 허용</b> 으로 변경<br>
+          4. 이 앱으로 돌아오기 (자동 감지)
         </div>
       </div>
+      <button onclick="window.location.reload()"
+        style="width:100%;padding:14px;background:#34C759;border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px">
+        설정 변경 후 새로고침
+      </button>
       <button onclick="document.getElementById('fcm-blocked-modal').remove()"
-        style="width:100%;padding:14px;background:#007AFF;border:none;border-radius:12px;color:#fff;font-size:16px;font-weight:700;cursor:pointer">
-        확인
+        style="width:100%;padding:12px;background:#2C2C2E;border:none;border-radius:12px;color:rgba(255,255,255,0.6);font-size:14px;cursor:pointer">
+        닫기
       </button>
     </div>`;
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   document.body.appendChild(modal);
+
+  // Auto-detect when user returns from browser settings with permission granted
+  const onVisible = () => {
+    if (document.visibilityState !== 'visible') return;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'granted') {
+      document.removeEventListener('visibilitychange', onVisible);
+      const m = document.getElementById('fcm-blocked-modal');
+      if (m) m.remove();
+      // Auto-enable notifications now that permission is granted
+      const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
+      fcmInit(grp).then(() => {
+        fcmDrawerUpdateStatus();
+        toast('알림이 허용됐습니다! (Notifications ON)', 'success');
+      });
+    }
+  };
+  document.addEventListener('visibilitychange', onVisible);
 }
 
 </script>
