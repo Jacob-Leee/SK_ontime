@@ -4166,9 +4166,9 @@ function renderIssues() {
     <td>
       <div class="row-actions">
         <button class="icon-btn" title="Edit Order" onclick="openOrderModal('${o.id}')">✏️</button>
-        <button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','active')">← Orders</button>
-        <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">✅ Resolved →</button>
-        <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="setOrderStatus('${o.id}','cancelled')">❌ Cancel →</button>
+        <button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','active')">Resolve</button>
+        <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">Complete</button>
+        <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="setOrderStatus('${o.id}','cancelled')">Cancel</button>
         <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
       </div>
     </td>
