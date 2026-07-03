@@ -229,6 +229,10 @@ textarea.form-control { resize: vertical; min-height: 72px; }
    page that's already filtered to one status, painting every row the same color adds
    noise without adding information. Neutral zebra striping reads faster instead. */
 tr.srow-orders td, tr.srow-completed td, tr.srow-claim td, tr.srow-closed td, tr.srow-issue td { background: var(--surface); color: var(--text); }
+tr.srow-completed.sui-checked { opacity: 0.38 !important; }
+tr.srow-completed.sui-checked td { color: #9CA3AF !important; background: rgba(0,0,0,0.04) !important; }
+tr.srow-completed.sui-checked .area-tag { filter: grayscale(1) opacity(0.5) !important; }
+tr.srow-completed.sui-checked .amount-cell { color: #9CA3AF !important; }
 tr[data-sub] td { background: inherit !important; }
 tr[data-sub]:nth-child(even) td { background: inherit !important; }
 tr.srow-orders:nth-child(even) td, tr.srow-completed:nth-child(even) td, tr.srow-claim:nth-child(even) td, tr.srow-closed:nth-child(even) td, tr.srow-issue:nth-child(even) td { background: var(--cream2); }
@@ -2897,6 +2901,17 @@ function setOrderStatus(id, newStatus) {
 // ============================================================
 // RENDER COMPLETED
 // ============================================================
+
+// ── SUI Payment Check — session-only row marking ──────────────
+function markSuiChecked(id) {
+  try {
+    const arr = JSON.parse(sessionStorage.getItem('sui_chk') || '[]');
+    if (!arr.includes(id)) { arr.push(id); sessionStorage.setItem('sui_chk', JSON.stringify(arr)); }
+  } catch(e) {}
+  const row = document.querySelector('tr[data-oid="' + id + '"]');
+  if (row) row.classList.add('sui-checked');
+}
+
 function renderCompleted() {
   const q = (document.getElementById('search-completed')?.value || '').toLowerCase();
   const area = document.getElementById('filter-completed-area')?.value || '';
@@ -2924,7 +2939,7 @@ function renderCompleted() {
     const payBadge = pc?.paid === 'Y'
       ? `<span class="badge badge-green">✓ Paid</span>`
       : `<span class="badge badge-yellow">Unpaid</span>`;
-    return `<tr class="srow-completed">
+    return `<tr class="srow-completed" data-oid="${o.id}">
     <td style="white-space:nowrap;font-size:12px">${fmtDate(o.orderDate)}</td>
     <td style="white-space:nowrap;color:var(--green);font-size:12px">${fmtDate(o.completedAt)}</td>
     <td>${orderNumCell(o)}</td>
@@ -2943,6 +2958,15 @@ function renderCompleted() {
     </td>
   </tr>`;
   }).join('');
+  // Restore checked rows from session (resets on page refresh)
+  try {
+    const _chk = JSON.parse(sessionStorage.getItem('sui_chk') || '[]');
+    _chk.forEach(id => {
+      const r = tbody.querySelector('tr[data-oid="' + id + '"]');
+      if (r) r.classList.add('sui-checked');
+    });
+  } catch(e) {}
+
   renderTabSummary('completed');
   updateMobNav('completed');
 }
@@ -2961,7 +2985,7 @@ function orderNumCell(o) {
   const hasClaim2 = o.status === 'claim';
   const dot = hasClaim2 ? '<span class="claim-dot" title="Has Claim"></span> ' : '';
   if (link) {
-    return `${dot}<a href="${link}" target="_blank" rel="noopener" title="Open in SUI portal" style="color:var(--gold-dark);font-family:monospace;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px">${esc(o.orderNumber)}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`;
+    return `${dot}<a href="${link}" target="_blank" rel="noopener" onclick="markSuiChecked('${o.id}')" title="Open in SUI portal" style="color:var(--gold-dark);font-family:monospace;font-size:12px;text-decoration:none;display:inline-flex;align-items:center;gap:4px">${esc(o.orderNumber)}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`;
   }
   return `${dot}<span style="font-family:monospace;font-size:12px;color:var(--text2)" title="No SUI ID — edit order to add it">${esc(o.orderNumber)}</span>`;
 }
@@ -6210,29 +6234,4 @@ function _rtdbSyncOrder(order) {
 // Init on page load
 window.addEventListener('load', _rtdbInit);
 
-// ============================================================
-// SUI Import — auto-fill New Order modal from URL params
-// Triggered by the SUI bookmarklet on the Homes NSW portal
-// ============================================================
-(function() {
-  const p = new URLSearchParams(window.location.search);
-  if (!p.get('suiImport')) return;
-  // Wait for app (SOR codes, subbies) to finish initialising
-  setTimeout(function() {
-    openOrderModal();          // opens blank New Order modal
-    const set = (id, val) => { if (val) document.getElementById(id).value = val; };
-    set('f-orderNumber', p.get('orderNumber'));
-    set('f-prn',         p.get('prn'));
-    set('f-address',     p.get('address'));
-    set('f-area',        p.get('area'));
-    set('f-workType',    p.get('workType'));
-    set('f-suiId',       p.get('suiId'));
-    if (p.get('orderDate')) set('f-orderDate', p.get('orderDate'));
-    // Clean params from URL bar without reloading
-    window.history.replaceState({}, '', window.location.pathname);
-  }, 1200);
-})();
-
-</script>
-</body>
-</html>
+// =======================
