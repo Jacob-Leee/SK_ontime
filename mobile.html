@@ -7294,11 +7294,11 @@ function fcmInitIfAdmin() {
       localStorage.removeItem('fcm_last_reg_' + groupName);
     }
 
-    // Full re-registration: once per day OR if never registered
+    // Full re-registration: once per 6h OR if never registered
     const last = parseInt(localStorage.getItem('fcm_last_reg_' + groupName) || '0');
-    const oneDayMs = 24 * 60 * 60 * 1000;
-    if (Date.now() - last > oneDayMs) {
-      console.log('[FCM] Token refresh');
+    const sixHoursMs = 6 * 60 * 60 * 1000;
+    if (Date.now() - last > sixHoursMs) {
+      console.log('[FCM] Token refresh (6h interval)');
       fcmInit(groupName);
     }
   };
@@ -7358,9 +7358,12 @@ async function fcmDrawerToggle() {
     fcmDrawerUpdateStatus();
     toast('알림을 껐습니다 (Notifications OFF)', 'success');
   } else {
-    // Turn ON (or re-register) — full registration
+    // Turn ON — delete old token first to force fresh registration
     localStorage.setItem(notifKey, 'on');
-    localStorage.removeItem('fcm_last_reg_' + group); // force fresh token write
+    localStorage.removeItem('fcm_last_reg_' + group);
+    if (_fcmMessaging) {
+      try { await _fcmMessaging.deleteToken(); } catch(e) { console.log('[FCM] deleteToken skip:', e.message); }
+    }
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmInit(grp);
     fcmDrawerUpdateStatus();
@@ -7381,12 +7384,23 @@ function _fcmShowBlockedModal() {
         <div style="font-size:17px;font-weight:700;margin-top:8px">알림이 차단돼 있어요</div>
         <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:6px">아래 순서대로 허용 후 돌아오면 자동으로 켜져요</div>
       </div>
-      <div style="background:#2C2C2E;border-radius:12px;padding:16px;margin-bottom:16px">
-        <div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:2.2">
-          1. 주소창 왼쪽 <b style="color:#fff">&#128274; 자물쇠</b> 탭<br>
-          2. <b style="color:#fff">사이트 설정</b> 선택<br>
-          3. <b style="color:#fff">알림 → 허용</b> 으로 변경<br>
-          4. 이 앱으로 돌아오기 (자동 감지)
+      <!-- Method A -->
+      <div style="background:#2C2C2E;border-radius:12px;padding:14px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:#FF9500;letter-spacing:0.5px;margin-bottom:8px">방법 A — 주소창</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.9);line-height:2">
+          1. 화면 상단 주소창을 한번 탭<br>
+          2. 왼쪽에 <b style="color:#fff">&#128274; 자물쇠</b> 또는 <b style="color:#fff">&#9432; 아이콘</b> 보이면 탭<br>
+          3. <b style="color:#fff">사이트 설정 → 알림 → 허용</b>
+        </div>
+      </div>
+      <!-- Method B -->
+      <div style="background:#2C2C2E;border-radius:12px;padding:14px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:#34C759;letter-spacing:0.5px;margin-bottom:8px">방법 B — Chrome 설정 (더 쉬움)</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.9);line-height:2">
+          1. Chrome 오른쪽 위 <b style="color:#fff">⋮ (점 세개)</b> 탭<br>
+          2. <b style="color:#fff">설정 → 사이트 설정 → 알림</b><br>
+          3. 차단 목록에서 <b style="color:#fff">jacob-leee.github.io</b> 탭 → <b style="color:#fff">허용</b><br>
+          4. 앱으로 돌아오기 (자동 감지)
         </div>
       </div>
       <button onclick="Object.keys(localStorage).filter(k=>k.startsWith('fcm_last_reg_')).forEach(k=>localStorage.removeItem(k));localStorage.setItem('fcm_prev_perm','denied');window.location.reload()"
