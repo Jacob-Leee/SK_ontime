@@ -2902,12 +2902,10 @@ function setOrderStatus(id, newStatus) {
 // RENDER COMPLETED
 // ============================================================
 
-// ── SUI Payment Check — session-only row marking ──────────────
+// ── SUI Payment Check — page-load-only row marking (resets on refresh) ──
+window._suiChecked = window._suiChecked || new Set();
 function markSuiChecked(id) {
-  try {
-    const arr = JSON.parse(sessionStorage.getItem('sui_chk') || '[]');
-    if (!arr.includes(id)) { arr.push(id); sessionStorage.setItem('sui_chk', JSON.stringify(arr)); }
-  } catch(e) {}
+  window._suiChecked.add(id);
   const row = document.querySelector('tr[data-oid="' + id + '"]');
   if (row) row.classList.add('sui-checked');
 }
@@ -2958,14 +2956,11 @@ function renderCompleted() {
     </td>
   </tr>`;
   }).join('');
-  // Restore checked rows from session (resets on page refresh)
-  try {
-    const _chk = JSON.parse(sessionStorage.getItem('sui_chk') || '[]');
-    _chk.forEach(id => {
-      const r = tbody.querySelector('tr[data-oid="' + id + '"]');
-      if (r) r.classList.add('sui-checked');
-    });
-  } catch(e) {}
+  // Restore checked rows from memory (resets on page refresh)
+  window._suiChecked.forEach(id => {
+    const r = tbody.querySelector('tr[data-oid="' + id + '"]');
+    if (r) r.classList.add('sui-checked');
+  });
 
   renderTabSummary('completed');
   updateMobNav('completed');
