@@ -60,7 +60,7 @@
 body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 15px; -webkit-font-smoothing: antialiased; }
 
 /* ── Layout ── */
-#app { display: flex; height: 100vh; overflow: hidden; }
+#app { display: flex; height: 100vh; overflow: hidden; position: relative; }
 #sidebar { width: 230px; background: var(--black); border-right: none; display: flex; flex-direction: column; flex-shrink: 0; transition: width 0.22s cubic-bezier(.4,0,.2,1); overflow: hidden; }
 #sidebar.collapsed { width: 56px; }
 #sidebar.collapsed .logo { padding: 18px 0; display: flex; justify-content: center; }
@@ -73,9 +73,9 @@ body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(
 #sidebar.collapsed .nav-divider { margin: 4px 10px; }
 #sidebar.collapsed .sidebar-footer .stats-mini { display: none; }
 #sidebar.collapsed .sidebar-footer { padding: 6px 0; }
-#sb-toggle { width: 100%; padding: 9px 0; background: transparent; border: none; border-top: 1px solid rgba(255,255,255,0.07); cursor: pointer; color: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 11px; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
-#sb-toggle:hover { color: rgba(255,255,255,0.65); background: rgba(255,255,255,0.04); }
-#sb-toggle svg { width: 14px; height: 14px; flex-shrink: 0; }
+#sb-toggle { position: absolute; left: 230px; top: 50%; transform: translateY(-50%); z-index: 50; width: 14px; height: 52px; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.13); border-left: none; border-radius: 0 6px 6px 0; cursor: pointer; color: rgba(255,255,255,0.4); font-size: 13px; font-family: inherit; padding: 0; display: flex; align-items: center; justify-content: center; transition: left 0.22s cubic-bezier(.4,0,.2,1), color 0.15s, background 0.15s; }
+#sb-toggle:hover { color: rgba(255,255,255,0.9); background: #2c2c2e; }
+#sidebar.collapsed + #sb-toggle { left: 56px; }
 #main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 
 /* ── Sidebar ── */
@@ -372,10 +372,6 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <span id="navlabel-sor">SOR Codes</span>
       </div>
     </nav>
-    <button id="sb-toggle" onclick="toggleSidebar()" title="사이드바 접기/펼치기">
-      <svg id="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
-      <span id="sb-toggle-label">Collapse</span>
-    </button>
     <div class="sidebar-footer">
       <div class="stats-mini" id="sidebar-stats">
         <div class="stat-mini-row"><span>This Month Revenue</span><span id="mini-month">$0</span></div>
@@ -388,6 +384,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       </div>
     </div>
   </div>
+  <button id="sb-toggle" onclick="toggleSidebar()" title="사이드바 접기/펼치기">‹</button>
 
   <!-- Main -->
   <div id="main">
@@ -6262,10 +6259,8 @@ window.addEventListener('load', _rtdbInit);
     const sb=document.getElementById('sidebar');
     if(sb){
       sb.classList.add('collapsed');
-      const icon=document.getElementById('sb-icon');
-      const lbl=document.getElementById('sb-toggle-label');
-      if(icon) icon.setAttribute('points','9 18 15 12 9 6');
-      if(lbl) lbl.textContent='Expand';
+      const btn=document.getElementById('sb-toggle');
+      if(btn) btn.textContent='›';
       document.querySelectorAll('#sidebar .nav-item').forEach(el=>{ el.title=el.dataset.label||''; });
     }
   }
@@ -6275,10 +6270,8 @@ function toggleSidebar(){
   const sb=document.getElementById('sidebar');
   const collapsed=sb.classList.toggle('collapsed');
   localStorage.setItem('sb_collapsed',collapsed?'1':'0');
-  const icon=document.getElementById('sb-icon');
-  const lbl=document.getElementById('sb-toggle-label');
-  if(icon) icon.setAttribute('points',collapsed?'9 18 15 12 9 6':'15 18 9 12 15 6');
-  if(lbl) lbl.textContent=collapsed?'Expand':'Collapse';
+  const btn=document.getElementById('sb-toggle');
+  if(btn) btn.textContent=collapsed?'›':'‹';
   document.querySelectorAll('#sidebar .nav-item').forEach(el=>{
     el.title=collapsed?(el.dataset.label||''):'';
   });
