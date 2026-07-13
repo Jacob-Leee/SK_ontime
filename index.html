@@ -3045,7 +3045,16 @@ function confirmIssueModal() {
 // ============================================================
 // SUPERVISOR EMAIL
 // ============================================================
-function loadSupervisors() { return JSON.parse(lsGet('hom_supervisors') || '[]'); }
+function loadSupervisors() {
+  const list = JSON.parse(lsGet('hom_supervisors') || '[]');
+  let changed = false;
+  // Revert any CA11 Central/Southern split back to CA11
+  list.forEach(s => {
+    if (s.group === 'CA11 Southern' || s.group === 'CA11 Central') { s.group = 'CA11'; changed = true; }
+  });
+  if (changed) lsSet('hom_supervisors', JSON.stringify(list));
+  return list;
+}
 function saveSupervisors(list) { lsSet('hom_supervisors', JSON.stringify(list)); cloudPushDebounced(); }
 // One-time backfill: supervisors saved before sync support existed have no stable id —
 // without one, merging two devices' contact lists can't tell records apart.
@@ -3118,7 +3127,7 @@ function renderSupList() {
     'Homes NSW':'#4f7ef8','IT Team':'#7c5cbf','LAHC System':'#7c5cbf',
     'High Cost Team & MPW':'#e67e22','Relocation Team':'#e74c3c',
     'CA1':'#2ecc71','CA2':'#1abc9c','CA3':'#3498db',
-    'CA4':'#9b59b6','CA9':'#e74c3c','CA10':'#f39c12','CA11':'#27ae60','Other':'#8b90a7'
+    'CA4':'#9b59b6','CA9':'#e74c3c','CA10':'#f39c12','CA11':'#16a085','Other':'#8b90a7'
   };
 
   el.innerHTML = ordered.map(g => {
@@ -5559,15 +5568,17 @@ function updateAreaFilter() {
   sel.innerHTML = '<option value="">All Areas</option>' + areas.map(a => `<option ${a === cur ? 'selected' : ''}>${a}</option>`).join('');
 }
 
-// CA area → Homes NSW HP Central team email
+// CA area → Homes NSW HP team email
 const CA_CC_EMAIL = {
+  'High Cost Team & MPW': 'HomesNSW-HP-CapitalmaintenanceTeam@homes.nsw.gov.au',
+  'Relocation Team':      'HomesNSW-HP-RelocationTeam@homes.nsw.gov.au',
   CA1:  'HomesNSW-HP-Centralca1@homes.nsw.gov.au',
   CA2:  'HomesNSW-HP-Centralca2@homes.nsw.gov.au',
-  CA3:  'HomesNSW-HP-Centralca3@homes.nsw.gov.au',
-  CA4:  'HomesNSW-HP-Centralca4@homes.nsw.gov.au',
+  CA3:  'HomesNSW-HP-NorthernCA3@homes.nsw.gov.au',
+  CA4:  'HomesNSW-HP-Northernca4@homes.nsw.gov.au',
   CA9:  'HomesNSW-HP-Centralca9@homes.nsw.gov.au',
   CA10: 'HomesNSW-HP-Centralca10@homes.nsw.gov.au',
-  CA11: 'HomesNSW-HP-Centralca11@homes.nsw.gov.au',
+  CA11: 'HomesNSW-HP-Southernca11@homes.nsw.gov.au',
 };
 
 // Returns supervisor name as a mailto link.
