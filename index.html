@@ -4197,16 +4197,14 @@ function setIssueTab(tab) {
   renderIssues();
 }
 
-function changeIssueType(id) {
+function changeIssueType(id, val) {
   const o = DB.orders.find(x => x.id === id);
   if (!o) return;
-  const cur = o.issueType || '';
-  const next = cur === 'hold' ? 'claim' : 'hold';
-  o.issueType = next;
+  o.issueType = val;
   o.updatedAt = _nowSafe();
   save();
   renderIssues();
-  toast(`Issue type → ${next === 'hold' ? '⏸ Hold' : '📋 Claim'}`, 'success');
+  toast(val === 'hold' ? '⏸ Hold으로 이동' : val === 'claim' ? '📋 Claim으로 이동' : '미분류로 변경', 'success');
 }
 
 function renderIssues() {
@@ -4248,18 +4246,22 @@ function renderIssues() {
   function issueRow(o) {
     const isHold  = o.issueType === 'hold';
     const isClaim = o.issueType === 'claim';
-    const typeBadge = isHold
-      ? `<span onclick="changeIssueType('${o.id}')" title="클릭하면 Claim으로 변경" style="cursor:pointer;display:inline-block;background:rgba(217,119,6,0.15);color:#D97706;border:1px solid rgba(217,119,6,0.4);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⏸ Hold</span>`
-      : isClaim
-      ? `<span onclick="changeIssueType('${o.id}')" title="클릭하면 Hold으로 변경" style="cursor:pointer;display:inline-block;background:rgba(124,58,237,0.12);color:#7C3AED;border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">📋 Claim</span>`
-      : `<span onclick="changeIssueType('${o.id}')" title="클릭하여 타입 설정" style="cursor:pointer;display:inline-block;background:rgba(100,116,139,0.1);color:var(--text3);border:1px solid var(--border);border-radius:10px;padding:2px 9px;font-size:11px;white-space:nowrap">— 설정</span>`;
+    const typeBg    = isHold ? '#D97706' : isClaim ? '#7C3AED' : 'var(--cream2)';
+    const typeColor = (isHold || isClaim) ? '#fff' : 'var(--text3)';
+    const typeBorder = isHold ? '#B45309' : isClaim ? '#5B21B6' : 'var(--border)';
+    const typeSelect = `<select onchange="changeIssueType('${o.id}',this.value)"
+      style="padding:5px 10px;font-size:13px;font-weight:700;border-radius:8px;border:2px solid ${typeBorder};background:${typeBg};color:${typeColor};cursor:pointer;min-width:105px;letter-spacing:0.3px">
+      <option value="" ${!o.issueType?'selected':''}>— 미분류</option>
+      <option value="hold"  ${isHold ?'selected':''}>⏸ Hold</option>
+      <option value="claim" ${isClaim?'selected':''}>📋 Claim</option>
+    </select>`;
     return `<tr class="srow-issue" style="border-left:3px solid ${isHold?'#D97706':isClaim?'#7C3AED':'var(--border)'}">
       <td style="white-space:nowrap">${fmtDate(o.orderDate)}</td>
       <td style="white-space:nowrap;color:var(--red);font-size:12px">${fmtDate(o.issueAt)}</td>
       <td>${orderNumCell(o)}</td>
       <td><div class="addr-full issue-addr">${esc(o.address)}</div></td>
       <td><span class="area-tag">${esc(o.area)}</span></td>
-      <td>${typeBadge}</td>
+      <td>${typeSelect}</td>
       <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
       <td style="font-size:12px">${esc(o.subbies)}${o.supervisor?`<br>${supervisorLink(o.supervisor,o.area)}`:''}</td>
       <td><select class="form-control" style="padding:4px 8px;font-size:12px;min-width:185px" onchange="setClaimStatus('${esc(o.orderNumber)}',this.value)">${claimStatusOptions(claimMap[o.orderNumber]?.status)}</select></td>
@@ -4284,15 +4286,15 @@ function renderIssues() {
     const COLS = 11;
     let html = '';
     if (holds.length) {
-      html += `<tr><td colspan="${COLS}" style="background:rgba(217,119,6,0.08);padding:6px 14px;font-size:11px;font-weight:700;color:#D97706;border-top:2px solid rgba(217,119,6,0.3);letter-spacing:0.5px">⏸  HOLD &nbsp;(${holds.length})</td></tr>`;
+      html += `<tr><td colspan="${COLS}" style="background:#D97706;padding:8px 16px;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.8px">⏸  HOLD &nbsp;&nbsp;${holds.length}건</td></tr>`;
       html += holds.map(issueRow).join('');
     }
     if (claims.length) {
-      html += `<tr><td colspan="${COLS}" style="background:rgba(124,58,237,0.07);padding:6px 14px;font-size:11px;font-weight:700;color:#7C3AED;border-top:2px solid rgba(124,58,237,0.3);letter-spacing:0.5px">📋  CLAIM &nbsp;(${claims.length})</td></tr>`;
+      html += `<tr><td colspan="${COLS}" style="background:#7C3AED;padding:8px 16px;font-size:13px;font-weight:800;color:#fff;letter-spacing:0.8px">📋  CLAIM &nbsp;&nbsp;${claims.length}건</td></tr>`;
       html += claims.map(issueRow).join('');
     }
     if (others.length) {
-      html += `<tr><td colspan="${COLS}" style="background:var(--cream2);padding:6px 14px;font-size:11px;font-weight:700;color:var(--text3);border-top:1px solid var(--border)">— 미분류 &nbsp;(${others.length}) &nbsp;<span style="font-weight:400;font-size:10px">타입 뱃지를 클릭해서 분류하세요</span></td></tr>`;
+      html += `<tr><td colspan="${COLS}" style="background:var(--cream2);padding:8px 16px;font-size:12px;font-weight:700;color:var(--text3);border-top:2px solid var(--border)">— 미분류 &nbsp;${others.length}건 &nbsp;<span style="font-weight:400;font-size:11px">드롭다운에서 Hold / Claim 선택하세요</span></td></tr>`;
       html += others.map(issueRow).join('');
     }
     tbody.innerHTML = html;
