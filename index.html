@@ -703,11 +703,16 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <!-- ISSUES PAGE -->
       <div id="page-issues" class="page">
         <div class="filters">
-          <input class="filter-input" id="search-issues" placeholder="🔍  Search issues..." style="width:260px" oninput="renderIssues()">
+          <input class="filter-input" id="search-issues" placeholder="🔍  Search issues..." style="width:220px" oninput="renderIssues()">
           <select class="filter-input" id="filter-issues-area" onchange="renderIssues()">
             <option value="">All Areas</option>
             <option value="CA1">CA1</option><option value="CA2">CA2</option><option value="CA3">CA3</option>
             <option value="CA4">CA4</option><option value="CA9">CA9</option><option value="CA10">CA10</option><option value="CA11">CA11</option>
+          </select>
+          <select class="filter-input" id="filter-issues-type" onchange="renderIssues()" style="min-width:120px">
+            <option value="">All Types</option>
+            <option value="hold">⏸ Hold</option>
+            <option value="claim">📋 Claim</option>
           </select>
           <span id="issues-count" style="color:var(--text3);font-size:12px;margin-left:4px"></span>
         </div>
@@ -722,6 +727,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
                     <th data-sort="orderNumber" onclick="sortBy('issues','orderNumber')">Order # <span class="sort-icon">↕</span></th>
                     <th data-sort="address" onclick="sortBy('issues','address')">Address <span class="sort-icon">↕</span></th>
                     <th data-sort="area" onclick="sortBy('issues','area')">Area <span class="sort-icon">↕</span></th>
+                    <th data-sort="issueType" onclick="sortBy('issues','issueType')">Type <span class="sort-icon">↕</span></th>
                     <th data-sort="amount" onclick="sortBy('issues','amount')">Amount <span class="sort-icon">↕</span></th>
                     <th data-sort="subbies" onclick="sortBy('issues','subbies')">Subbies <span class="sort-icon">↕</span></th>
                     <th>Status</th>
@@ -1181,6 +1187,26 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
     </div>
     <div class="modal-body">
       <div class="form-grid">
+        <!-- Issue Type selector -->
+        <div class="form-group form-full">
+          <label class="form-label">Issue Type</label>
+          <div style="display:flex;gap:10px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:2px solid var(--border);cursor:pointer;flex:1;transition:all 0.15s" id="iss-type-hold-label">
+              <input type="radio" name="iss-type" id="iss-type-hold" value="hold" style="accent-color:#D97706">
+              <span>
+                <span style="font-weight:700;color:#D97706;font-size:13px">⏸ Hold</span><br>
+                <span style="font-size:11px;color:var(--text3)">작업 시작 전 보류</span>
+              </span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;border:2px solid var(--border);cursor:pointer;flex:1;transition:all 0.15s" id="iss-type-claim-label">
+              <input type="radio" name="iss-type" id="iss-type-claim" value="claim" style="accent-color:#7C3AED">
+              <span>
+                <span style="font-weight:700;color:#7C3AED;font-size:13px">📋 Claim</span><br>
+                <span style="font-size:11px;color:var(--text3)">클레임으로 Issue</span>
+              </span>
+            </label>
+          </div>
+        </div>
         <div class="form-group">
           <label class="form-label">Issue Date</label>
           <input type="date" class="form-control" id="iss-date">
@@ -3010,6 +3036,19 @@ function openIssueModal(id) {
   document.getElementById('iss-date').value = localDateStr();
   document.getElementById('iss-status').value = '';
   document.getElementById('iss-reason').value = '';
+  // Reset type selection
+  document.querySelectorAll('input[name="iss-type"]').forEach(r => r.checked = false);
+  document.getElementById('iss-type-hold-label').style.borderColor = 'var(--border)';
+  document.getElementById('iss-type-claim-label').style.borderColor = 'var(--border)';
+  // Highlight on change
+  document.getElementById('iss-type-hold').onchange = function() {
+    document.getElementById('iss-type-hold-label').style.borderColor = '#D97706';
+    document.getElementById('iss-type-claim-label').style.borderColor = 'var(--border)';
+  };
+  document.getElementById('iss-type-claim').onchange = function() {
+    document.getElementById('iss-type-claim-label').style.borderColor = '#7C3AED';
+    document.getElementById('iss-type-hold-label').style.borderColor = 'var(--border)';
+  };
   openModal('issue-modal');
 }
 
@@ -3017,6 +3056,9 @@ function confirmIssueModal() {
   if (!issueTargetId) return;
   const o = DB.orders.find(x => x.id === issueTargetId);
   if (!o) return;
+  const typeEl = document.querySelector('input[name="iss-type"]:checked');
+  if (!typeEl) { toast('Issue Type을 선택해주세요 (Hold / Claim)', 'error'); return; }
+  o.issueType   = typeEl.value;
   o.issueNote   = document.getElementById('iss-reason').value.trim();
   o.issueStatus = document.getElementById('iss-status').value;
   o.issueAt     = document.getElementById('iss-date').value;
@@ -4138,13 +4180,15 @@ function editIssueNote(id) {
 }
 
 function renderIssues() {
-  const q = (document.getElementById('search-issues')?.value || '').toLowerCase();
+  const q    = (document.getElementById('search-issues')?.value || '').toLowerCase();
   const area = document.getElementById('filter-issues-area')?.value || '';
+  const type = document.getElementById('filter-issues-type')?.value || '';
 
   const orders = DB.orders.filter(o => {
     if (o.status !== 'issue') return false;
     if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
     if (area && o.area !== area) return false;
+    if (type && o.issueType !== type) return false;
     return true;
   });
   applySort(orders, 'issues');
@@ -4152,26 +4196,44 @@ function renderIssues() {
   const claimMap = {};
   DB.claims.forEach(c => { claimMap[c.orderNumber] = c; });
 
-  const tbody = document.getElementById('issues-tbody');
-  const empty = document.getElementById('issues-empty');
+  const tbody  = document.getElementById('issues-tbody');
+  const empty  = document.getElementById('issues-empty');
   const countEl = document.getElementById('issues-count');
-  if (countEl) countEl.textContent = orders.length + ' issue' + (orders.length !== 1 ? 's' : '');
+
+  // Count by type
+  const holdCount  = DB.orders.filter(o => o.status==='issue' && o.issueType==='hold').length;
+  const claimCount = DB.orders.filter(o => o.status==='issue' && o.issueType==='claim').length;
+  if (countEl) countEl.innerHTML =
+    `${orders.length} issue${orders.length!==1?'s':''} &nbsp;`+
+    `<span style="background:rgba(217,119,6,0.15);color:#D97706;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">⏸ Hold ${holdCount}</span> &nbsp;`+
+    `<span style="background:rgba(124,58,237,0.12);color:#7C3AED;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">📋 Claim ${claimCount}</span>`;
+
   empty.style.display = orders.length ? 'none' : 'block';
   tbody.style.display = orders.length ? '' : 'none';
 
-  tbody.innerHTML = orders.map(o => `<tr class="srow-issue">
+  tbody.innerHTML = orders.map(o => {
+    const isHold  = o.issueType === 'hold';
+    const isClaim = o.issueType === 'claim';
+    const typeBadge = isHold
+      ? `<span style="display:inline-block;background:rgba(217,119,6,0.15);color:#D97706;border:1px solid rgba(217,119,6,0.3);border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;white-space:nowrap">⏸ Hold</span>`
+      : isClaim
+      ? `<span style="display:inline-block;background:rgba(124,58,237,0.12);color:#7C3AED;border:1px solid rgba(124,58,237,0.25);border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;white-space:nowrap">📋 Claim</span>`
+      : `<span style="display:inline-block;background:rgba(100,116,139,0.12);color:var(--text3);border-radius:10px;padding:1px 8px;font-size:11px">—</span>`;
+    const rowBorder = isHold ? 'border-left:3px solid #D97706' : isClaim ? 'border-left:3px solid #7C3AED' : '';
+    return `<tr class="srow-issue" style="${rowBorder}">
     <td style="white-space:nowrap">${fmtDate(o.orderDate)}</td>
     <td style="white-space:nowrap;color:var(--red);font-size:12px">${fmtDate(o.issueAt)}</td>
     <td>${orderNumCell(o)}</td>
     <td><div class="addr-full issue-addr">${esc(o.address)}</div></td>
     <td><span class="area-tag">${esc(o.area)}</span></td>
+    <td>${typeBadge}</td>
     <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
     <td style="font-size:12px">
       ${esc(o.subbies)}
       ${o.supervisor ? `<br>${supervisorLink(o.supervisor, o.area)}` : ''}
     </td>
     <td><select class="form-control" style="padding:4px 8px;font-size:12px;min-width:185px" onchange="setClaimStatus('${esc(o.orderNumber)}', this.value)">${claimStatusOptions(claimMap[o.orderNumber]?.status)}</select></td>
-    <td><div class="truncate" title="${esc(o.issueNote)}" style="max-width:220px;cursor:pointer;color:var(--yellow)" onclick="editIssueNote('${o.id}')">${esc(o.issueNote) || '<span style=\'color:var(--text3)\'>+ add note</span>'}</div></td>
+    <td><div class="truncate" title="${esc(o.issueNote)}" style="max-width:180px;cursor:pointer;color:var(--yellow)" onclick="editIssueNote('${o.id}')">${esc(o.issueNote) || '<span style=\'color:var(--text3)\'>+ add note</span>'}</div></td>
     <td>
       <div class="row-actions">
         <button class="icon-btn" title="Edit Order" onclick="openOrderModal('${o.id}')">✏️</button>
@@ -4181,7 +4243,8 @@ function renderIssues() {
         <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
       </div>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
   renderTabSummary('issues');
 }
 
