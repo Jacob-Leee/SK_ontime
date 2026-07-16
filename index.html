@@ -703,17 +703,18 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <!-- ISSUES PAGE -->
       <div id="page-issues" class="page">
         <div class="filters">
-          <input class="filter-input" id="search-issues" placeholder="🔍  Search issues..." style="width:220px" oninput="renderIssues()">
+          <input class="filter-input" id="search-issues" placeholder="🔍  Search issues..." style="width:200px" oninput="renderIssues()">
           <select class="filter-input" id="filter-issues-area" onchange="renderIssues()">
             <option value="">All Areas</option>
             <option value="CA1">CA1</option><option value="CA2">CA2</option><option value="CA3">CA3</option>
             <option value="CA4">CA4</option><option value="CA9">CA9</option><option value="CA10">CA10</option><option value="CA11">CA11</option>
           </select>
-          <select class="filter-input" id="filter-issues-type" onchange="renderIssues()" style="min-width:120px">
-            <option value="">All Types</option>
-            <option value="hold">⏸ Hold</option>
-            <option value="claim">📋 Claim</option>
-          </select>
+          <!-- Type tab buttons -->
+          <div style="display:flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid var(--border);flex-shrink:0">
+            <button id="itab-all"   onclick="setIssueTab('all')"   style="padding:5px 14px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:var(--accent);color:#fff">All</button>
+            <button id="itab-hold"  onclick="setIssueTab('hold')"  style="padding:5px 14px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:var(--surface);color:#D97706;border-left:1px solid var(--border)">⏸ Hold</button>
+            <button id="itab-claim" onclick="setIssueTab('claim')" style="padding:5px 14px;font-size:12px;font-weight:600;border:none;cursor:pointer;background:var(--surface);color:#7C3AED;border-left:1px solid var(--border)">📋 Claim</button>
+          </div>
           <span id="issues-count" style="color:var(--text3);font-size:12px;margin-left:4px"></span>
         </div>
         <div class="card">
@@ -4179,72 +4180,125 @@ function editIssueNote(id) {
   toast('Issue note updated', 'success');
 }
 
+let _issueTab = 'all'; // 'all' | 'hold' | 'claim'
+
+function setIssueTab(tab) {
+  _issueTab = tab;
+  ['all','hold','claim'].forEach(t => {
+    const btn = document.getElementById('itab-' + t);
+    if (!btn) return;
+    const isActive = t === tab;
+    btn.style.background = isActive
+      ? (t==='hold' ? '#D97706' : t==='claim' ? '#7C3AED' : 'var(--accent)')
+      : 'var(--surface)';
+    btn.style.color = isActive ? '#fff'
+      : (t==='hold' ? '#D97706' : t==='claim' ? '#7C3AED' : 'var(--text2)');
+  });
+  renderIssues();
+}
+
+function changeIssueType(id) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o) return;
+  const cur = o.issueType || '';
+  const next = cur === 'hold' ? 'claim' : 'hold';
+  o.issueType = next;
+  o.updatedAt = _nowSafe();
+  save();
+  renderIssues();
+  toast(`Issue type → ${next === 'hold' ? '⏸ Hold' : '📋 Claim'}`, 'success');
+}
+
 function renderIssues() {
   const q    = (document.getElementById('search-issues')?.value || '').toLowerCase();
   const area = document.getElementById('filter-issues-area')?.value || '';
-  const type = document.getElementById('filter-issues-type')?.value || '';
 
-  const orders = DB.orders.filter(o => {
+  const allIssues = DB.orders.filter(o => {
     if (o.status !== 'issue') return false;
     if (q && !JSON.stringify(o).toLowerCase().includes(q)) return false;
     if (area && o.area !== area) return false;
-    if (type && o.issueType !== type) return false;
     return true;
   });
-  applySort(orders, 'issues');
+
+  const holdCount  = allIssues.filter(o => o.issueType === 'hold').length;
+  const claimCount = allIssues.filter(o => o.issueType === 'claim').length;
+
+  // Update tab button badges
+  const holdBtn  = document.getElementById('itab-hold');
+  const claimBtn = document.getElementById('itab-claim');
+  if (holdBtn)  holdBtn.textContent  = `⏸ Hold ${holdCount}`;
+  if (claimBtn) claimBtn.textContent = `📋 Claim ${claimCount}`;
+
+  // Filter by active tab
+  const filtered = _issueTab === 'all' ? allIssues
+    : allIssues.filter(o => o.issueType === _issueTab);
+  applySort(filtered, 'issues');
 
   const claimMap = {};
   DB.claims.forEach(c => { claimMap[c.orderNumber] = c; });
 
-  const tbody  = document.getElementById('issues-tbody');
-  const empty  = document.getElementById('issues-empty');
+  const tbody   = document.getElementById('issues-tbody');
+  const empty   = document.getElementById('issues-empty');
   const countEl = document.getElementById('issues-count');
+  if (countEl) countEl.textContent = filtered.length + ' issue' + (filtered.length !== 1 ? 's' : '');
 
-  // Count by type
-  const holdCount  = DB.orders.filter(o => o.status==='issue' && o.issueType==='hold').length;
-  const claimCount = DB.orders.filter(o => o.status==='issue' && o.issueType==='claim').length;
-  if (countEl) countEl.innerHTML =
-    `${orders.length} issue${orders.length!==1?'s':''} &nbsp;`+
-    `<span style="background:rgba(217,119,6,0.15);color:#D97706;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">⏸ Hold ${holdCount}</span> &nbsp;`+
-    `<span style="background:rgba(124,58,237,0.12);color:#7C3AED;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:600">📋 Claim ${claimCount}</span>`;
+  empty.style.display = filtered.length ? 'none' : 'block';
+  tbody.style.display = filtered.length ? '' : 'none';
 
-  empty.style.display = orders.length ? 'none' : 'block';
-  tbody.style.display = orders.length ? '' : 'none';
-
-  tbody.innerHTML = orders.map(o => {
+  function issueRow(o) {
     const isHold  = o.issueType === 'hold';
     const isClaim = o.issueType === 'claim';
     const typeBadge = isHold
-      ? `<span style="display:inline-block;background:rgba(217,119,6,0.15);color:#D97706;border:1px solid rgba(217,119,6,0.3);border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;white-space:nowrap">⏸ Hold</span>`
+      ? `<span onclick="changeIssueType('${o.id}')" title="클릭하면 Claim으로 변경" style="cursor:pointer;display:inline-block;background:rgba(217,119,6,0.15);color:#D97706;border:1px solid rgba(217,119,6,0.4);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">⏸ Hold</span>`
       : isClaim
-      ? `<span style="display:inline-block;background:rgba(124,58,237,0.12);color:#7C3AED;border:1px solid rgba(124,58,237,0.25);border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;white-space:nowrap">📋 Claim</span>`
-      : `<span style="display:inline-block;background:rgba(100,116,139,0.12);color:var(--text3);border-radius:10px;padding:1px 8px;font-size:11px">—</span>`;
-    const rowBorder = isHold ? 'border-left:3px solid #D97706' : isClaim ? 'border-left:3px solid #7C3AED' : '';
-    return `<tr class="srow-issue" style="${rowBorder}">
-    <td style="white-space:nowrap">${fmtDate(o.orderDate)}</td>
-    <td style="white-space:nowrap;color:var(--red);font-size:12px">${fmtDate(o.issueAt)}</td>
-    <td>${orderNumCell(o)}</td>
-    <td><div class="addr-full issue-addr">${esc(o.address)}</div></td>
-    <td><span class="area-tag">${esc(o.area)}</span></td>
-    <td>${typeBadge}</td>
-    <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
-    <td style="font-size:12px">
-      ${esc(o.subbies)}
-      ${o.supervisor ? `<br>${supervisorLink(o.supervisor, o.area)}` : ''}
-    </td>
-    <td><select class="form-control" style="padding:4px 8px;font-size:12px;min-width:185px" onchange="setClaimStatus('${esc(o.orderNumber)}', this.value)">${claimStatusOptions(claimMap[o.orderNumber]?.status)}</select></td>
-    <td><div class="truncate" title="${esc(o.issueNote)}" style="max-width:180px;cursor:pointer;color:var(--yellow)" onclick="editIssueNote('${o.id}')">${esc(o.issueNote) || '<span style=\'color:var(--text3)\'>+ add note</span>'}</div></td>
-    <td>
-      <div class="row-actions">
-        <button class="icon-btn" title="Edit Order" onclick="openOrderModal('${o.id}')">✏️</button>
-        <button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','active')">Resolve</button>
-        <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">Complete</button>
-        <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="setOrderStatus('${o.id}','cancelled')">Cancel</button>
-        <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
-      </div>
-    </td>
-  </tr>`;
-  }).join('');
+      ? `<span onclick="changeIssueType('${o.id}')" title="클릭하면 Hold으로 변경" style="cursor:pointer;display:inline-block;background:rgba(124,58,237,0.12);color:#7C3AED;border:1px solid rgba(124,58,237,0.3);border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700;white-space:nowrap">📋 Claim</span>`
+      : `<span onclick="changeIssueType('${o.id}')" title="클릭하여 타입 설정" style="cursor:pointer;display:inline-block;background:rgba(100,116,139,0.1);color:var(--text3);border:1px solid var(--border);border-radius:10px;padding:2px 9px;font-size:11px;white-space:nowrap">— 설정</span>`;
+    return `<tr class="srow-issue" style="border-left:3px solid ${isHold?'#D97706':isClaim?'#7C3AED':'var(--border)'}">
+      <td style="white-space:nowrap">${fmtDate(o.orderDate)}</td>
+      <td style="white-space:nowrap;color:var(--red);font-size:12px">${fmtDate(o.issueAt)}</td>
+      <td>${orderNumCell(o)}</td>
+      <td><div class="addr-full issue-addr">${esc(o.address)}</div></td>
+      <td><span class="area-tag">${esc(o.area)}</span></td>
+      <td>${typeBadge}</td>
+      <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
+      <td style="font-size:12px">${esc(o.subbies)}${o.supervisor?`<br>${supervisorLink(o.supervisor,o.area)}`:''}</td>
+      <td><select class="form-control" style="padding:4px 8px;font-size:12px;min-width:185px" onchange="setClaimStatus('${esc(o.orderNumber)}',this.value)">${claimStatusOptions(claimMap[o.orderNumber]?.status)}</select></td>
+      <td><div class="truncate" title="${esc(o.issueNote)}" style="max-width:180px;cursor:pointer;color:var(--yellow)" onclick="editIssueNote('${o.id}')">${esc(o.issueNote)||'<span style=\'color:var(--text3)\'>+ add note</span>'}</div></td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-btn" title="Edit Order" onclick="openOrderModal('${o.id}')">✏️</button>
+          <button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','active')">Resolve</button>
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">Complete</button>
+          <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="setOrderStatus('${o.id}','cancelled')">Cancel</button>
+          <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  // "All" 탭: Hold 그룹 → Claim 그룹으로 섹션 나눠서 렌더링
+  if (_issueTab === 'all') {
+    const holds  = filtered.filter(o => o.issueType === 'hold');
+    const claims = filtered.filter(o => o.issueType === 'claim');
+    const others = filtered.filter(o => !o.issueType);
+    const COLS = 11;
+    let html = '';
+    if (holds.length) {
+      html += `<tr><td colspan="${COLS}" style="background:rgba(217,119,6,0.08);padding:6px 14px;font-size:11px;font-weight:700;color:#D97706;border-top:2px solid rgba(217,119,6,0.3);letter-spacing:0.5px">⏸  HOLD &nbsp;(${holds.length})</td></tr>`;
+      html += holds.map(issueRow).join('');
+    }
+    if (claims.length) {
+      html += `<tr><td colspan="${COLS}" style="background:rgba(124,58,237,0.07);padding:6px 14px;font-size:11px;font-weight:700;color:#7C3AED;border-top:2px solid rgba(124,58,237,0.3);letter-spacing:0.5px">📋  CLAIM &nbsp;(${claims.length})</td></tr>`;
+      html += claims.map(issueRow).join('');
+    }
+    if (others.length) {
+      html += `<tr><td colspan="${COLS}" style="background:var(--cream2);padding:6px 14px;font-size:11px;font-weight:700;color:var(--text3);border-top:1px solid var(--border)">— 미분류 &nbsp;(${others.length}) &nbsp;<span style="font-weight:400;font-size:10px">타입 뱃지를 클릭해서 분류하세요</span></td></tr>`;
+      html += others.map(issueRow).join('');
+    }
+    tbody.innerHTML = html;
+  } else {
+    tbody.innerHTML = filtered.map(issueRow).join('');
+  }
   renderTabSummary('issues');
 }
 
