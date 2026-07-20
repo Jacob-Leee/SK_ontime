@@ -2412,22 +2412,23 @@ function showPage(page) {
   document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
 
   const actions = document.getElementById('header-actions');
-  const newBtn = `<button class="btn btn-primary" onclick="openOrderModal()">${DB.uiLabels.btnNewOrder}</button>`;
-  const csvBtn = `<button class="btn btn-secondary" onclick="exportCSV()">📊 ${DB.uiLabels.btnExportCsv}</button>`;
+  const newBtn  = `<button class="btn btn-primary" onclick="openOrderModal()">${DB.uiLabels.btnNewOrder}</button>`;
+  const csvBtn  = `<button class="btn btn-secondary" onclick="exportCSV()">📊 ${DB.uiLabels.btnExportCsv}</button>`;
+  const pdfBtn  = `<button class="btn btn-secondary" onclick="promptMonthlyPDF()" title="Export monthly report as PDF">📄 Export PDF</button>`;
   const importBtn = `<button class="btn btn-secondary" onclick="openEmailImport()">📧 ${DB.uiLabels.btnImportEmail}</button>`;
 
-  if (page === 'all')       { actions.innerHTML = csvBtn + importBtn + newBtn; renderAll(); }
-  else if (page === 'orders')    { actions.innerHTML = csvBtn + importBtn + newBtn; renderOrders(); }
-  else if (page === 'vac')       { actions.innerHTML = csvBtn + importBtn + newBtn; renderVAC(); }
-  else if (page === 'mpw')       { actions.innerHTML = csvBtn + importBtn + newBtn; renderMPW(); }
-  else if (page === 'completed') { actions.innerHTML = csvBtn; renderCompleted(); }
-  else if (page === 'claims')    { actions.innerHTML = csvBtn; renderClaims(); }
-  else if (page === 'closed')    { actions.innerHTML = csvBtn; renderClosed(); }
-  else if (page === 'issues')    { actions.innerHTML = csvBtn; renderIssues(); }
-  else if (page === 'cancelled') { actions.innerHTML = csvBtn; renderCancelled(); }
+  if (page === 'all')       { actions.innerHTML = csvBtn + pdfBtn + importBtn + newBtn; renderAll(); }
+  else if (page === 'orders')    { actions.innerHTML = csvBtn + pdfBtn + importBtn + newBtn; renderOrders(); }
+  else if (page === 'vac')       { actions.innerHTML = csvBtn + pdfBtn + importBtn + newBtn; renderVAC(); }
+  else if (page === 'mpw')       { actions.innerHTML = csvBtn + pdfBtn + importBtn + newBtn; renderMPW(); }
+  else if (page === 'completed') { actions.innerHTML = csvBtn + pdfBtn; renderCompleted(); }
+  else if (page === 'claims')    { actions.innerHTML = csvBtn + pdfBtn; renderClaims(); }
+  else if (page === 'closed')    { actions.innerHTML = csvBtn + pdfBtn; renderClosed(); }
+  else if (page === 'issues')    { actions.innerHTML = csvBtn + pdfBtn; renderIssues(); }
+  else if (page === 'cancelled') { actions.innerHTML = csvBtn + pdfBtn; renderCancelled(); }
   else if (page === 'subbies')   { actions.innerHTML = ''; subActivePerson = 'All'; renderSubbiesPage(); }
   else if (page === 'calendar')  { actions.innerHTML = `<button class="btn btn-primary" onclick="openCalEventModal()">+ New Event</button>`; renderCalendar(); }
-  else if (page === 'dashboard') { actions.innerHTML = ''; renderDashboard(); }
+  else if (page === 'dashboard') { actions.innerHTML = pdfBtn; renderDashboard(); }
   else if (page === 'sor')       { actions.innerHTML = `<button class="btn btn-primary" onclick="openSORModal()">+ Add SOR Code</button>`; renderSOR(); }
   renderTabSummary(page);
   updateSidebar();
