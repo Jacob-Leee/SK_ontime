@@ -591,7 +591,6 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
             <option value="N">Unpaid</option>
           </select>
           <span id="completed-count" style="color:var(--text3);font-size:12px;margin-left:4px"></span>
-          <button onclick="exportCompletedPDF()" style="margin-left:8px;padding:6px 14px;border-radius:8px;border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.08);color:#6366f1;font-size:12px;font-weight:600;cursor:pointer" onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='rgba(99,102,241,0.08)'">📄 Export PDF</button>
         </div>
         <div class="card">
           <div class="card-body" style="padding:0">
@@ -882,9 +881,6 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
               style="width:68px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--cream2);color:var(--text);font-size:12px;font-weight:700;text-align:center"
               onchange="saveDashTarget(this.value)" title="Set monthly order target">
             <span style="font-size:11px;color:var(--text3)">orders/mo</span>
-            <button onclick="exportSummaryPDF()" title="Export monthly summary as PDF"
-              style="margin-left:6px;padding:4px 10px;border-radius:6px;border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.08);color:#6366f1;font-size:11px;font-weight:600;cursor:pointer"
-              onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='rgba(99,102,241,0.08)'">📄 Monthly Report PDF</button>
             <button onclick="resetDashLayout()" title="Reset widget layout"
               style="margin-left:6px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--cream2);color:var(--text3);font-size:11px;cursor:pointer"
               onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='var(--cream2)'">&#8635; Reset Layout</button>
@@ -5994,223 +5990,284 @@ function updateSidebar() {
 // EXPORT PDF
 // ============================================================
 
-function exportCompletedPDF() {
+// Month picker prompt → calls exportMonthlyPDF
+function promptMonthlyPDF() {
+  const now = new Date();
+  const defaultMonth = now.toISOString().slice(0, 7); // YYYY-MM
+  const input = prompt('Which month? (YYYY-MM)', defaultMonth);
+  if (!input || !/^\d{4}-\d{2}$/.test(input.trim())) {
+    if (input !== null) toast('올바른 형식으로 입력해주세요 (예: 2026-07)', 'error');
+    return;
+  }
+  exportMonthlyPDF(input.trim());
+}
+
+function exportMonthlyPDF(month) {
   const { jsPDF } = window.jspdf;
   if (!jsPDF) { toast('PDF library not loaded yet. Please try again.', 'error'); return; }
 
-  // Gather current month's completed orders (default), or all if no filter
+  // All orders whose orderDate falls in the selected month — ALL statuses
+  const orders = DB.orders
+    .filter(o => (o.orderDate || '').startsWith(month))
+    .sort((a, b) => {
+      // Sort by status priority, then by orderDate
+      const priority = { active:1, completed:2, claim:3, closed:4, issue:5, cancelled:6 };
+      const pa = priority[a.status] || 9;
+      const pb = priority[b.status] || 9;
+      if (pa !== pb) return pa - pb;
+      return (a.orderDate || '').localeCompare(b.orderDate || '');
+    });
+
+  if (!orders.length) {
+    toast(`${month}에 해당하는 오더가 없습니다`, 'error');
+    return;
+  }
+
+  const [yr, mo] = month.split('-');
+  const monthLabel = new Date(Number(yr), Number(mo) - 1, 1)
+    .toLocaleString('en-AU', { month: 'long', year: 'numeric' });
+
+  const STATUS_DISPLAY = {
+    active:'Active', completed:'Completed', claim:'Claim',
+    closed:'Closed', issue:'Issue', cancelled:'Cancelled'
+  };
+  const STATUS_COLORS = {
+    active:    [79, 126, 248],
+    completed: [34, 197, 94],
+    claim:     [167, 139, 250],
+    closed:    [30, 41, 59],
+    issue:     [239, 68, 68],
+    cancelled: [156, 163, 175],
+  };
+
+  const totalAmt = orders.reduce((s, o) => s + Number(o.amount || 0), 0);
   const now = new Date();
-  const thisMonth = now.toISOString().slice(0, 7); // YYYY-MM
-  const area = document.getElementById('filter-completed-area')?.value || '';
-
-  const orders = DB.orders.filter(o => {
-    if (o.status !== 'completed') return false;
-    if (area && o.area !== area) return false;
-    return true;
-  }).filter(o => o.completedAt && new Date(o.completedAt).toISOString().slice(0,7) === thisMonth);
-
-  const monthLabel = now.toLocaleString('en-AU', { month: 'long', year: 'numeric' });
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = 297;
 
-  // Header
+  // ══════════════════════════════════════════
+  // PAGE 1: SUMMARY DASHBOARD
+  // ══════════════════════════════════════════
+  const completed  = orders.filter(o => o.status === 'completed');
+  const activeOrds = orders.filter(o => !o.status || o.status === 'active');
+  const claimOrds  = orders.filter(o => o.status === 'claim');
+  const closedOrds = orders.filter(o => o.status === 'closed');
+  const issueOrds  = orders.filter(o => o.status === 'issue');
+  const cancelOrds = orders.filter(o => o.status === 'cancelled');
+  const compRev    = completed.reduce((s,o) => s + Number(o.amount||0), 0);
+  const totalRev   = orders.reduce((s,o) => s + Number(o.amount||0), 0);
+
+  // By area (all orders)
+  const areaMap = {};
+  orders.forEach(o => {
+    const a = o.area || 'Unknown';
+    if (!areaMap[a]) areaMap[a] = { count:0, amount:0 };
+    areaMap[a].count++;
+    areaMap[a].amount += Number(o.amount||0);
+  });
+
+  // By subbie (completed only)
+  const subMap = {};
+  completed.forEach(o => {
+    const s = o.subbies || 'Unassigned';
+    if (!subMap[s]) subMap[s] = { count:0, amount:0 };
+    subMap[s].count++;
+    subMap[s].amount += Number(o.amount||0);
+  });
+  const subRows = Object.entries(subMap).sort((a,b) => b[1].amount - a[1].amount).slice(0,10);
+
+  // Header banner
   doc.setFillColor(30, 41, 59);
-  doc.rect(0, 0, 297, 22, 'F');
+  doc.rect(0, 0, W, 28, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(16); doc.setFont('helvetica','bold');
+  doc.text('SK ONTIME', 14, 13);
+  doc.setFontSize(11); doc.setFont('helvetica','normal');
+  doc.text('Monthly Performance Summary', 14, 21);
+  doc.setFontSize(10);
+  doc.text(monthLabel, W-14, 13, { align:'right' });
+  doc.setFontSize(8); doc.setTextColor(180,200,220);
+  doc.text(`Generated ${now.toLocaleDateString('en-AU')}`, W-14, 21, { align:'right' });
+
+  // KPI boxes
+  let ky = 34;
+  const kpis = [
+    { label:'Total Orders',     value: orders.length,          color:[79,126,248]   },
+    { label:'Total Amount',     value:'$'+totalRev.toFixed(0), color:[201,168,76]   },
+    { label:'Completed',        value: completed.length,        color:[34,197,94]    },
+    { label:'Completed Revenue',value:'$'+compRev.toFixed(0),  color:[16,185,129]   },
+    { label:'Active (VAC/MPW)', value: activeOrds.length,       color:[99,102,241]   },
+    { label:'Claims',           value: claimOrds.length,        color:[167,139,250]  },
+    { label:'Closed',           value: closedOrds.length,       color:[30,41,59]     },
+    { label:'Issues',           value: issueOrds.length,        color:[239,68,68]    },
+    { label:'Cancelled',        value: cancelOrds.length,       color:[156,163,175]  },
+  ];
+  const cols3 = 3, bw3 = (W - 28) / cols3;
+  kpis.forEach((k,i) => {
+    const col = i % cols3;
+    const row = Math.floor(i / cols3);
+    const x = 14 + col*(bw3+4);
+    const by = ky + row*22;
+    const [r,g,b] = k.color;
+    doc.setFillColor(r+170, g+170, b+170);
+    doc.roundedRect(x, by, bw3-2, 18, 2, 2, 'F');
+    doc.setDrawColor(r,g,b);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(x, by, bw3-2, 18, 2, 2, 'S');
+    doc.setTextColor(Math.max(0,r-40), Math.max(0,g-40), Math.max(0,b-40));
+    doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text(k.label.toUpperCase(), x+4, by+6.5);
+    doc.setFontSize(15);
+    doc.text(String(k.value), x+4, by+14.5);
+  });
+
+  let sy = ky + Math.ceil(kpis.length/cols3)*22 + 6;
+
+  // Area table
+  doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(30,41,59);
+  doc.text('Orders by Area', 14, sy);
+  doc.autoTable({
+    startY: sy+3,
+    head: [['Area','Orders','Amount ($)','% of Total']],
+    body: Object.entries(areaMap).sort((a,b)=>b[1].amount-a[1].amount).map(([area,d])=>[
+      area, d.count, d.amount.toFixed(2),
+      totalRev>0 ? (d.amount/totalRev*100).toFixed(1)+'%' : '0%',
+    ]),
+    foot: [['TOTAL', orders.length, totalRev.toFixed(2), '100%']],
+    headStyles:{ fillColor:[30,41,59], textColor:255, fontSize:8, fontStyle:'bold' },
+    footStyles:{ fillColor:[241,245,249], textColor:[30,41,59], fontStyle:'bold', fontSize:8 },
+    bodyStyles:{ fontSize:8 },
+    alternateRowStyles:{ fillColor:[248,250,252] },
+    columnStyles:{ 2:{ halign:'right' }, 3:{ halign:'right' } },
+    margin:{ left:14, right: W/2+4 },
+    tableWidth: W/2-18,
+    showFoot:'lastPage',
+  });
+
+  // Subbie table (right column)
+  doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(30,41,59);
+  doc.text('Top Subbies (Completed)', W/2+4, sy);
+  doc.autoTable({
+    startY: sy+3,
+    head: [['Subcontractor','Orders','Amount ($)']],
+    body: subRows.map(([name,d])=>[name, d.count, d.amount.toFixed(2)]),
+    headStyles:{ fillColor:[30,41,59], textColor:255, fontSize:8, fontStyle:'bold' },
+    bodyStyles:{ fontSize:8 },
+    alternateRowStyles:{ fillColor:[248,250,252] },
+    columnStyles:{ 1:{ halign:'right' }, 2:{ halign:'right' } },
+    margin:{ left: W/2+4, right:14 },
+    tableWidth: W/2-18,
+  });
+
+  doc.setFontSize(7.5); doc.setTextColor(150);
+  doc.text('SK Ontime — Holmes Order Manager', 14, 208);
+  doc.text(`${monthLabel}  |  Confidential`, W-14, 208, { align:'right' });
+
+  // ══════════════════════════════════════════
+  // PAGE 2+: DETAIL TABLE
+  // ══════════════════════════════════════════
+  doc.addPage();
+
+  // ── Header ──
+  doc.setFillColor(30, 41, 59);
+  doc.rect(0, 0, 297, 24, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text('SK ONTIME — Completed Orders Report', 14, 10);
+  doc.text('SK ONTIME — Monthly Order Report', 14, 11);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(monthLabel + (area ? `  |  Area: ${area}` : '  |  All Areas'), 14, 17);
-  doc.text(`Generated: ${now.toLocaleDateString('en-AU')}`, 220, 17);
+  doc.text(monthLabel + '  |  All Statuses', 14, 19);
+  doc.text(`Generated: ${now.toLocaleDateString('en-AU')}`, 240, 19);
 
-  // Table
-  const totalAmt = orders.reduce((s, o) => s + Number(o.amount || 0), 0);
+  // ── Status summary chips ──
+  const statusGroups = {};
+  orders.forEach(o => {
+    const s = o.status || 'active';
+    if (!statusGroups[s]) statusGroups[s] = { count: 0, amount: 0 };
+    statusGroups[s].count++;
+    statusGroups[s].amount += Number(o.amount || 0);
+  });
+  let chipX = 14;
+  const chipY = 28;
+  Object.entries(statusGroups).forEach(([st, d]) => {
+    const col = STATUS_COLORS[st] || [100,100,100];
+    doc.setFillColor(...col.map(c => Math.min(255, c + 180)));
+    doc.roundedRect(chipX, chipY, 42, 10, 2, 2, 'F');
+    doc.setDrawColor(...col);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(chipX, chipY, 42, 10, 2, 2, 'S');
+    doc.setTextColor(...col.map(c => Math.max(0, c - 30)));
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(STATUS_DISPLAY[st] || st, chipX + 3, chipY + 4.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${d.count} orders  $${d.amount.toFixed(0)}`, chipX + 3, chipY + 8.5);
+    chipX += 46;
+  });
+
+  // ── Main table ──
   doc.autoTable({
-    startY: 26,
-    head: [['Order Date', 'Completed', 'SCO #', 'Address', 'PRN', 'Area', 'SOR Code', 'Amount ($)']],
-    body: orders.map(o => [
-      fmtDate(o.orderDate),
-      fmtDate(o.completedAt),
-      o.orderNumber || '—',
-      o.address || '—',
-      o.prn || '—',
-      o.area || '—',
-      o.sorCode || '—',
-      Number(o.amount || 0).toFixed(2),
-    ]),
-    foot: [['', '', '', '', '', '', 'TOTAL', totalAmt.toFixed(2)]],
-    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-    footStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' },
-    bodyStyles: { fontSize: 8.5 },
+    startY: 42,
+    head: [['Status', 'Order Date', 'SCO #', 'Address', 'PRN', 'Area', 'SOR Code', 'Amount ($)', 'Subbie']],
+    body: orders.map(o => {
+      const st = o.status || 'active';
+      return [
+        STATUS_DISPLAY[st] || st,
+        fmtDate(o.orderDate),
+        o.orderNumber || '—',
+        o.address || '—',
+        o.prn || '—',
+        o.area || '—',
+        o.sorCode || '—',
+        Number(o.amount || 0).toFixed(2),
+        o.subbies || '—',
+      ];
+    }),
+    foot: [['', '', '', '', '', '', 'TOTAL', totalAmt.toFixed(2), `${orders.length} orders`]],
+    headStyles:  { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+    footStyles:  { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold', fontSize: 8.5 },
+    bodyStyles:  { fontSize: 8 },
     alternateRowStyles: { fillColor: [248, 250, 252] },
+    didParseCell(data) {
+      if (data.section === 'body' && data.column.index === 0) {
+        const st = (orders[data.row.index]?.status) || 'active';
+        const col = STATUS_COLORS[st] || [100,100,100];
+        data.cell.styles.textColor = col;
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
     columnStyles: {
-      0: { cellWidth: 24 },
-      1: { cellWidth: 24 },
-      2: { cellWidth: 30 },
-      3: { cellWidth: 70 },
-      4: { cellWidth: 20 },
-      5: { cellWidth: 16 },
-      6: { cellWidth: 28 },
-      7: { cellWidth: 22, halign: 'right' },
+      0: { cellWidth: 22 },
+      1: { cellWidth: 22 },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 68 },
+      4: { cellWidth: 18 },
+      5: { cellWidth: 14 },
+      6: { cellWidth: 26 },
+      7: { cellWidth: 20, halign: 'right' },
+      8: { cellWidth: 30 },
     },
     margin: { left: 14, right: 14 },
     showFoot: 'lastPage',
   });
 
-  // Footer
+  // ── Page footers ──
   const pageCount = doc.internal.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
+    doc.setFontSize(7.5);
     doc.setTextColor(150);
-    doc.text(`${orders.length} orders  |  Total: $${totalAmt.toFixed(2)}`, 14, doc.internal.pageSize.height - 6);
-    doc.text(`Page ${i} of ${pageCount}`, 260, doc.internal.pageSize.height - 6);
+    doc.text(`${orders.length} orders  |  Total: $${totalAmt.toFixed(2)}`, 14, 205);
+    doc.text(`Page ${i} of ${pageCount}`, 265, 205);
   }
 
-  const fname = `Completed_Orders_${thisMonth}${area ? '_' + area : ''}.pdf`;
+  const fname = `Monthly_Report_${month}.pdf`;
   doc.save(fname);
   toast(`📄 ${fname} saved`, 'success');
 }
 
-function exportSummaryPDF() {
-  const { jsPDF } = window.jspdf;
-  if (!jsPDF) { toast('PDF library not loaded yet. Please try again.', 'error'); return; }
-
-  const now   = new Date();
-  const month = now.toISOString().slice(0, 7);
-  const label = now.toLocaleString('en-AU', { month: 'long', year: 'numeric' });
-
-  // Collect this month's data
-  const allOrders = DB.orders;
-  const thisMonth  = o => (o.orderDate || '').startsWith(month) || (o.completedAt && new Date(o.completedAt).toISOString().slice(0,7) === month);
-  const completed  = allOrders.filter(o => o.status === 'completed' && thisMonth(o));
-  const active     = allOrders.filter(o => (!o.status || o.status === 'active'));
-  const claims     = allOrders.filter(o => o.status === 'claim');
-  const issues     = allOrders.filter(o => o.status === 'issue');
-  const cancelled  = allOrders.filter(o => o.status === 'cancelled' && thisMonth(o));
-  const totalRev   = completed.reduce((s, o) => s + Number(o.amount || 0), 0);
-
-  // By area
-  const areaMap = {};
-  completed.forEach(o => {
-    const a = o.area || 'Unknown';
-    if (!areaMap[a]) areaMap[a] = { count: 0, amount: 0 };
-    areaMap[a].count++;
-    areaMap[a].amount += Number(o.amount || 0);
-  });
-
-  // By subbie
-  const subMap = {};
-  completed.forEach(o => {
-    const s = o.subbies || 'Unassigned';
-    if (!subMap[s]) subMap[s] = { count: 0, amount: 0 };
-    subMap[s].count++;
-    subMap[s].amount += Number(o.amount || 0);
-  });
-  const subRows = Object.entries(subMap).sort((a,b) => b[1].amount - a[1].amount).slice(0, 10);
-
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210;
-
-  // Header banner
-  doc.setFillColor(30, 41, 59);
-  doc.rect(0, 0, W, 28, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('SK ONTIME', 14, 12);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Monthly Performance Summary', 14, 20);
-  doc.setFontSize(10);
-  doc.text(label, W - 14, 12, { align: 'right' });
-  doc.setFontSize(8);
-  doc.setTextColor(180, 200, 220);
-  doc.text(`Generated ${now.toLocaleDateString('en-AU')}`, W - 14, 20, { align: 'right' });
-
-  // KPI boxes
-  let y = 36;
-  const kpis = [
-    { label: 'Completed', value: completed.length, color: [34, 197, 94] },
-    { label: 'Revenue', value: '$' + totalRev.toFixed(0), color: [201, 168, 76] },
-    { label: 'Active (VAC/MPW)', value: active.length, color: [79, 126, 248] },
-    { label: 'Claims', value: claims.length, color: [167, 139, 250] },
-    { label: 'Issues', value: issues.length, color: [239, 68, 68] },
-    { label: 'Cancelled', value: cancelled.length, color: [156, 163, 175] },
-  ];
-  const bw = (W - 28) / 3;
-  kpis.forEach((k, i) => {
-    const col = i % 3;
-    const row = Math.floor(i / 3);
-    const x = 14 + col * (bw + 4);
-    const by = y + row * 24;
-    doc.setFillColor(...k.color.map(c => Math.round(c * 0.12 + 243)));
-    doc.roundedRect(x, by, bw, 20, 3, 3, 'F');
-    doc.setDrawColor(...k.color);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(x, by, bw, 20, 3, 3, 'S');
-    doc.setTextColor(...k.color);
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.text(k.label.toUpperCase(), x + 4, by + 7);
-    doc.setFontSize(16);
-    doc.text(String(k.value), x + 4, by + 16);
-  });
-
-  y += 54;
-
-  // Area breakdown table
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('Completed Orders by Area', 14, y);
-  y += 4;
-  doc.autoTable({
-    startY: y,
-    head: [['Area', 'Orders', 'Total Amount ($)', '% of Revenue']],
-    body: Object.entries(areaMap).sort((a,b) => b[1].amount - a[1].amount).map(([area, d]) => [
-      area, d.count, d.amount.toFixed(2),
-      totalRev > 0 ? (d.amount / totalRev * 100).toFixed(1) + '%' : '0%',
-    ]),
-    foot: [['TOTAL', completed.length, totalRev.toFixed(2), '100%']],
-    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: 8.5, fontStyle: 'bold' },
-    footStyles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold', fontSize: 8.5 },
-    bodyStyles: { fontSize: 8.5 },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
-    margin: { left: 14, right: 14 },
-    tableWidth: 90,
-    showFoot: 'lastPage',
-  });
-
-  // Subbie breakdown table (right column)
-  const areaTableEnd = doc.lastAutoTable.finalY;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('Top Subbies (Completed)', W / 2 + 4, y);
-  doc.autoTable({
-    startY: y + 4,
-    head: [['Subcontractor', 'Orders', 'Amount ($)']],
-    body: subRows.map(([name, d]) => [name, d.count, d.amount.toFixed(2)]),
-    headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: 8.5, fontStyle: 'bold' },
-    bodyStyles: { fontSize: 8.5 },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
-    margin: { left: W / 2 + 4, right: 14 },
-    tableWidth: 86,
-  });
-
-  // Footer
-  doc.setFontSize(7.5);
-  doc.setTextColor(150);
-  doc.text('SK Ontime — Holmes Order Manager', 14, 290);
-  doc.text(`${label}  |  Confidential`, W - 14, 290, { align: 'right' });
-
-  doc.save(`Summary_Report_${month}.pdf`);
-  toast(`📄 Summary_Report_${month}.pdf saved`, 'success');
-}
+// exportSummaryPDF removed — merged into exportMonthlyPDF (Page 1)
 
 // ============================================================
 // EXPORT CSV
@@ -6443,6 +6500,7 @@ document.addEventListener('keydown', e => {
 // ============================================================
 document.getElementById('header-actions').innerHTML = `
   <button class="btn btn-secondary" onclick="exportCSV()">📊 Export CSV</button>
+  <button class="btn btn-secondary" onclick="promptMonthlyPDF()" title="Export monthly order report as PDF">📄 Export PDF</button>
   <button class="btn btn-secondary" onclick="openEmailImport()">📧 Import Email</button>
   <button class="btn btn-primary" onclick="openOrderModal()">+ New Order</button>`;
 
