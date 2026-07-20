@@ -3085,7 +3085,7 @@ function renderCompleted() {
       : `<span class="badge badge-yellow">Unpaid</span>`;
     return `<tr class="srow-completed" data-oid="${o.id}">
     <td style="white-space:nowrap;font-size:12px">${fmtDate(o.orderDate)}</td>
-    <td style="white-space:nowrap;color:var(--green);font-size:12px">${fmtDate(o.completedAt)}</td>
+    <td style="white-space:nowrap;font-size:12px"><div style="display:flex;align-items:center;color:var(--green)">${completedAgeIndicator(o)}${fmtDate(o.completedAt)}</div></td>
     <td>${orderNumCell(o)}</td>
     <td><div class="addr-full">${esc(o.address)}</div></td>
     <td><span class="area-tag">${esc(o.area)}</span></td>
@@ -4613,6 +4613,26 @@ function renderMPW() {
   orders = applySort(orders, 'mpw');
   renderOrdersTable(orders, 'mpw-tbody', 'mpw-empty', 'mpw-count', 'vac');
   renderTabSummary('mpw');
+}
+
+function completedAgeIndicator(o) {
+  const ref = o.completedAt
+    ? (typeof o.completedAt === 'number' ? o.completedAt : new Date(o.completedAt).getTime())
+    : (o.orderDate ? new Date(o.orderDate + 'T00:00:00').getTime() : null);
+  if (!ref) return '';
+  const days = (Date.now() - ref) / 86400000;
+  let color, label;
+  if (days < 7) {
+    color = '#22c55e';
+    label = `${Math.floor(days)}일 경과 (1주 이내)`;
+  } else if (days < 14) {
+    color = '#f97316';
+    label = `${Math.floor(days)}일 경과 (2주차)`;
+  } else {
+    color = '#ef4444';
+    label = `${Math.floor(days)}일 경과 (3주+)`;
+  }
+  return `<span title="${label}" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color};margin-right:5px;flex-shrink:0;box-shadow:0 0 5px ${color}90;cursor:default"></span>`;
 }
 
 function ageIndicator(o) {
