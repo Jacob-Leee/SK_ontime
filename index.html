@@ -4810,7 +4810,7 @@ function renderClaims() {
       <td>
         <div class="row-actions">
           <button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">← Completed</button>
-          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="confirmMove('${o.id}','closed')">💵 Payment Received</button>
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','closed')">💵 Payment Received</button>
         </div>
       </td>
     </tr>`;
@@ -4904,7 +4904,7 @@ function renderAll() {
       completed: `<button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','active')">← Orders</button>
                   <button class="btn btn-sm" style="background:rgba(201,168,76,0.12);color:var(--gold-dark);border:1px solid rgba(201,168,76,0.3);font-size:11px" onclick="confirmMove('${o.id}','claim')">Claim →</button>`,
       claim:     `<button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">← Completed</button>
-                  <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="confirmMove('${o.id}','closed')">Close →</button>`,
+                  <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','closed')">Close →</button>`,
       closed:    `<button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','claim')">← Claim</button>`,
       issue:     `<button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','active')">← Orders</button>
                   <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">✅ Resolved →</button>`,
