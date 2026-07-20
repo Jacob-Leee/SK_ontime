@@ -1179,6 +1179,41 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   </div>
 </div>
 
+<!-- MOVE CONFIRMATION MODAL -->
+<div class="modal-overlay" id="move-confirm-modal">
+  <div class="modal" style="width:460px">
+    <div class="modal-header" style="background:var(--surface);border-bottom:2px solid var(--border)">
+      <h2 id="move-confirm-title" style="font-size:15px">이 오더를 이동하시겠습니까?</h2>
+      <button class="modal-close" onclick="closeModal('move-confirm-modal')">&#215;</button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px">
+      <!-- Order summary card -->
+      <div style="background:var(--cream2);border-radius:10px;border:1px solid var(--border);padding:16px 18px;margin-bottom:16px">
+        <div style="display:grid;grid-template-columns:80px 1fr;gap:8px;font-size:13px">
+          <span style="color:var(--text3);font-weight:600">SCO #</span>
+          <span id="mcm-sco" style="font-weight:700;color:var(--text)"></span>
+          <span style="color:var(--text3);font-weight:600">Address</span>
+          <span id="mcm-addr" style="font-weight:700;color:var(--red)"></span>
+          <span style="color:var(--text3);font-weight:600">PRN</span>
+          <span id="mcm-prn" style="font-weight:700;color:var(--text)"></span>
+          <span style="color:var(--text3);font-weight:600">Amount</span>
+          <span id="mcm-amount" style="font-weight:700;color:var(--gold-dark)"></span>
+        </div>
+      </div>
+      <!-- Move arrow -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:12px;font-size:13px;font-weight:700">
+        <span id="mcm-from" style="padding:5px 14px;border-radius:20px;background:var(--surface);border:1px solid var(--border);color:var(--text2)"></span>
+        <span style="font-size:18px;color:var(--accent)">→</span>
+        <span id="mcm-to" style="padding:5px 14px;border-radius:20px;background:rgba(22,163,74,0.12);border:1px solid rgba(22,163,74,0.3);color:var(--green)"></span>
+      </div>
+    </div>
+    <div class="modal-footer" style="gap:10px">
+      <button class="btn btn-secondary" onclick="closeModal('move-confirm-modal')">취소</button>
+      <button class="btn btn-primary" id="move-confirm-btn" onclick="executeMoveConfirmed()" style="min-width:130px">✓ 이동 확인</button>
+    </div>
+  </div>
+</div>
+
 <!-- ISSUE MODAL -->
 <div class="modal-overlay" id="issue-modal">
   <div class="modal" style="width:580px">
@@ -2845,6 +2880,68 @@ function saveSOR() {
 }
 
 // ============================================================
+// ============================================================
+// MOVE CONFIRMATION — modal + undo toast
+// ============================================================
+let _moveTarget = null; // { id, newStatus, prevStatus }
+let _undoTimer  = null;
+
+const STATUS_LABELS = {
+  active:'Orders', completed:'Completed', claim:'Claim',
+  closed:'Closed', issue:'Issue', cancelled:'Cancelled'
+};
+
+function confirmMove(id, newStatus) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o) return;
+  _moveTarget = { id, newStatus, prevStatus: o.status || 'active' };
+
+  document.getElementById('mcm-sco').textContent    = o.orderNumber || '—';
+  document.getElementById('mcm-addr').textContent   = o.address     || '—';
+  document.getElementById('mcm-prn').textContent    = o.prn         || '—';
+  document.getElementById('mcm-amount').textContent = '$' + Number(o.amount || 0).toFixed(2);
+  document.getElementById('mcm-from').textContent   = STATUS_LABELS[o.status] || o.status || '—';
+  document.getElementById('mcm-to').textContent     = STATUS_LABELS[newStatus] || newStatus;
+  document.getElementById('move-confirm-title').textContent =
+    `이 오더를 ${STATUS_LABELS[newStatus] || newStatus}(으)로 이동할까요?`;
+
+  openModal('move-confirm-modal');
+}
+
+function executeMoveConfirmed() {
+  if (!_moveTarget) return;
+  const { id, newStatus, prevStatus } = _moveTarget;
+  closeModal('move-confirm-modal');
+  setOrderStatus(id, newStatus);
+
+  // Undo toast — 5초
+  if (_undoTimer) clearTimeout(_undoTimer);
+  const toastEl = document.getElementById('toast');
+  if (toastEl) {
+    toastEl.innerHTML = `✓ ${STATUS_LABELS[newStatus]}으로 이동됨 &nbsp;
+      <button onclick="undoMove('${id}','${prevStatus}')"
+        style="margin-left:10px;padding:2px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.4);
+        background:rgba(255,255,255,0.15);color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+        ↩ Undo
+      </button>`;
+    toastEl.className = 'toast toast-success show';
+    _undoTimer = setTimeout(() => {
+      toastEl.innerHTML = '';
+      toastEl.className = 'toast';
+    }, 5000);
+  }
+  _moveTarget = null;
+}
+
+function undoMove(id, prevStatus) {
+  if (_undoTimer) clearTimeout(_undoTimer);
+  const toastEl = document.getElementById('toast');
+  if (toastEl) { toastEl.innerHTML = ''; toastEl.className = 'toast'; }
+  setOrderStatus(id, prevStatus);
+  toast('↩ 되돌렸습니다', 'success');
+}
+
+// ============================================================
 // STATUS MANAGEMENT — one-click move
 // ============================================================
 function setOrderStatus(id, newStatus) {
@@ -2992,7 +3089,7 @@ function renderCompleted() {
       <div class="row-actions">
         <button class="icon-btn" title="Edit" onclick="openOrderModal('${o.id}')">✏️</button>
         <button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','active')">← Orders</button>
-        <button class="btn btn-sm" style="background:rgba(201,168,76,0.12);color:var(--gold-dark);border:1px solid rgba(201,168,76,0.3);font-size:11px" onclick="setOrderStatus('${o.id}','claim')">Claim →</button>
+        <button class="btn btn-sm" style="background:rgba(201,168,76,0.12);color:var(--gold-dark);border:1px solid rgba(201,168,76,0.3);font-size:11px" onclick="confirmMove('${o.id}','claim')">Claim →</button>
         <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
       </div>
     </td>
@@ -4552,7 +4649,7 @@ function renderOrdersTable(orders, tbodyId, emptyId, countId, moveTo) {
         <div class="row-actions">
           <button class="icon-btn" title="Edit" onclick="openOrderModal('${o.id}')">✏️</button>
           <button class="btn btn-sm" style="${moveBtnStyle};font-size:11px" onclick="moveOrderCategory('${o.id}','${moveTo}')">${moveLabel}</button>
-          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">Complete →</button>
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="confirmMove('${o.id}','completed')">Complete →</button>
           <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="openIssueModal('${o.id}')">⚠️ Issue</button>
           <button class="btn btn-sm" style="background:rgba(107,87,68,0.08);color:var(--text2);border:1px solid rgba(107,87,68,0.2);font-size:11px" onclick="setOrderStatus('${o.id}','cancelled')">✕ Cancel</button>
           <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
@@ -4639,7 +4736,7 @@ function renderOrders() {
       <td>
         <div class="row-actions">
           <button class="icon-btn" title="Edit" onclick="openOrderModal('${o.id}')">✏️</button>
-          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">Complete →</button>
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="confirmMove('${o.id}','completed')">Complete →</button>
           <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="openIssueModal('${o.id}')">⚠️ Issue</button>
           <button class="btn btn-sm" style="background:rgba(107,87,68,0.08);color:var(--text2);border:1px solid rgba(107,87,68,0.2);font-size:11px" onclick="setOrderStatus('${o.id}','cancelled')">✕ Cancel</button>
           <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
@@ -4713,7 +4810,7 @@ function renderClaims() {
       <td>
         <div class="row-actions">
           <button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">← Completed</button>
-          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','closed')">💵 Payment Received</button>
+          <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="confirmMove('${o.id}','closed')">💵 Payment Received</button>
         </div>
       </td>
     </tr>`;
@@ -4802,12 +4899,12 @@ function renderAll() {
     const stLabel = statusLabels[st] || st;
     const stClass = statusColors[st] || 'badge-blue';
     const nextBtns = {
-      active:    `<button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">Complete →</button>
+      active:    `<button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="confirmMove('${o.id}','completed')">Complete →</button>
                   <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="flagIssue('${o.id}')">⚠️ Issue</button>`,
       completed: `<button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','active')">← Orders</button>
-                  <button class="btn btn-sm" style="background:rgba(201,168,76,0.12);color:var(--gold-dark);border:1px solid rgba(201,168,76,0.3);font-size:11px" onclick="setOrderStatus('${o.id}','claim')">Claim →</button>`,
+                  <button class="btn btn-sm" style="background:rgba(201,168,76,0.12);color:var(--gold-dark);border:1px solid rgba(201,168,76,0.3);font-size:11px" onclick="confirmMove('${o.id}','claim')">Claim →</button>`,
       claim:     `<button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">← Completed</button>
-                  <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','closed')">Close →</button>`,
+                  <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="confirmMove('${o.id}','closed')">Close →</button>`,
       closed:    `<button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','claim')">← Claim</button>`,
       issue:     `<button class="btn btn-sm" style="background:rgba(217,119,6,0.1);color:var(--yellow);border:1px solid rgba(217,119,6,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','active')">← Orders</button>
                   <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">✅ Resolved →</button>`,
