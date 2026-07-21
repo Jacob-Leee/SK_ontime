@@ -1532,6 +1532,22 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <div class="form-group"><label class="form-label">Import Email button</label><input class="form-control" id="set-btnImportEmail"></div>
         <div class="form-group"><label class="form-label">New Order button</label><input class="form-control" id="set-btnNewOrder"></div>
       </div>
+      <div class="section-title">Branding</div>
+      <div class="form-grid">
+        <div class="form-group form-full"><label class="form-label">App subtitle (sidebar)</label><input class="form-control" id="set-companySubtitle" placeholder="Holmes Order Manager"></div>
+      </div>
+      <div class="section-title">Links &amp; URLs</div>
+      <div class="form-grid">
+        <div class="form-group form-full"><label class="form-label">DCJ Portal URL</label><input class="form-control" id="set-dcjPortalUrl" placeholder="https://portal.dcj.nsw.gov.au/login/login.htm"></div>
+        <div class="form-group form-full"><label class="form-label">SUI Base URL <span style="color:var(--text3);font-weight:400;font-size:11px">(SCO# 링크 앞에 붙는 주소)</span></label><input class="form-control" id="set-suiBaseUrl" placeholder="https://nsw06.my.site.com/cma/s/detail/"></div>
+      </div>
+      <div class="section-title">Aging Thresholds</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">VAC/MPW — Warning (hours) 🟠</label><input type="number" min="1" class="form-control" id="setnum-vacWarnHours" placeholder="24"></div>
+        <div class="form-group"><label class="form-label">VAC/MPW — Critical (hours) 🔴</label><input type="number" min="1" class="form-control" id="setnum-vacCritHours" placeholder="48"></div>
+        <div class="form-group"><label class="form-label">Completed — Warning (days) 🟠</label><input type="number" min="1" class="form-control" id="setnum-compWarnDays" placeholder="7"></div>
+        <div class="form-group"><label class="form-label">Completed — Critical (days) 🔴</label><input type="number" min="1" class="form-control" id="setnum-compCritDays" placeholder="14"></div>
+      </div>
       <div class="section-title">Colors</div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Accent / brand color</label><input type="color" class="form-control" id="setcolor-accent" style="height:38px;padding:4px"></div>
@@ -2312,6 +2328,10 @@ function openSettingsModal() {
     const el = document.getElementById('setcolor-' + k);
     if (el) el.value = DB.uiColors[k];
   });
+  Object.keys(DEFAULT_APP_SETTINGS).forEach(k => {
+    const el = document.getElementById('setnum-' + k);
+    if (el) el.value = DB.appSettings[k];
+  });
   openModal('settings-modal');
 }
 
@@ -2330,7 +2350,16 @@ function saveUiLabels() {
   lsSet('hom_ui_colors', JSON.stringify(DB.uiColors));
   applyUiColors();
 
-  showPage(currentPage); // rebuilds header action buttons with the new labels
+  Object.keys(DEFAULT_APP_SETTINGS).forEach(k => {
+    const el = document.getElementById('setnum-' + k);
+    if (el) {
+      const v = Number(el.value);
+      DB.appSettings[k] = (v > 0) ? v : DEFAULT_APP_SETTINGS[k];
+    }
+  });
+  lsSet('hom_app_settings', JSON.stringify(DB.appSettings));
+
+  showPage(currentPage);
   closeModal('settings-modal');
   toast('Settings saved', 'success');
 }
@@ -2344,6 +2373,9 @@ function resetUiLabels() {
   lsSet('hom_ui_colors', JSON.stringify(DB.uiColors));
   applyUiColors();
 
+  DB.appSettings = Object.assign({}, DEFAULT_APP_SETTINGS);
+  lsSet('hom_app_settings', JSON.stringify(DB.appSettings));
+
   showPage(currentPage);
   SETTINGS_FIELDS.forEach(k => {
     const el = document.getElementById('set-' + k);
@@ -2352,6 +2384,10 @@ function resetUiLabels() {
   COLOR_FIELDS.forEach(k => {
     const el = document.getElementById('setcolor-' + k);
     if (el) el.value = DEFAULT_UI_COLORS[k];
+  });
+  Object.keys(DEFAULT_APP_SETTINGS).forEach(k => {
+    const el = document.getElementById('setnum-' + k);
+    if (el) el.value = DEFAULT_APP_SETTINGS[k];
   });
   toast('Reset to defaults', 'success');
 }
@@ -3130,9 +3166,9 @@ function renderCompleted() {
 // SUI DEEP LINK
 // ============================================================
 function suiLink(o) {
-  const SUI_BASE = 'https://nsw06.my.site.com/cma/s/detail/';
   if (!o?.suiId) return null;
-  return SUI_BASE + o.suiId.trim();
+  const base = DB.uiLabels.suiBaseUrl || 'https://nsw06.my.site.com/cma/s/detail/';
+  return base + o.suiId.trim();
 }
 
 function orderNumCell(o) {
@@ -4635,22 +4671,23 @@ function completedAgeIndicator(o) {
     : (o.orderDate ? new Date(o.orderDate + 'T00:00:00').getTime() : null);
   if (!ref) return '';
   const days = (Date.now() - ref) / 86400000;
+  const warnDays = DB.appSettings.compWarnDays || 7;
+  const critDays = DB.appSettings.compCritDays || 14;
   let color, label;
-  if (days < 7) {
+  if (days < warnDays) {
     color = '#22c55e';
-    label = `${Math.floor(days)}일 경과 (1주 이내)`;
-  } else if (days < 14) {
+    label = `${Math.floor(days)}일 경과 (${warnDays}일 이내)`;
+  } else if (days < critDays) {
     color = '#f97316';
-    label = `${Math.floor(days)}일 경과 (2주차)`;
+    label = `${Math.floor(days)}일 경과 (${warnDays}~${critDays}일)`;
   } else {
     color = '#ef4444';
-    label = `${Math.floor(days)}일 경과 (3주+)`;
+    label = `${Math.floor(days)}일 경과 (${critDays}일+)`;
   }
   return `<span title="${label}" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${color};margin-right:5px;flex-shrink:0;box-shadow:0 0 5px ${color}90;cursor:default"></span>`;
 }
 
 function ageIndicator(o) {
-  // createdAt = ms timestamp; fallback to orderDate (YYYY-MM-DD) at midnight
   const ref = o.createdAt
     ? o.createdAt
     : (o.orderDate ? new Date(o.orderDate + 'T00:00:00').getTime() : null);
@@ -4658,13 +4695,15 @@ function ageIndicator(o) {
   const hours = (Date.now() - ref) / 3600000;
   const days  = Math.floor(hours / 24);
   const hRem  = Math.floor(hours % 24);
+  const warnH = DB.appSettings.vacWarnHours || 24;
+  const critH = DB.appSettings.vacCritHours || 48;
   let color, label;
-  if (hours < 24) {
+  if (hours < warnH) {
     color = '#22c55e';
     label = hours < 1 ? '방금 접수' : `${Math.floor(hours)}시간 경과`;
-  } else if (hours < 48) {
+  } else if (hours < critH) {
     color = '#f97316';
-    label = `1일 ${hRem}시간 경과`;
+    label = `${days}일 ${hRem}시간 경과`;
   } else {
     color = '#ef4444';
     label = `${days}일 경과`;
