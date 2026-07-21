@@ -305,7 +305,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   <div id="sidebar">
     <div class="logo">
       <div class="logo-mark"><span class="logo-sk">SK</span>&nbsp;<span class="logo-on">ON</span><span class="logo-time">TIME</span></div>
-      <div class="logo-sub">Holmes Order Manager</div>
+      <div class="logo-sub" id="logo-sub">Holmes Order Manager</div>
     </div>
     <nav>
       <div class="nav-item" onclick="showPage('dashboard')" id="nav-dashboard">
@@ -394,7 +394,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
     <div id="header">
       <h1 id="page-title">Orders</h1>
       <div style="display:flex;gap:10px;align-items:center">
-        <a href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="btn btn-secondary" style="text-decoration:none;font-size:12.5px;border-color:rgba(79,126,248,0.4);color:var(--gold-dark)">
+        <a id="dcj-portal-link" href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="btn btn-secondary" style="text-decoration:none;font-size:12.5px;border-color:rgba(79,126,248,0.4);color:var(--gold-dark)">
           &#127974; <span id="navlabel-dcj">DCJ Portal</span>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </a>
@@ -1569,6 +1569,16 @@ const DEFAULT_UI_LABELS = {
   navClosed: 'Closed', navIssues: 'Issues', navCancelled: 'Cancelled', navCalendar: 'Calendar',
   navSubbies: 'Subbies', navDashboard: 'Dashboard', navSup: 'Supervisors', navSor: 'SOR Codes',
   navDcj: 'DCJ Portal', btnExportCsv: 'Export CSV', btnImportEmail: 'Import Email', btnNewOrder: '+ New Order',
+  // Branding
+  companySubtitle: 'Holmes Order Manager',
+  // URLs
+  dcjPortalUrl: 'https://portal.dcj.nsw.gov.au/login/login.htm',
+  suiBaseUrl: 'https://nsw06.my.site.com/cma/s/detail/',
+};
+
+const DEFAULT_APP_SETTINGS = {
+  vacWarnHours: 24, vacCritHours: 48,
+  compWarnDays: 7,  compCritDays: 14,
 };
 
 const DEFAULT_UI_COLORS = {
@@ -1585,6 +1595,7 @@ const DB = {
   // later always get a default even if an old saved object doesn't have them yet.
   uiLabels: Object.assign({}, DEFAULT_UI_LABELS, JSON.parse(lsGet('hom_ui_labels') || 'null') || {}),
   uiColors: Object.assign({}, DEFAULT_UI_COLORS, JSON.parse(lsGet('hom_ui_colors') || 'null') || {}),
+  appSettings: Object.assign({}, DEFAULT_APP_SETTINGS, JSON.parse(lsGet('hom_app_settings') || 'null') || {}),
   orders: JSON.parse(lsGet('hom_orders') || 'null') || [],
   claims: JSON.parse(lsGet('hom_claims') || 'null') || [],
   sorCodes: JSON.parse(lsGet('hom_sor') || 'null') || getDefaultSOR(),
@@ -2262,6 +2273,12 @@ function applyUiLabels() {
   });
   const titleEl = document.getElementById('page-title');
   if (titleEl) titleEl.textContent = PAGE_TITLES[currentPage] || currentPage;
+  // Branding
+  const sub = document.getElementById('logo-sub');
+  if (sub) sub.textContent = L.companySubtitle;
+  // URLs
+  const dcj = document.getElementById('dcj-portal-link');
+  if (dcj) dcj.href = L.dcjPortalUrl;
 }
 
 const COLOR_FIELDS = Object.keys(DEFAULT_UI_COLORS);
