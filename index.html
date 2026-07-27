@@ -1532,6 +1532,41 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <div class="form-group"><label class="form-label">Import Email button</label><input class="form-control" id="set-btnImportEmail"></div>
         <div class="form-group"><label class="form-label">New Order button</label><input class="form-control" id="set-btnNewOrder"></div>
       </div>
+      <div class="section-title">App Lock</div>
+      <div class="form-grid">
+        <div class="form-group form-full" style="display:flex;align-items:center;justify-content:space-between;background:var(--cream2);border-radius:10px;padding:12px 16px">
+          <div>
+            <div style="font-weight:600;font-size:13px">잠금 활성화</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">앱 열 때 / 백그라운드 복귀 시 인증 요구</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0">
+            <input type="checkbox" id="set-lockEnabled" style="opacity:0;width:0;height:0" onchange="onLockToggleChange()">
+            <span style="position:absolute;cursor:pointer;inset:0;border-radius:24px;background:var(--border2);transition:0.3s" id="lock-toggle-track">
+              <span style="position:absolute;content:'';height:18px;width:18px;left:3px;bottom:3px;border-radius:50%;background:#fff;transition:0.3s" id="lock-toggle-thumb"></span>
+            </span>
+          </label>
+        </div>
+        <div class="form-group form-full" id="lock-settings-body" style="display:none">
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div>
+              <label class="form-label">PIN 설정 <span style="color:var(--text3);font-weight:400">(4~6자리 숫자)</span></label>
+              <div style="display:flex;gap:8px">
+                <input type="password" inputmode="numeric" maxlength="6" class="form-control" id="set-lockPin" placeholder="새 PIN 입력" style="letter-spacing:4px;font-size:16px">
+                <button onclick="saveLockPin()" class="btn btn-secondary" style="white-space:nowrap;flex-shrink:0">PIN 저장</button>
+              </div>
+            </div>
+            <div>
+              <label class="form-label">Face ID / Touch ID 등록</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button onclick="registerBiometric()" class="btn btn-secondary" style="flex:1">🔐 생체인식 등록</button>
+                <button onclick="clearBiometric()" class="btn btn-secondary" style="color:var(--red);border-color:rgba(220,38,38,0.3)">삭제</button>
+              </div>
+              <div id="lock-bio-status" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
+            </div>
+            <button onclick="showLockScreen()" class="btn btn-secondary" style="width:100%">🔒 지금 잠금 테스트</button>
+          </div>
+        </div>
+      </div>
       <div class="section-title">Branding</div>
       <div class="form-grid">
         <div class="form-group form-full"><label class="form-label">App subtitle (sidebar)</label><input class="form-control" id="set-companySubtitle" placeholder="Holmes Order Manager"></div>
@@ -1568,6 +1603,56 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
+
+<!-- LOCK SCREEN -->
+<div id="lock-screen" style="display:none;position:fixed;inset:0;z-index:99999;background:var(--sidebar,#1a1a2e);flex-direction:column;align-items:center;justify-content:center;gap:0">
+  <!-- Logo -->
+  <div style="margin-bottom:36px;text-align:center">
+    <div style="font-size:28px;font-weight:900;letter-spacing:2px;color:#fff">SK <span style="color:#C9A84C">ON</span>TIME</div>
+    <div id="lock-subtitle" style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1.5px;text-transform:uppercase;margin-top:4px">Holmes Order Manager</div>
+  </div>
+
+  <!-- Biometric button -->
+  <div id="lock-bio-section" style="text-align:center;margin-bottom:28px">
+    <button id="lock-bio-btn" onclick="tryBiometric(true)"
+      style="width:88px;height:88px;border-radius:50%;border:2px solid rgba(201,168,76,0.5);background:rgba(201,168,76,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;transition:all 0.2s"
+      onmouseover="this.style.background='rgba(201,168,76,0.2)'" onmouseout="this.style.background='rgba(201,168,76,0.1)'">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="1.5">
+        <path d="M12 2C9.38 2 7 3.56 7 6v1c-1.5.5-2.5 2-2.5 3.5 0 2 1.5 4 2.5 5v2c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2v-2c1-1 2.5-3 2.5-5C19.5 8.56 17.12 7 15.5 7V6c0-2.44-1.5-4-3.5-4z"/>
+        <circle cx="12" cy="11" r="2"/>
+        <path d="M9 15c0-1.66 1.34-3 3-3s3 1.34 3 3"/>
+      </svg>
+    </button>
+    <div id="lock-bio-label" style="font-size:12px;color:rgba(255,255,255,0.5)">Face ID / Touch ID</div>
+  </div>
+
+  <!-- PIN section -->
+  <div id="lock-pin-section" style="display:none;text-align:center">
+    <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:14px">PIN 입력</div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-bottom:10px">
+      <input id="lock-pin-input" type="password" inputmode="numeric" maxlength="6"
+        placeholder="• • • •"
+        style="width:160px;text-align:center;font-size:22px;letter-spacing:8px;padding:10px 16px;border-radius:12px;border:1.5px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:#fff;outline:none"
+        onkeydown="if(event.key==='Enter')checkLockPin()">
+    </div>
+    <div id="lock-pin-error" style="display:none;color:#ef4444;font-size:12px;margin-bottom:8px">PIN이 틀렸습니다</div>
+    <button onclick="checkLockPin()"
+      style="padding:10px 32px;border-radius:10px;border:none;background:#C9A84C;color:#1a1a2e;font-weight:700;font-size:14px;cursor:pointer">
+      잠금해제
+    </button>
+  </div>
+
+  <!-- Switch mode -->
+  <div style="margin-top:24px;display:flex;gap:16px">
+    <button id="lock-switch-pin" onclick="toggleLockMode('pin')"
+      style="background:none;border:none;color:rgba(255,255,255,0.35);font-size:12px;cursor:pointer;text-decoration:underline">
+      PIN으로 잠금해제
+    </button>
+    <button id="lock-switch-bio" onclick="toggleLockMode('bio')" style="display:none;background:none;border:none;color:rgba(255,255,255,0.35);font-size:12px;cursor:pointer;text-decoration:underline">
+      생체인식 사용
+    </button>
+  </div>
+</div>
 
 <script>
 const SEED_ORDERS = []; // data removed from public source 2026-06-22 — see private backup
@@ -2332,6 +2417,7 @@ function openSettingsModal() {
     const el = document.getElementById('setnum-' + k);
     if (el) el.value = DB.appSettings[k];
   });
+  _openLockSettings();
   openModal('settings-modal');
 }
 
@@ -6044,6 +6130,207 @@ function updateSidebar() {
 }
 
 // ============================================================
+// APP LOCK — WebAuthn (Face ID / Touch ID) + PIN fallback
+// ============================================================
+
+const LOCK_RP_ID   = location.hostname || 'localhost';
+const LOCK_RP_NAME = 'SK Ontime';
+const LOCK_USER_ID = new TextEncoder().encode('sk-ontime-user-v1');
+let _lockInactivityTimer = null;
+
+async function _hashPin(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('sk_hom_' + pin));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function initLock() {
+  if (lsGet('hom_lock_enabled') !== 'true') return;
+  showLockScreen(true); // silent = auto-try biometric
+}
+
+function showLockScreen(autoBio = false) {
+  const el = document.getElementById('lock-screen');
+  if (!el) return;
+  el.style.display = 'flex';
+  // Update subtitle from settings
+  const sub = document.getElementById('lock-subtitle');
+  if (sub) sub.textContent = DB.uiLabels.companySubtitle || 'Holmes Order Manager';
+  // Show biometric button only if credential registered
+  const hasCred = !!lsGet('hom_lock_cred_id');
+  document.getElementById('lock-bio-section').style.display = hasCred ? 'block' : 'none';
+  document.getElementById('lock-switch-pin').style.display  = hasCred ? 'inline' : 'none';
+  document.getElementById('lock-switch-bio').style.display  = 'none';
+  if (!hasCred) { // No biometric → go straight to PIN
+    document.getElementById('lock-pin-section').style.display = 'block';
+    setTimeout(() => document.getElementById('lock-pin-input')?.focus(), 300);
+  } else if (autoBio) {
+    setTimeout(() => tryBiometric(false), 600);
+  }
+}
+
+function hideLockScreen() {
+  const el = document.getElementById('lock-screen');
+  if (el) el.style.display = 'none';
+  _resetInactivityTimer();
+}
+
+function toggleLockMode(mode) {
+  const pinSec = document.getElementById('lock-pin-section');
+  const bioSec = document.getElementById('lock-bio-section');
+  const swPin  = document.getElementById('lock-switch-pin');
+  const swBio  = document.getElementById('lock-switch-bio');
+  if (mode === 'pin') {
+    pinSec.style.display = 'block';
+    bioSec.style.display = 'none';
+    swPin.style.display  = 'none';
+    swBio.style.display  = 'inline';
+    setTimeout(() => document.getElementById('lock-pin-input')?.focus(), 100);
+  } else {
+    pinSec.style.display = 'none';
+    bioSec.style.display = 'block';
+    swPin.style.display  = 'inline';
+    swBio.style.display  = 'none';
+    tryBiometric(true);
+  }
+}
+
+async function tryBiometric(showPinOnFail = true) {
+  const credId = lsGet('hom_lock_cred_id');
+  if (!credId || !window.PublicKeyCredential) {
+    if (showPinOnFail) toggleLockMode('pin');
+    return;
+  }
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        rpId: LOCK_RP_ID,
+        allowCredentials: [{ type: 'public-key', id: Uint8Array.from(atob(credId), c => c.charCodeAt(0)) }],
+        userVerification: 'required',
+        timeout: 30000,
+      }
+    });
+    hideLockScreen();
+    toast('🔓 잠금 해제됨', 'success');
+  } catch (e) {
+    if (showPinOnFail) toggleLockMode('pin');
+  }
+}
+
+async function checkLockPin() {
+  const input = document.getElementById('lock-pin-input')?.value.trim();
+  if (!input) return;
+  const stored = lsGet('hom_lock_pin_hash');
+  if (!stored) { hideLockScreen(); return; }
+  const h = await _hashPin(input);
+  if (h === stored) {
+    hideLockScreen();
+    toast('🔓 잠금 해제됨', 'success');
+  } else {
+    document.getElementById('lock-pin-input').value = '';
+    document.getElementById('lock-pin-error').style.display = 'block';
+    setTimeout(() => {
+      const err = document.getElementById('lock-pin-error');
+      if (err) err.style.display = 'none';
+    }, 2000);
+  }
+}
+
+async function registerBiometric() {
+  if (!window.PublicKeyCredential) {
+    toast('이 기기/브라우저는 생체인식을 지원하지 않습니다', 'error'); return;
+  }
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { id: LOCK_RP_ID, name: LOCK_RP_NAME },
+        user: { id: LOCK_USER_ID, name: 'sk-user', displayName: 'SK Ontime User' },
+        pubKeyCredParams: [
+          { type: 'public-key', alg: -7 },
+          { type: 'public-key', alg: -257 },
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          userVerification: 'required',
+          residentKey: 'preferred',
+        },
+        timeout: 30000,
+      }
+    });
+    const credId = btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
+    lsSet('hom_lock_cred_id', credId);
+    const status = document.getElementById('lock-bio-status');
+    if (status) status.textContent = '✓ 생체인식 등록됨';
+    toast('✓ Face ID / Touch ID 등록 완료', 'success');
+  } catch (e) {
+    toast('등록 실패: ' + (e.message || '취소됨'), 'error');
+  }
+}
+
+function clearBiometric() {
+  lsSet('hom_lock_cred_id', '');
+  const status = document.getElementById('lock-bio-status');
+  if (status) status.textContent = '생체인식 삭제됨';
+  toast('생체인식 삭제됨', 'success');
+}
+
+async function saveLockPin() {
+  const pin = document.getElementById('set-lockPin')?.value.trim();
+  if (!pin) { toast('PIN을 입력해주세요', 'error'); return; }
+  if (pin.length < 4 || !/^\d+$/.test(pin)) {
+    toast('PIN은 4~6자리 숫자여야 합니다', 'error'); return;
+  }
+  const h = await _hashPin(pin);
+  lsSet('hom_lock_pin_hash', h);
+  document.getElementById('set-lockPin').value = '';
+  toast('✓ PIN 저장됨', 'success');
+}
+
+function onLockToggleChange() {
+  const enabled = document.getElementById('set-lockEnabled').checked;
+  const body    = document.getElementById('lock-settings-body');
+  const track   = document.getElementById('lock-toggle-track');
+  const thumb   = document.getElementById('lock-toggle-thumb');
+  if (body)  body.style.display   = enabled ? 'block' : 'none';
+  if (track) track.style.background = enabled ? 'var(--accent)' : 'var(--border2)';
+  if (thumb) thumb.style.transform = enabled ? 'translateX(20px)' : 'translateX(0)';
+  lsSet('hom_lock_enabled', enabled ? 'true' : 'false');
+  if (enabled && !lsGet('hom_lock_pin_hash') && !lsGet('hom_lock_cred_id')) {
+    toast('PIN을 먼저 설정하거나 생체인식을 등록해주세요', 'error');
+  }
+}
+
+function _openLockSettings() {
+  const enabled = lsGet('hom_lock_enabled') === 'true';
+  const cb = document.getElementById('set-lockEnabled');
+  if (cb) cb.checked = enabled;
+  onLockToggleChange();
+  const status = document.getElementById('lock-bio-status');
+  if (status) status.textContent = lsGet('hom_lock_cred_id') ? '✓ 생체인식 등록됨' : '미등록';
+}
+
+function _resetInactivityTimer() {
+  if (_lockInactivityTimer) clearTimeout(_lockInactivityTimer);
+  if (lsGet('hom_lock_enabled') !== 'true') return;
+  // Re-lock after 10 minutes of inactivity
+  _lockInactivityTimer = setTimeout(() => showLockScreen(true), 10 * 60 * 1000);
+}
+
+// Re-lock when app comes back from background (mobile)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (lsGet('hom_lock_enabled') === 'true') showLockScreen(true);
+});
+
+// Reset inactivity timer on any user interaction
+['touchstart','mousedown','keydown'].forEach(evt =>
+  document.addEventListener(evt, _resetInactivityTimer, { passive: true })
+);
+
+// ============================================================
 // EXPORT PDF
 // ============================================================
 
@@ -6561,6 +6848,8 @@ document.getElementById('header-actions').innerHTML = `
   <button class="btn btn-secondary" onclick="openEmailImport()">📧 Import Email</button>
   <button class="btn btn-primary" onclick="openOrderModal()">+ New Order</button>`;
 
+// Initialise lock on startup
+initLock();
 
 // ============================================================
 // MANAGE SUBBIES
