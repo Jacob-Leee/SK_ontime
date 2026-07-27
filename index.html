@@ -1572,6 +1572,9 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <div class="form-group form-full">
           <div id="auth-settings-status" style="font-size:11.5px;line-height:1.7;margin-bottom:10px"></div>
           <div id="auth-signin-row"></div>
+          <div id="auth-signin-msg" style="display:none;font-size:11.5px;margin-top:8px;line-height:1.6;white-space:pre-line"></div>
+          <button onclick="authDiagnose()" class="btn btn-secondary" style="width:100%;margin-top:8px">🩺 로그인 진단 (안 될 때 눌러보세요)</button>
+          <div id="auth-diag-result"></div>
         </div>
         <div class="form-group form-full">
           <label class="form-label">동기화 주소 (서버 저장 — 팀 전체 공유)</label>
@@ -6908,28 +6911,119 @@ function _authError(msg) {
   el.style.display = msg ? 'block' : 'none';
 }
 
+// Errors must land wherever the user actually is. #auth-error lives INSIDE the
+// login gate, so writing there while the gate is hidden (AUTH_REQUIRED=false,
+// signing in from Settings) means the message is rendered into an invisible
+// element — the click appears to do nothing at all. This routes to whichever
+// surface is on screen, and always leaves a trace in the Settings panel.
+function _authFeedback(msg, kind) {
+  if (AUTH_REQUIRED && document.getElementById('auth-gate')?.style.display === 'flex') {
+    _authError(msg);
+  } else {
+    toast(msg.split('\n')[0], kind || 'error');
+  }
+  const box = document.getElementById('auth-signin-msg');
+  if (box) {
+    box.style.display = msg ? 'block' : 'none';
+    box.style.color   = kind === 'success' ? 'var(--green)' : 'var(--red)';
+    box.textContent   = msg || '';
+  }
+}
+
 // Popup, not redirect. signInWithRedirect relies on cross-site storage between
 // jacob-leee.github.io and homes-nsw.firebaseapp.com, which Safari's ITP and
 // Chrome's third-party cookie phase-out now partition — the redirect returns
 // and the user is still signed out, with no error. Popup avoids that entirely.
 async function authSignIn() {
   _authError('');
-  if (!_authSetup()) { _authError('Firebase 인증 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+  _authFeedback('', 'success');
+
+  if (typeof firebase === 'undefined') {
+    _authFeedback('Firebase SDK가 로드되지 않았습니다.\n네트워크 차단(사내 방화벽 등)이나 광고 차단 확장을 확인해주세요.');
+    return;
+  }
+  if (!firebase.auth) {
+    _authFeedback('firebase-auth-compat.js 를 불러오지 못했습니다.\n수정된 index.html 이 배포되었는지 확인해주세요.');
+    return;
+  }
+  if (!_authSetup()) {
+    _authFeedback('Firebase 초기화에 실패했습니다. 새로고침 후 다시 시도해주세요.');
+    return;
+  }
+
   const btn = document.getElementById('auth-signin-btn');
   if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  _authFeedback('로그인 창을 여는 중… 팝업이 뜨지 않으면 주소창의 팝업 차단 아이콘을 확인해주세요.', 'success');
+
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    await AUTH.auth.signInWithPopup(provider);
+    const res = await AUTH.auth.signInWithPopup(provider);
+    _authFeedback('로그인 성공 — 권한 확인 중…', 'success');
+    console.log('[AUTH] popup returned for', res?.user?.email);
     // onAuthStateChanged takes it from here.
   } catch (e) {
-    console.warn('[AUTH] sign-in failed:', e);
-    const msg = _authErrorMessage(e);
-    // When the gate is off this is being run from Settings, where the gate's
-    // error panel is not on screen — a toast is the only way the message lands.
-    if (AUTH_REQUIRED) _authError(msg); else toast(msg.split('\n')[0], 'error');
+    console.warn('[AUTH] sign-in failed:', e.code, e.message);
+    _authFeedback(_authErrorMessage(e));
   } finally {
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
+}
+
+// Answers "I clicked sign in and nothing happened" without needing devtools.
+async function authDiagnose() {
+  const L = [];
+  const row = (k, v, ok) => L.push(
+    `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:11.5px">
+       <span style="flex-shrink:0">${ok === null ? 'ℹ️' : ok ? '✅' : '❌'}</span>
+       <span style="flex-shrink:0;color:var(--text3);min-width:120px">${k}</span>
+       <span style="flex:1;word-break:break-all">${esc(String(v))}</span>
+     </div>`);
+
+  row('HTTPS', window.isSecureContext ? '예' : '아니오 — 로그인 불가', !!window.isSecureContext);
+  row('현재 호스트', location.hostname, null);
+  row('Firebase SDK', typeof firebase !== 'undefined' ? '로드됨' : '없음', typeof firebase !== 'undefined');
+  row('Auth 모듈', (typeof firebase !== 'undefined' && firebase.auth) ? '로드됨' : '없음 — index.html 재배포 필요',
+      !!(typeof firebase !== 'undefined' && firebase.auth));
+  row('Database 모듈', (typeof firebase !== 'undefined' && firebase.database) ? '로드됨' : '없음',
+      !!(typeof firebase !== 'undefined' && firebase.database));
+
+  const u = AUTH.auth && AUTH.auth.currentUser;
+  row('현재 세션', u ? u.email : '없음', !!u);
+  row('AUTH_REQUIRED', String(AUTH_REQUIRED), null);
+
+  if (u) {
+    try {
+      const key  = _emailKey(u.email);
+      row('조회할 키', key, null);
+      const snap = await AUTH.db.ref('/allowedUsers/' + key).once('value');
+      row('허용 명단 조회', snap.exists() ? '있음 (' + JSON.stringify(snap.val()) + ')' : '없음 — 키 철자 확인', snap.exists());
+    } catch (e) {
+      row('허용 명단 조회', '실패: ' + e.message, false);
+    }
+    try {
+      const cfg = await AUTH.db.ref('/config/cloudUrl').once('value');
+      row('서버 저장 주소', cfg.exists() ? '있음' : '아직 없음 (4단계에서 저장)', null);
+    } catch (e) {
+      row('서버 저장 주소', '읽기 실패: ' + e.message, false);
+    }
+  }
+  row('팝업 차단 여부', '아래 버튼으로 직접 확인', null);
+
+  document.getElementById('auth-diag-result').innerHTML =
+    `<div style="margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--cream2)">${L.join('')}
+       <button onclick="authTestPopup()" style="margin-top:8px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);font-size:11px;cursor:pointer">팝업 차단 테스트</button>
+     </div>`;
+}
+
+function authTestPopup() {
+  const w = window.open('', '_blank', 'width=320,height=200');
+  if (!w || w.closed || typeof w.closed === 'undefined') {
+    toast('❌ 팝업이 차단되어 있습니다 — 주소창의 차단 아이콘에서 허용해주세요', 'error');
+  } else {
+    w.document.write('<p style="font-family:sans-serif;padding:20px">팝업 정상 — 이 창은 닫으셔도 됩니다.</p>');
+    setTimeout(() => { try { w.close(); } catch (e) {} }, 1500);
+    toast('✓ 팝업 허용됨 — 로그인을 다시 시도해보세요', 'success');
   }
 }
 
@@ -7004,6 +7098,7 @@ function authInit() {
       await _authApplyConfig();
       AUTH.ready = true;
       _authHide();
+      _authFeedback(`✓ ${user.email} 로 로그인됨`, 'success');
       _authAfterSignIn();
 
     } catch (e) {
@@ -7075,13 +7170,13 @@ function renderAuthBadge() {
 async function authLoadAllowlist() {
   const box = document.getElementById('auth-allowlist');
   if (!box) return;
-  if (!AUTH_REQUIRED) {
-    box.innerHTML = `<div style="font-size:11.5px;color:var(--text3);line-height:1.6">
-      Google 로그인이 아직 <b>비활성</b> 상태입니다.<br>
-      Firebase Console 설정을 마친 뒤 소스에서 <code>AUTH_REQUIRED</code>를 <code>true</code>로 바꾸면 켜집니다.</div>`;
+  // Gating this on AUTH_REQUIRED was wrong: the setup phase runs with the gate
+  // still off, and that is exactly when the admin needs to see and edit the
+  // list. What actually matters is whether we are signed in.
+  if (!_authSetup() || !AUTH.user) {
+    box.innerHTML = '<div style="font-size:11.5px;color:var(--text3);line-height:1.6">먼저 위에서 <b>Google로 로그인</b> 해주세요.<br>로그인해야 명단을 읽을 수 있습니다.</div>';
     return;
   }
-  if (!_authSetup() || !AUTH.user) { box.innerHTML = '<div style="font-size:11.5px;color:var(--text3)">로그인이 필요합니다.</div>'; return; }
   try {
     const snap = await AUTH.db.ref('/allowedUsers').once('value');
     const all  = snap.val() || {};
