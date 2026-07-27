@@ -1570,7 +1570,8 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <div class="section-title">Google 로그인 &amp; 접근 권한</div>
       <div class="form-grid">
         <div class="form-group form-full">
-          <div id="auth-settings-status" style="font-size:11.5px;line-height:1.6;margin-bottom:10px"></div>
+          <div id="auth-settings-status" style="font-size:11.5px;line-height:1.7;margin-bottom:10px"></div>
+          <div id="auth-signin-row"></div>
         </div>
         <div class="form-group form-full">
           <label class="form-label">동기화 주소 (서버 저장 — 팀 전체 공유)</label>
@@ -6923,7 +6924,10 @@ async function authSignIn() {
     // onAuthStateChanged takes it from here.
   } catch (e) {
     console.warn('[AUTH] sign-in failed:', e);
-    _authError(_authErrorMessage(e));
+    const msg = _authErrorMessage(e);
+    // When the gate is off this is being run from Settings, where the gate's
+    // error panel is not on screen — a toast is the only way the message lands.
+    if (AUTH_REQUIRED) _authError(msg); else toast(msg.split('\n')[0], 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
   }
@@ -6955,21 +6959,30 @@ async function authSignOut() {
   location.reload();
 }
 
-// Runs on every load and on every sign-in/out.
+// Runs on every load. The session listener is attached whether or not the gate
+// is enforced: the admin has to be able to sign in from Settings to seed
+// /config/cloudUrl BEFORE turning AUTH_REQUIRED on. Without that, setup
+// deadlocks — the rules demand a signed-in admin, but nothing can sign in yet.
 function authInit() {
-  if (!AUTH_REQUIRED) { AUTH.ready = true; return; }
   if (!_authSetup()) {
-    // Firebase unreachable. Falling open would defeat the gate; falling closed
-    // with an explanation is the safe failure mode.
-    _authShow('signin');
-    _authError('인증 모듈을 불러오지 못했습니다. 네트워크를 확인한 뒤 새로고침해주세요.');
+    if (AUTH_REQUIRED) {
+      // Falling open would defeat the gate entirely; fail closed, with a reason.
+      _authShow('signin');
+      _authError('인증 모듈을 불러오지 못했습니다. 네트워크를 확인한 뒤 새로고침해주세요.');
+    }
     return;
   }
-  _authShow('busy', '확인 중…');
+  if (AUTH_REQUIRED) _authShow('busy', '확인 중…');
 
   AUTH.auth.onAuthStateChanged(async (user) => {
-    if (!user) { AUTH.user = null; _authShow('signin'); return; }
-    _authShow('busy', '권한 확인 중…');
+    if (!user) {
+      AUTH.user = null; AUTH.entry = null;
+      renderAuthBadge();
+      if (AUTH_REQUIRED) _authShow('signin');
+      else _openAuthSettings();
+      return;
+    }
+    if (AUTH_REQUIRED) _authShow('busy', '권한 확인 중…');
     try {
       const key  = _emailKey(user.email);
       const snap = await AUTH.db.ref('/allowedUsers/' + key).once('value');
@@ -6977,8 +6990,9 @@ function authInit() {
       if (!snap.exists()) {
         // Deny, and do not leave a half-signed-in session behind.
         await AUTH.auth.signOut();
-        _authShow('signin');
-        _authError(`${user.email} 계정은 접근 권한이 없습니다.\n관리자에게 등록을 요청해주세요.`);
+        const msg = `${user.email} 계정은 접근 권한이 없습니다.\n관리자에게 등록을 요청해주세요.`;
+        if (AUTH_REQUIRED) { _authShow('signin'); _authError(msg); }
+        else toast(msg.replace('\n', ' '), 'error');
         return;
       }
 
@@ -6994,17 +7008,19 @@ function authInit() {
 
     } catch (e) {
       console.warn('[AUTH] allowlist check failed:', e);
-      // Permission-denied here almost always means the RTDB rules were deployed
-      // before the allowlist was seeded — say so instead of a raw error code.
+      // Permission-denied here almost always means the rules were published
+      // before /allowedUsers was seeded — say so instead of a raw error code.
       const offline = !navigator.onLine;
+      const msg = '권한 정보를 읽지 못했습니다.\n' +
+        '허용 명단(/allowedUsers)이 아직 등록되지 않았거나 데이터베이스 규칙이 이를 막고 있습니다.\n\n' +
+        (e.message || '');
       if (offline && lsGet('hom_auth_email')) {
         AUTH.user = user; AUTH.ready = true; _authHide(); _authAfterSignIn();
         toast('오프라인 — 저장된 권한으로 실행 중', 'info');
+      } else if (AUTH_REQUIRED) {
+        _authShow('signin'); _authError(msg);
       } else {
-        _authShow('signin');
-        _authError('권한 정보를 읽지 못했습니다.\n' +
-          '허용 명단(/allowedUsers)이 아직 등록되지 않았거나 데이터베이스 규칙이 이를 막고 있습니다.\n\n' +
-          (e.message || ''));
+        toast('권한 확인 실패: ' + (e.message || ''), 'error');
       }
     }
   });
@@ -7034,7 +7050,11 @@ async function _authApplyConfig() {
 
 function _authAfterSignIn() {
   renderAuthBadge();
-  try { initLock(); } catch (e) {}     // PIN / Face ID layers on top of sign-in
+  _openAuthSettings();
+  // Only start the PIN/Face ID layer here when sign-in gated the boot. With the
+  // gate off, initLock() already ran at startup — running it again would throw
+  // the lock screen back up in the middle of a Settings sign-in.
+  if (AUTH_REQUIRED) { try { initLock(); } catch (e) {} }
   try { fcmMaintain(); } catch (e) {}
 }
 
@@ -7120,14 +7140,27 @@ async function authSaveCloudUrl() {
 }
 
 async function _openAuthSettings() {
-  const st = document.getElementById('auth-settings-status');
+  const st  = document.getElementById('auth-settings-status');
+  const box = document.getElementById('auth-signin-row');
+
   if (st) {
-    st.innerHTML = !AUTH_REQUIRED
-      ? '<span style="color:var(--yellow)">⚠ 비활성 — 소스의 AUTH_REQUIRED를 true로 바꾸면 켜집니다</span>'
-      : (AUTH.user
-          ? `<span style="color:var(--green)">✓ ${esc(AUTH.user.email)} 로 로그인됨</span>`
-          : '<span style="color:var(--text3)">로그인되지 않음</span>');
+    const gate = AUTH_REQUIRED
+      ? '<span style="color:var(--green)">잠금 <b>켜짐</b></span>'
+      : '<span style="color:var(--yellow)">잠금 <b>꺼짐</b> — 소스의 AUTH_REQUIRED를 true로 바꾸면 켜집니다</span>';
+    const who = AUTH.user
+      ? `<span style="color:var(--green)">✓ ${esc(AUTH.user.email)} 로 로그인됨</span>`
+      : '<span style="color:var(--text3)">로그인되지 않음</span>';
+    st.innerHTML = gate + '<br>' + who;
   }
+
+  // Sign-in has to be reachable here even with the gate off — that is how the
+  // admin authenticates in order to write /config/cloudUrl during setup.
+  if (box) {
+    box.innerHTML = AUTH.user
+      ? `<button onclick="authSignOut()" class="btn btn-secondary" style="width:100%">로그아웃</button>`
+      : `<button onclick="authSignIn()" class="btn btn-secondary" style="width:100%">🔑 Google로 로그인 (설정 저장에 필요)</button>`;
+  }
+
   const urlEl = document.getElementById('auth-cloud-url');
   if (urlEl && !urlEl.value) urlEl.value = CLOUD.url || '';
   authLoadAllowlist();
@@ -8151,9 +8184,12 @@ document.getElementById('header-actions').innerHTML = `
   <button class="btn btn-primary" onclick="openOrderModal()">+ New Order</button>`;
 
 // Startup gates, outermost first: Google sign-in → PIN/Face ID → app.
-// When sign-in is required the lock is started by _authAfterSignIn() instead,
-// otherwise the two overlays race and the PIN pad renders behind the login box.
-if (AUTH_REQUIRED) { authInit(); } else { initLock(); }
+// authInit() always runs so an existing session is restored and Settings can
+// sign in; it only puts the gate on screen when AUTH_REQUIRED. The PIN lock is
+// started here only when the gate is off — otherwise _authAfterSignIn() starts
+// it, so the two overlays cannot race and strand the PIN pad behind the login box.
+authInit();
+if (!AUTH_REQUIRED) initLock();
 
 // Notification bell + first-run baseline.
 // Seeding here (not on first alert) is what guarantees an existing user who
