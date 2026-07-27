@@ -6870,7 +6870,7 @@ function runNotifSimulation() {
 
 const AUTH_REQUIRED = false;   // ← set to true AFTER Firebase Console setup
 
-const AUTH = { user: null, entry: null, ready: false, auth: null, db: null };
+const AUTH = { user: null, entry: null, ready: false, auth: null, db: null, lastError: null };
 
 // Firebase keys cannot contain '.', so emails are stored with dots as commas.
 // The RTDB rules do the identical transform — the two MUST agree or every
@@ -6993,20 +6993,47 @@ async function authDiagnose() {
   row('AUTH_REQUIRED', String(AUTH_REQUIRED), null);
 
   if (u) {
+    // The rules require email_verified == true. If that claim is missing or
+    // false, every read is denied no matter how correct the allowlist is —
+    // so it has to be visible here, not guessed at.
     try {
-      const key  = _emailKey(u.email);
-      row('조회할 키', key, null);
-      const snap = await AUTH.db.ref('/allowedUsers/' + key).once('value');
-      row('허용 명단 조회', snap.exists() ? '있음 (' + JSON.stringify(snap.val()) + ')' : '없음 — 키 철자 확인', snap.exists());
+      const tok = await u.getIdTokenResult();
+      const c   = tok.claims || {};
+      row('토큰 email', c.email || '(없음)', !!c.email);
+      row('email_verified', String(c.email_verified),
+          c.email_verified === true);
+      row('로그인 제공자', (u.providerData[0] && u.providerData[0].providerId) || '?', null);
     } catch (e) {
-      row('허용 명단 조회', '실패: ' + e.message, false);
+      row('토큰 확인', '실패: ' + e.message, false);
     }
+
+    const key = _emailKey(u.email);
+    row('조회할 키', key, null);
+
+    // Read the whole node too: it separates "rules blocked me" from
+    // "rules are fine, the key just is not there".
+    try {
+      const all = await AUTH.db.ref('/allowedUsers').once('value');
+      const v   = all.val() || {};
+      const keys = Object.keys(v);
+      row('명단 읽기', '성공 — 등록 ' + keys.length + '건', true);
+      if (keys.length) row('등록된 키', keys.join(', '), null);
+      row('내 키 일치', keys.includes(key) ? '일치 ✓' : '불일치 — 위 두 줄을 비교해보세요', keys.includes(key));
+    } catch (e) {
+      row('명단 읽기', '차단됨: ' + e.message, false);
+      row('원인 추정', 'email_verified 가 false 이거나 규칙이 게시되지 않음', null);
+    }
+
     try {
       const cfg = await AUTH.db.ref('/config/cloudUrl').once('value');
       row('서버 저장 주소', cfg.exists() ? '있음' : '아직 없음 (4단계에서 저장)', null);
     } catch (e) {
-      row('서버 저장 주소', '읽기 실패: ' + e.message, false);
+      row('서버 저장 주소', '읽기 차단: ' + e.message, false);
     }
+  }
+
+  if (AUTH.lastError) {
+    row('마지막 오류', AUTH.lastError.stage + (AUTH.lastError.message ? ' — ' + AUTH.lastError.message : ''), false);
   }
   row('팝업 차단 여부', '아래 버튼으로 직접 확인', null);
 
@@ -7082,11 +7109,25 @@ function authInit() {
       const snap = await AUTH.db.ref('/allowedUsers/' + key).once('value');
 
       if (!snap.exists()) {
-        // Deny, and do not leave a half-signed-in session behind.
-        await AUTH.auth.signOut();
-        const msg = `${user.email} 계정은 접근 권한이 없습니다.\n관리자에게 등록을 요청해주세요.`;
-        if (AUTH_REQUIRED) { _authShow('signin'); _authError(msg); }
-        else toast(msg.replace('\n', ' '), 'error');
+        AUTH.lastError = { stage: 'allowlist-miss', key, email: user.email };
+        if (AUTH_REQUIRED) {
+          // Production: deny hard, leave no half-signed-in session behind.
+          await AUTH.auth.signOut();
+          _authShow('signin');
+          _authError(`${user.email} 계정은 접근 권한이 없습니다.\n관리자에게 등록을 요청해주세요.`);
+        } else {
+          // Setup phase: signing out here destroys the very session the admin
+          // needs in order to see WHY the lookup missed. Stay signed in and
+          // show the exact key that was searched — a wrong key is the usual cause.
+          AUTH.user = user;
+          renderAuthBadge();
+          _authFeedback(
+            `계정은 인증됐지만 허용 명단에 없습니다.\n` +
+            `찾은 키: ${key}\n` +
+            `Firebase의 allowedUsers 아래에 이 키가 정확히 있는지 확인해주세요.`
+          );
+          _openAuthSettings();
+        }
         return;
       }
 
@@ -7103,11 +7144,10 @@ function authInit() {
 
     } catch (e) {
       console.warn('[AUTH] allowlist check failed:', e);
-      // Permission-denied here almost always means the rules were published
-      // before /allowedUsers was seeded — say so instead of a raw error code.
+      AUTH.lastError = { stage: 'allowlist-read', message: e.message, email: user.email };
       const offline = !navigator.onLine;
       const msg = '권한 정보를 읽지 못했습니다.\n' +
-        '허용 명단(/allowedUsers)이 아직 등록되지 않았거나 데이터베이스 규칙이 이를 막고 있습니다.\n\n' +
+        '허용 명단(/allowedUsers) 읽기가 데이터베이스 규칙에 막혔습니다.\n\n' +
         (e.message || '');
       if (offline && lsGet('hom_auth_email')) {
         AUTH.user = user; AUTH.ready = true; _authHide(); _authAfterSignIn();
@@ -7115,7 +7155,11 @@ function authInit() {
       } else if (AUTH_REQUIRED) {
         _authShow('signin'); _authError(msg);
       } else {
-        toast('권한 확인 실패: ' + (e.message || ''), 'error');
+        // Keep the session so the diagnostic can inspect the token claims.
+        AUTH.user = user;
+        renderAuthBadge();
+        _authFeedback(msg);
+        _openAuthSettings();
       }
     }
   });
