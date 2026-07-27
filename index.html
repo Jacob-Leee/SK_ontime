@@ -1806,6 +1806,21 @@ const SEED_VERSION = '15';
 function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 
+// Declared here, not next to the RTDB code that also uses it. `const` sits in
+// the temporal dead zone until its own line executes, so having it further down
+// meant authInit() — which runs earlier — threw ReferenceError inside a
+// try/catch, silently failed to attach the auth listener, and left sign-in
+// hanging at "권한 확인 중" forever. Definition order matters here.
+const _RTDB_CONFIG = {
+  apiKey: "AIzaSyBRzLQXpX_tWdJCpxKT7DI5m402KiaiCUA",
+  authDomain: "homes-nsw.firebaseapp.com",
+  projectId: "homes-nsw",
+  storageBucket: "homes-nsw.firebasestorage.app",
+  messagingSenderId: "1064085096701",
+  appId: "1:1064085096701:web:9463a7ccba801d9a9b5694",
+  databaseURL: "https://homes-nsw-default-rtdb.firebaseio.com"
+};
+
 const DEFAULT_UI_LABELS = {
   navAll: 'All Orders', navOrders: 'Orders', navCompleted: 'Completed', navClaims: 'Claim',
   navClosed: 'Closed', navIssues: 'Issues', navCancelled: 'Cancelled', navCalendar: 'Calendar',
@@ -6880,14 +6895,26 @@ function _emailKey(email) {
 }
 
 function _authSetup() {
-  if (AUTH.auth) return true;
+  if (AUTH.auth) { _authAttachListener(); return true; }
   if (typeof firebase === 'undefined' || !firebase.auth) return false;
   try {
     const app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(_RTDB_CONFIG);
     AUTH.auth = firebase.auth(app);
     AUTH.db   = firebase.database(app);
+    // Attach here, not only in authInit(). If authInit() ever runs before
+    // Firebase is usable it returns early, and a listener attached only there
+    // would never exist — sign-in would then succeed with nothing handling the
+    // result. Tying it to setup means the first successful init always wires it.
+    _authAttachListener();
     return true;
   } catch (e) { console.warn('[AUTH] setup failed:', e); return false; }
+}
+
+function _authAttachListener() {
+  if (AUTH._listening || !AUTH.auth) return;
+  AUTH._listening = true;
+  AUTH.auth.onAuthStateChanged(_authOnStateChanged);
+  console.log('[AUTH] state listener attached');
 }
 
 function _authShow(view, text) {
@@ -7094,8 +7121,9 @@ function authInit() {
     return;
   }
   if (AUTH_REQUIRED) _authShow('busy', '확인 중…');
+}
 
-  AUTH.auth.onAuthStateChanged(async (user) => {
+async function _authOnStateChanged(user) {
     if (!user) {
       AUTH.user = null; AUTH.entry = null;
       renderAuthBadge();
@@ -7162,7 +7190,6 @@ function authInit() {
         _openAuthSettings();
       }
     }
-  });
 }
 
 // Pull the sync URL and this person's identity from their allowlist entry, so a
@@ -8568,15 +8595,8 @@ function updateMobNav() {}
 // FIREBASE RTDB — Push notification trigger (desktop → mobile)
 // ══════════════════════════════════════════════════════════
 
-const _RTDB_CONFIG = {
-  apiKey: "AIzaSyBRzLQXpX_tWdJCpxKT7DI5m402KiaiCUA",
-  authDomain: "homes-nsw.firebaseapp.com",
-  projectId: "homes-nsw",
-  storageBucket: "homes-nsw.firebasestorage.app",
-  messagingSenderId: "1064085096701",
-  appId: "1:1064085096701:web:9463a7ccba801d9a9b5694",
-  databaseURL: "https://homes-nsw-default-rtdb.firebaseio.com"
-};
+// _RTDB_CONFIG is declared near the top of this script — it has to exist before
+// authInit() runs, which happens several hundred lines above this point.
 
 let _rtdbApp, _rtdbDB;
 
