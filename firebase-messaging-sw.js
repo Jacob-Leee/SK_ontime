@@ -14,43 +14,65 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Force new SW to activate immediately — prevents old SW handling push with FCM defaults
+// Everything is resolved relative to where this SW is served from, so the same
+// file works at /SK_ontime/ and at a domain root without editing paths.
+// self.registration.scope always ends in '/'.
+const SCOPE = self.registration.scope;
+
+// Force new SW to activate immediately — prevents an old SW handling push with
+// FCM defaults after a deploy.
 self.addEventListener('install',  () => self.skipWaiting());
 self.addEventListener('activate', e  => e.waitUntil(clients.claim()));
 
-// Data-only push — browser won't auto-show; we control display here.
-// onBackgroundMessage fires when app is CLOSED or BACKGROUND.
-// When app is FOREGROUND, onMessage in the page fires instead (no duplicate).
-messaging.onBackgroundMessage(function(payload) {
+// Data-only push — the browser will not auto-show it; display is controlled here.
+// onBackgroundMessage fires when the app is CLOSED or BACKGROUNDED.
+// When the app is in the FOREGROUND, onMessage in the page fires instead, so
+// there is exactly one notification either way.
+messaging.onBackgroundMessage(function (payload) {
   console.log('[SW] Background message:', payload);
+  const d = payload.data || {};
+  const title = d.title || 'New Order';
+  const body  = d.body  || 'A new work order has been assigned.';
 
-  // Read from data field (no notification field in payload)
-  const title = payload.data?.title || 'New Order';
-  const body  = payload.data?.body  || 'A new work order has been assigned.';
+  // Tag identifies an ASSIGNMENT, not an order. Tagging by order number alone
+  // meant a re-assignment of the same order silently replaced the earlier
+  // notification instead of arriving as a new one.
+  const tag = 'sk-order-' + (d.orderNumber || 'x') + '-' + (d.subbiesAt || Date.now());
 
-  // Unique tag per order — prevents second notification silently replacing first
-  const tag = 'sk-order-' + (payload.data?.orderNumber || Date.now());
   return self.registration.showNotification(title, {
     body,
-    icon:               '/SK_ontime/icon-192.png',
-    badge:              '/SK_ontime/icon-192.png',
+    icon:  SCOPE + 'icon-192.png',
+    badge: SCOPE + 'icon-192.png',
     tag,
-    data:               payload.data || {},
+    data: d,
     requireInteraction: false,
-    vibrate:            [200, 100, 200]
+    vibrate: [200, 100, 200],
+    actions: [{ action: 'open', title: '오더 열기' }]
   });
 });
 
-self.addEventListener('notificationclick', function(event) {
+self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      for (let client of clientList) {
-        if (client.url.includes('/SK_ontime/mobile.html') && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) return clients.openWindow('/SK_ontime/mobile.html');
-    })
-  );
+  const data = event.notification.data || {};
+
+  event.waitUntil((async () => {
+    const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    // Prefer a window that already belongs to this app — whichever page the user
+    // actually has open. Hardcoding mobile.html used to yank desktop admins into
+    // the phone UI, and opened a second tab when index.html was already running.
+    const mine = all.filter(c => c.url.startsWith(SCOPE));
+    if (mine.length) {
+      const target = mine.find(c => c.focused) || mine[0];
+      await target.focus();
+      // Tell the page which order was tapped so it can jump straight to the row.
+      try { target.postMessage({ type: 'SK_OPEN_ORDER', orderNumber: data.orderNumber || '' }); } catch (e) {}
+      return;
+    }
+
+    // Nothing open — pick the UI that suits the device.
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(self.navigator.userAgent || '');
+    const url = SCOPE + (isMobile ? 'mobile.html' : 'index.html');
+    if (clients.openWindow) await clients.openWindow(url);
+  })());
 });
