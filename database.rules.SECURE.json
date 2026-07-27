@@ -1,0 +1,44 @@
+{
+  "_comment_1": "SECURE RULES — DO NOT DEPLOY YET.",
+  "_comment_2": "These require every client to be signed in with an allow-listed Google account. Deploying them before index.html has AUTH_REQUIRED=true, and before mobile.html/subbie.html also sign in, will break those apps immediately (all reads and writes denied).",
+  "_comment_3": "Deploy order: 1) seed /allowedUsers via Console  2) set AUTH_REQUIRED=true and verify you can sign in  3) add sign-in to mobile.html + subbie.html  4) only then: copy this over database.rules.json and run firebase deploy --only database",
+  "_comment_4": "auth.token.email.replace('.', ',') mirrors _emailKey() in index.html. If one side changes, every lookup misses and nobody can get in.",
+
+  "rules": {
+    "allowedUsers": {
+      ".read": "auth != null && auth.token.email_verified == true",
+      "$emailKey": {
+        ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).child('role').val() === 'admin'"
+      }
+    },
+
+    "config": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).child('role').val() === 'admin'"
+    },
+
+    "orders": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "issues": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "notifications": {
+      ".read": false,
+      ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()"
+    },
+
+    "fcmTokens": {
+      ".read": false,
+      "$group": {
+        "$deviceId": {
+          ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()"
+        }
+      }
+    }
+  }
+}

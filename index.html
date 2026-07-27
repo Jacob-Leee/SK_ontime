@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SK Ontime — Holmes Order Manager</title>
+<!-- Icons. Relative paths so the app keeps working if it is ever served from a
+     different folder than /SK_ontime/ (absolute paths silently 404 if moved). -->
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1C1C1E">
 <script>
 /* Chart.js v4.4.0 — embedded for offline use (MIT License) */
 /*!
@@ -100,6 +108,9 @@ nav { flex: 1; padding: 10px 0; overflow-y: auto; }
 .stat-mini-row { display: flex; justify-content: space-between; font-size: 12.5px; }
 .stat-mini-row span:first-child { color: rgba(255,255,255,0.3); }
 .stat-mini-row span:last-child { color: rgba(255,255,255,0.75); font-weight: 600; }
+
+@keyframes notifSlide { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes authSpin { to { transform: rotate(360deg); } }
 
 /* ── Header ── */
 #header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; height: 58px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -292,6 +303,8 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 <!-- Firebase SDK (for push notification triggers) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <!-- jsPDF for PDF export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
@@ -399,6 +412,28 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </a>
         <div class="header-actions" id="header-actions"></div>
+        <div id="auth-badge" style="display:none;align-items:center;gap:7px;padding:0 4px"></div>
+        <!-- Notification bell -->
+        <div style="position:relative;display:none" id="notif-bell">
+          <button onclick="toggleNotifPanel(event)" title="내 알림"
+            style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:pointer;position:relative">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span id="notif-bell-badge" style="display:none;position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--red,#DC2626);color:#fff;font-size:10px;font-weight:800;align-items:center;justify-content:center;line-height:1">0</span>
+          </button>
+          <div id="notif-panel" onclick="event.stopPropagation()"
+            style="display:none;position:absolute;top:42px;right:0;width:330px;max-height:420px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,0.16);z-index:9000;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--border)">
+              <span style="font-weight:700;font-size:13px">내 알림</span>
+              <div style="display:flex;gap:10px">
+                <button onclick="markAllNotifRead()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer">모두 읽음</button>
+                <button onclick="clearNotifInbox()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer">지우기</button>
+              </div>
+            </div>
+            <div id="notif-list" style="max-height:370px;overflow-y:auto"></div>
+          </div>
+        </div>
         <div style="display:flex;align-items:center;gap:8px">
           <div onclick="openCloudModal()" title="Click to open Cloud Sync settings" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 2px">
             <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
@@ -1532,6 +1567,77 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <div class="form-group"><label class="form-label">Import Email button</label><input class="form-control" id="set-btnImportEmail"></div>
         <div class="form-group"><label class="form-label">New Order button</label><input class="form-control" id="set-btnNewOrder"></div>
       </div>
+      <div class="section-title">Google 로그인 &amp; 접근 권한</div>
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <div id="auth-settings-status" style="font-size:11.5px;line-height:1.6;margin-bottom:10px"></div>
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label">동기화 주소 (서버 저장 — 팀 전체 공유)</label>
+          <div style="display:flex;gap:8px">
+            <input class="form-control" id="auth-cloud-url" placeholder="https://script.google.com/macros/s/...">
+            <button onclick="authSaveCloudUrl()" class="btn btn-secondary" style="white-space:nowrap;flex-shrink:0">저장</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">
+            여기 저장하면 팀원은 주소를 입력할 필요 없이 로그인만으로 자동 연결됩니다.
+          </div>
+        </div>
+        <div class="form-group form-full">
+          <label class="form-label">허용 계정</label>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <input class="form-control" id="auth-new-email" placeholder="이메일 주소" style="flex:2">
+            <input class="form-control" id="auth-new-name" placeholder="이름 (SK_Jacob)" style="flex:1">
+            <button onclick="authAddUser()" class="btn btn-secondary" style="white-space:nowrap;flex-shrink:0">+ 추가</button>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.5">
+            이름을 넣어두면 그 사람이 로그인할 때 알림 대상이 자동으로 설정됩니다.
+          </div>
+          <div id="auth-allowlist" style="max-height:190px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px 12px"></div>
+        </div>
+      </div>
+      <div class="section-title">Notifications</div>
+      <div class="form-grid">
+        <div class="form-group form-full">
+          <label class="form-label">내 이름 (이 기기 사용자)</label>
+          <select class="form-control" id="set-notifIdentity" onchange="setNotifIdentity(this.value)"></select>
+          <div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">
+            여기 선택한 이름으로 <b>배정된 오더만</b> 알림이 옵니다. 다른 사람 오더를 열어봐도 알림은 오지 않습니다.
+          </div>
+        </div>
+        <div class="form-group form-full" style="display:flex;align-items:center;justify-content:space-between;background:var(--cream2);border-radius:10px;padding:12px 16px">
+          <div>
+            <div style="font-weight:600;font-size:13px">알림 켜기</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">새 오더 배정 시 즉시 알림</div>
+          </div>
+          <input type="checkbox" id="set-notifEnabled" onchange="setNotifEnabled(this.checked)" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">
+        </div>
+        <div class="form-group form-full" style="display:flex;align-items:center;justify-content:space-between;background:var(--cream2);border-radius:10px;padding:12px 16px">
+          <div>
+            <div style="font-weight:600;font-size:13px">알림음</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">알림 도착 시 소리 재생</div>
+          </div>
+          <input type="checkbox" id="set-notifSound" onchange="setNotifSound(this.checked)" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">
+        </div>
+        <div class="form-group form-full">
+          <button onclick="askNotifPermission()" class="btn btn-secondary" style="width:100%">🔔 시스템 알림 권한 요청</button>
+          <div id="notif-perm-status" style="font-size:11px;margin-top:6px;line-height:1.5"></div>
+        </div>
+        <div class="form-group form-full" style="background:var(--cream2);border-radius:10px;padding:14px 16px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:3px">백그라운드 푸시 (앱 닫아도 수신)</div>
+          <div style="font-size:11px;color:var(--text3);line-height:1.5;margin-bottom:10px">
+            켜두면 브라우저를 닫아도 배정 알림이 도착합니다. 모바일은 홈 화면에 추가 후 사용하면 더 안정적입니다.
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="fcmRegister(true)" class="btn btn-secondary" style="flex:1">📲 백그라운드 알림 켜기</button>
+            <button onclick="fcmUnregister()" class="btn btn-secondary" style="color:var(--red);border-color:rgba(220,38,38,0.3)">끄기</button>
+          </div>
+          <div id="fcm-status" style="font-size:11px;margin-top:8px;line-height:1.5"></div>
+        </div>
+        <div class="form-group form-full">
+          <button onclick="runNotifSimulation()" class="btn btn-secondary" style="width:100%">🧪 알림 동작 검증 (시뮬레이션 13종)</button>
+          <div id="notif-sim-result"></div>
+        </div>
+      </div>
       <div class="section-title">App Lock</div>
       <div class="form-grid">
         <div class="form-group form-full" style="display:flex;align-items:center;justify-content:space-between;background:var(--cream2);border-radius:10px;padding:12px 16px">
@@ -1561,8 +1667,10 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
                 <button onclick="registerBiometric()" class="btn btn-secondary" style="flex:1">🔐 생체인식 등록</button>
                 <button onclick="clearBiometric()" class="btn btn-secondary" style="color:var(--red);border-color:rgba(220,38,38,0.3)">삭제</button>
               </div>
-              <div id="lock-bio-status" style="font-size:11px;color:var(--text3);margin-top:6px"></div>
+              <div id="lock-bio-status" style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5"></div>
             </div>
+            <button onclick="diagnoseBiometric()" class="btn btn-secondary" style="width:100%">🩺 생체인식 진단 (안 될 때 눌러보세요)</button>
+            <div id="lock-diag-result"></div>
             <button onclick="showLockScreen()" class="btn btn-secondary" style="width:100%">🔒 지금 잠금 테스트</button>
           </div>
         </div>
@@ -1604,6 +1712,34 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
+<!-- GOOGLE SIGN-IN GATE -->
+<div id="auth-gate" style="display:none;position:fixed;inset:0;z-index:100000;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:24px">
+  <div style="text-align:center;margin-bottom:34px">
+    <img src="icon-192.png" alt="" width="72" height="72" style="border-radius:18px;margin-bottom:16px">
+    <div style="font-size:26px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#C9A84C">ON</span>TIME</div>
+    <div id="auth-gate-sub" style="font-size:11.5px;color:rgba(255,255,255,0.42);letter-spacing:1.4px;text-transform:uppercase;margin-top:5px">Holmes Order Manager</div>
+  </div>
+
+  <div id="auth-signin-box" style="text-align:center;width:100%;max-width:320px">
+    <button onclick="authSignIn()" id="auth-signin-btn"
+      style="width:100%;display:flex;align-items:center;justify-content:center;gap:11px;padding:13px 18px;border-radius:12px;border:none;background:#fff;color:#3c4043;font-size:14.5px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.25)">
+      <svg width="19" height="19" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Google로 로그인
+    </button>
+    <div style="font-size:11.5px;color:rgba(255,255,255,0.35);margin-top:14px;line-height:1.6">
+      승인된 계정만 접근할 수 있습니다.
+    </div>
+    <div id="auth-error" style="display:none;margin-top:16px;padding:12px 14px;border-radius:10px;background:rgba(220,38,38,0.14);border:1px solid rgba(220,38,38,0.35);color:#fca5a5;font-size:12px;line-height:1.6;text-align:left;white-space:pre-line"></div>
+  </div>
+
+  <div id="auth-busy" style="display:none;text-align:center;color:rgba(255,255,255,0.55);font-size:13px">
+    <div style="width:26px;height:26px;border:2.5px solid rgba(255,255,255,0.16);border-top-color:#C9A84C;border-radius:50%;margin:0 auto 12px;animation:authSpin 0.8s linear infinite"></div>
+    <span id="auth-busy-text">확인 중…</span>
+  </div>
+
+  <div style="position:absolute;bottom:22px;font-size:10.5px;color:rgba(255,255,255,0.22)">Homes NSW · Field Operations</div>
+</div>
+
 <!-- LOCK SCREEN -->
 <div id="lock-screen" style="display:none;position:fixed;inset:0;z-index:99999;background:var(--sidebar,#1a1a2e);flex-direction:column;align-items:center;justify-content:center;gap:0">
   <!-- Logo -->
@@ -1624,6 +1760,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       </svg>
     </button>
     <div id="lock-bio-label" style="font-size:12px;color:rgba(255,255,255,0.5)">Face ID / Touch ID</div>
+    <div id="lock-bio-error" style="display:none;margin-top:10px;max-width:280px;font-size:11.5px;color:#fca5a5;line-height:1.5"></div>
   </div>
 
   <!-- PIN section -->
@@ -2246,6 +2383,10 @@ async function cloudPull(initial) {
 
     const _statusBefore = {};
     DB.orders.forEach(o => { _statusBefore[o.id] = { s: o.status, u: o.updatedAt, sc: o.statusChangedAt }; });
+    // Snapshot for assignment-notification detection — must be taken BEFORE the
+    // merge so we can distinguish a genuinely new/changed assignment from a
+    // record that was merely re-serialised by the sync.
+    const _ordersBeforeMerge = DB.orders.map(o => ({ id: o.id, subbies: o.subbies, subbiesAt: o.subbiesAt, status: o.status }));
     DB.orders = mergeRecords(DB.orders, remote.orders, DB.tombstones.orders);
     const _statusChanges = DB.orders.filter(o => _statusBefore[o.id] && _statusBefore[o.id].s !== o.status);
     if (_statusChanges.length) {
@@ -2303,6 +2444,17 @@ async function cloudPull(initial) {
     }
     CLOUD.applying = false;
     console.log('[PULL DEBUG] merge done. DB.orders now=', DB.orders.length);
+
+    // Assignment notifications. `initial` = the first pull of this session, which
+    // is also the point where a fresh device learns about every existing order —
+    // seeding silently there is what stops a login from firing 200 popups (R6).
+    try {
+      if (initial && !NOTIF.seeded) seedNotifBaseline();
+      else detectNewAssignments(_ordersBeforeMerge);
+    } catch (notifErr) {
+      // A bug in notification code must never break cloud sync.
+      console.log('[NOTIF] detector error (sync unaffected):', notifErr);
+    }
 
     const r = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims,
                 closed:renderClosed, issues:renderIssues, cancelled:renderCancelled,
@@ -2417,6 +2569,8 @@ function openSettingsModal() {
     const el = document.getElementById('setnum-' + k);
     if (el) el.value = DB.appSettings[k];
   });
+  _openAuthSettings();
+  _openNotifSettings();
   _openLockSettings();
   openModal('settings-modal');
 }
@@ -2893,17 +3047,28 @@ function saveOrder(e) {
     const idx = DB.orders.findIndex(x => x.id === editingOrderId);
     DB.orders[idx] = order;
     toast('Order updated successfully', 'success');
-    // Sync to RTDB so subbie app reflects latest data
+    // Always mirror the record so the subbie app shows current data…
     _rtdbSyncOrder(order);
-    _rtdbNotify(order, 'update');   // push notification on update
+    // …but only RING someone when the assignee actually changed. Firing on every
+    // edit meant a comment tweak or amount fix pinged the subbie all over again.
+    const _prevWho = (_prevOrder?.subbies || '').trim();
+    const _nowWho  = (order.subbies || '').trim();
+    if (_nowWho && _nowWho !== _prevWho) _rtdbNotify(order, 'assigned');
   } else {
     DB.orders.push(order);
     historyPush(`New order: ${order.orderNumber}`, [{ id: order.id, _wasAbsent: true }], []);
     toast('Order saved successfully', 'success');
-    // Trigger FCM push + sync order to RTDB
-    _rtdbNotify(order, 'new');
     _rtdbSyncOrder(order);
+    if ((order.subbies || '').trim()) _rtdbNotify(order, 'new');
   }
+
+  // R5 — if I assigned this to myself, suppress my own incoming alert.
+  try {
+    if (typeof NOTIF !== 'undefined' && NOTIF.me &&
+        (order.subbies || '').trim() === NOTIF.me) {
+      markSelfAssigned(order.id);
+    }
+  } catch (e) { /* notification layer must never block saving an order */ }
 
   // Keep the linked claim/payment record's claimed amount and supervisor in sync.
   // amtPaid only follows automatically if it was already marked fully paid.
@@ -2979,6 +3144,21 @@ function saveClaim() {
   closeModal('claim-modal');
   renderClaims();
   updateSidebar();
+}
+
+// The "Save & Close Order" button in the claim modal called this, but it was
+// never defined — the click threw a ReferenceError and silently did nothing.
+// It saves the claim exactly as the Save button does, then moves the linked
+// order to `closed`.
+function saveClaimAndClose() {
+  const orderNumber = document.getElementById('c-orderNumber').value.trim();
+  saveClaim();
+  if (!orderNumber) return;
+  const o = DB.orders.find(x => x.orderNumber === orderNumber);
+  if (!o) { toast('연결된 오더를 찾을 수 없습니다: ' + orderNumber, 'error'); return; }
+  if (o.status === 'closed') { toast('이미 Closed 상태입니다', 'info'); return; }
+  setOrderStatus(o.id, 'closed');
+  toast(`🔒 ${orderNumber} — Closed 처리됨`, 'success');
 }
 
 // ============================================================
@@ -6130,6 +6310,1012 @@ function updateSidebar() {
 }
 
 // ============================================================
+// ASSIGNMENT NOTIFICATIONS
+// ------------------------------------------------------------
+// Design rules (each one exists because a naive version breaks it):
+//
+//  R1. Identity is per-device.  "Who am I" is stored locally, never synced.
+//      If it is unset, NOTHING ever fires — silence beats wrong alerts.
+//  R2. Only fires when the order's `subbies` field EQUALS my name.
+//      Opening / viewing / sorting someone else's order changes no data,
+//      so it can never produce a notification.
+//  R3. Dedup key = orderId + assignment + assignedAt.  The same assignment
+//      can only ever notify once, no matter how many times cloudPull runs
+//      (it runs every 3 s — without this you'd get an alert every 3 s).
+//  R4. Re-assignment DOES re-fire.  If an order goes me → Mo → me, the key
+//      changes, so I get told again. A plain "already seen" set would miss this.
+//  R5. Self-assignment is silent. If I am the one who typed my own name into
+//      the form, I already know — markSelfAssigned() suppresses it.
+//  R6. First run / first sync seeds the baseline silently. Without this,
+//      turning notifications on would instantly alert for every historical order.
+//  R7. Burst cap. If a device was offline for a day and 60 orders land at once,
+//      it shows ONE summary notification instead of 60 system popups.
+//  R8. Delivery is layered: OS notification (if granted) + in-app banner +
+//      badge count + optional sound. If permission is denied the in-app
+//      layers still work, so an alert is never silently lost.
+// ============================================================
+
+const NOTIF = {
+  me:        lsGet('hom_notif_identity') || '',
+  enabled:   lsGet('hom_notif_enabled') === 'true',
+  sound:     lsGet('hom_notif_sound') !== 'false',   // default ON
+  seeded:    lsGet('hom_notif_seeded') === 'true',
+  seen:      JSON.parse(lsGet('hom_notif_seen') || '{}'),   // { orderId: assignmentKey }
+  inbox:     JSON.parse(lsGet('hom_notif_inbox') || '[]'),  // [{id,orderId,orderNumber,address,area,amount,at,read}]
+  selfAssigned: new Set(),  // order ids this device just assigned — session only
+  MAX_INBOX: 60,
+  BURST_CAP: 4,             // >this many at once → single summary popup
+};
+
+// The value that uniquely identifies "this order is currently assigned to X,
+// and that decision was made at time T". Changing assignee OR re-assigning the
+// same person later both produce a new key, so R3 and R4 both hold.
+function _assignKey(o) {
+  const who  = (o.subbies || '').trim();
+  const when = o.subbiesAt || o.formSavedAt || o.updatedAt || 0;
+  return who + '|' + when;
+}
+
+function _notifSave() {
+  lsSet('hom_notif_seen',  JSON.stringify(NOTIF.seen));
+  lsSet('hom_notif_inbox', JSON.stringify(NOTIF.inbox));
+}
+
+// R1 — identity
+function setNotifIdentity(name) {
+  NOTIF.me = (name || '').trim();
+  lsSet('hom_notif_identity', NOTIF.me);
+  // Changing identity invalidates the old baseline: re-seed silently so the
+  // new person does not get blasted with every order already assigned to them.
+  NOTIF.seeded = false;
+  lsSet('hom_notif_seeded', 'false');
+  seedNotifBaseline();
+  renderNotifBell();
+  // The FCM token is filed under the OLD name — re-point it now, otherwise
+  // pushes keep going to the previous person's bucket.
+  try { fcmMaintain(); } catch (e) {}
+}
+
+function setNotifEnabled(on) {
+  NOTIF.enabled = !!on;
+  lsSet('hom_notif_enabled', on ? 'true' : 'false');
+  if (on) {
+    if (!NOTIF.me) toast('먼저 "내 이름"을 선택해주세요', 'error');
+    requestNotifPermission();
+    seedNotifBaseline();
+  }
+  renderNotifBell();
+}
+
+function setNotifSound(on) {
+  NOTIF.sound = !!on;
+  lsSet('hom_notif_sound', on ? 'true' : 'false');
+}
+
+// R6 — record every currently-assigned-to-me order as "already known",
+// without firing anything.
+function seedNotifBaseline() {
+  if (!NOTIF.me) return;
+  DB.orders.forEach(o => {
+    if ((o.subbies || '').trim() === NOTIF.me) NOTIF.seen[o.id] = _assignKey(o);
+  });
+  NOTIF.seeded = true;
+  lsSet('hom_notif_seeded', 'true');
+  _notifSave();
+}
+
+// R5 — called from saveOrder() when this device assigns work to itself
+function markSelfAssigned(orderId) {
+  NOTIF.selfAssigned.add(orderId);
+  const o = DB.orders.find(x => x.id === orderId);
+  if (o) { NOTIF.seen[o.id] = _assignKey(o); _notifSave(); }
+}
+
+async function requestNotifPermission() {
+  if (!('Notification' in window)) return 'unsupported';
+  if (Notification.permission === 'granted') return 'granted';
+  if (Notification.permission === 'denied')  return 'denied';
+  try { return await Notification.requestPermission(); } catch (e) { return 'error'; }
+}
+
+// ── The detector. Called after every successful cloud merge. ──
+// `prevOrders` is a snapshot taken BEFORE the merge so we can tell a genuinely
+// new assignment from a record that merely got re-serialised.
+function detectNewAssignments(prevOrders) {
+  if (!NOTIF.enabled || !NOTIF.me) return;
+  if (!NOTIF.seeded) { seedNotifBaseline(); return; }   // R6 safety net
+
+  const prevMap = {};
+  (prevOrders || []).forEach(o => { prevMap[o.id] = o; });
+
+  let fresh = [];
+  DB.orders.forEach(o => {
+    const mine = (o.subbies || '').trim() === NOTIF.me;   // R2
+
+    if (!mine) {
+      // Un-assigned from me → forget the key so a future re-assign fires (R4)
+      if (NOTIF.seen[o.id]) delete NOTIF.seen[o.id];
+      return;
+    }
+    // Never alert for finished work
+    if (['closed','cancelled','completed'].includes(o.status)) return;
+
+    const key = _assignKey(o);
+    if (NOTIF.seen[o.id] === key) return;                 // R3 — already told
+    if (NOTIF.selfAssigned.has(o.id)) {                   // R5 — I did this
+      NOTIF.seen[o.id] = key;
+      return;
+    }
+    NOTIF.seen[o.id] = key;
+    const prev = prevMap[o.id];
+    fresh.push({
+      order: o,
+      isNew: !prev,                                        // order didn't exist here before
+      wasMine: prev ? (prev.subbies || '').trim() === NOTIF.me : false,
+    });
+  });
+
+  if (!fresh.length) { _notifSave(); return; }
+
+  // Inbox entries (always, regardless of OS permission — R8)
+  const now = _nowSafe();
+  fresh.forEach(f => {
+    NOTIF.inbox.unshift({
+      id: 'n_' + f.order.id + '_' + now,
+      orderId: f.order.id,
+      orderNumber: f.order.orderNumber || '—',
+      address: f.order.address || '—',
+      area: f.order.area || '',
+      amount: Number(f.order.amount || 0),
+      at: now,
+      read: false,
+    });
+  });
+  if (NOTIF.inbox.length > NOTIF.MAX_INBOX) NOTIF.inbox.length = NOTIF.MAX_INBOX;
+  _notifSave();
+
+  // Drop any that the FCM push already announced (see _announce). The inbox
+  // entries above are still written — only the noisy layers are suppressed.
+  fresh = fresh.filter(f => _announce(_announceKey(
+    f.order.orderNumber || f.order.id,
+    f.order.subbies,
+    f.order.subbiesAt || f.order.formSavedAt || f.order.updatedAt
+  )));
+  if (!fresh.length) { renderNotifBell(); return; }
+
+  // R7 — burst cap
+  if (fresh.length > NOTIF.BURST_CAP) {
+    _fireOsNotification(
+      `새 오더 ${fresh.length}건 배정됨`,
+      `${NOTIF.me} 앞으로 ${fresh.length}건이 배정되었습니다. 앱에서 확인하세요.`,
+      null
+    );
+    _showInAppBanner(`📋 새 오더 ${fresh.length}건이 배정되었습니다`, null);
+  } else {
+    fresh.forEach(f => {
+      const o = f.order;
+      _fireOsNotification(
+        '새 오더 배정 — ' + (o.orderNumber || ''),
+        `${o.address || ''}\n${o.area || ''}  ·  $${Number(o.amount||0).toFixed(2)}`,
+        o.id
+      );
+      _showInAppBanner(
+        `📋 <b>${esc(o.orderNumber||'')}</b> 배정됨<br><span style="opacity:0.8;font-size:12px">${esc(o.address||'')}</span>`,
+        o.id
+      );
+    });
+  }
+
+  _playNotifSound();
+  renderNotifBell();
+}
+
+function _fireOsNotification(title, body, orderId) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const n = new Notification(title, {
+      body,
+      // tag: one live popup per order — a repeat replaces rather than stacks
+      tag: orderId ? ('sk-order-' + orderId) : 'sk-order-batch',
+      requireInteraction: false,
+      silent: true,   // we play our own sound so muted-tab behaviour is consistent
+    });
+    n.onclick = () => {
+      window.focus();
+      if (orderId) _openOrderFromNotification(orderId);
+      n.close();
+    };
+  } catch (e) { /* some browsers throw on constructor in insecure contexts */ }
+}
+
+function _openOrderFromNotification(orderId) {
+  const o = DB.orders.find(x => x.id === orderId);
+  if (!o) { toast('해당 오더를 찾을 수 없습니다', 'error'); return; }
+  const cat = (typeof getOrderCategory === 'function') ? getOrderCategory(o) : 'vac';
+  const page = (!o.status || o.status === 'active') ? (cat === 'mpw' ? 'mpw' : 'vac')
+             : (o.status === 'completed') ? 'completed'
+             : (o.status === 'claim') ? 'claims'
+             : (o.status === 'issue') ? 'issues'
+             : (o.status === 'cancelled') ? 'cancelled' : 'closed';
+  showPage(page);
+  markNotifReadByOrder(orderId);
+  setTimeout(() => {
+    const row = document.querySelector(`tr[data-oid="${orderId}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      row.style.transition = 'box-shadow 0.3s';
+      row.style.boxShadow = 'inset 0 0 0 2px var(--accent)';
+      setTimeout(() => { row.style.boxShadow = ''; }, 2500);
+    }
+  }, 250);
+}
+
+// In-app banner — the layer that always works, even with OS notifications off
+function _showInAppBanner(html, orderId) {
+  let host = document.getElementById('notif-banner-host');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'notif-banner-host';
+    host.style.cssText = 'position:fixed;top:14px;right:14px;z-index:99998;display:flex;flex-direction:column;gap:8px;max-width:340px;pointer-events:none';
+    document.body.appendChild(host);
+  }
+  const card = document.createElement('div');
+  card.style.cssText = 'pointer-events:auto;background:var(--surface,#fff);border:1px solid var(--accent,#C9A84C);border-left:4px solid var(--accent,#C9A84C);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.18);font-size:13px;color:var(--text,#222);cursor:pointer;animation:notifSlide 0.25s ease-out';
+  card.innerHTML = html;
+  card.onclick = () => { if (orderId) _openOrderFromNotification(orderId); card.remove(); };
+  host.appendChild(card);
+  setTimeout(() => { card.style.opacity = '0'; card.style.transition = 'opacity 0.4s'; setTimeout(() => card.remove(), 400); }, 9000);
+}
+
+// Short two-tone chime via Web Audio — no asset file, no autoplay-policy issues
+// once the user has interacted with the page at least once.
+function _playNotifSound() {
+  if (!NOTIF.sound) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    [880, 1180].forEach((freq, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + i * 0.14);
+      gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + i * 0.14 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + i * 0.14 + 0.22);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.14);
+      osc.stop(ctx.currentTime + i * 0.14 + 0.25);
+    });
+    setTimeout(() => ctx.close(), 900);
+  } catch (e) { /* audio blocked — silent is acceptable, other layers still fired */ }
+}
+
+// ── Bell / inbox UI ──
+function unreadNotifCount() { return NOTIF.inbox.filter(n => !n.read).length; }
+
+function renderNotifBell() {
+  const badge = document.getElementById('notif-bell-badge');
+  const bell  = document.getElementById('notif-bell');
+  if (!bell) return;
+  bell.style.display = NOTIF.enabled ? 'flex' : 'none';
+  const n = unreadNotifCount();
+  if (badge) {
+    badge.textContent = n > 99 ? '99+' : String(n);
+    badge.style.display = n ? 'flex' : 'none';
+  }
+}
+
+function toggleNotifPanel(e) {
+  if (e) e.stopPropagation();
+  const p = document.getElementById('notif-panel');
+  if (!p) return;
+  const open = p.style.display !== 'block';
+  p.style.display = open ? 'block' : 'none';
+  if (open) renderNotifPanel();
+}
+
+function renderNotifPanel() {
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+  if (!NOTIF.inbox.length) {
+    list.innerHTML = `<div style="padding:28px 16px;text-align:center;color:var(--text3);font-size:12.5px">새 알림이 없습니다</div>`;
+    return;
+  }
+  list.innerHTML = NOTIF.inbox.map(n => {
+    const ago = _timeAgo(n.at);
+    return `<div onclick="_openOrderFromNotification('${n.orderId}');toggleNotifPanel()"
+      style="padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;background:${n.read?'transparent':'rgba(201,168,76,0.07)'};display:flex;gap:10px;align-items:flex-start"
+      onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='${n.read?'transparent':'rgba(201,168,76,0.07)'}'">
+      <span style="width:7px;height:7px;border-radius:50%;background:${n.read?'transparent':'var(--accent)'};margin-top:5px;flex-shrink:0"></span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:${n.read?'500':'700'};font-size:12.5px;font-family:monospace">${esc(n.orderNumber)}</div>
+        <div style="font-size:11.5px;color:var(--text2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n.address)}</div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:3px">${esc(n.area)} · $${n.amount.toFixed(2)} · ${ago}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _timeAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60)     return '방금';
+  if (s < 3600)   return Math.floor(s/60) + '분 전';
+  if (s < 86400)  return Math.floor(s/3600) + '시간 전';
+  return Math.floor(s/86400) + '일 전';
+}
+
+function markNotifReadByOrder(orderId) {
+  let changed = false;
+  NOTIF.inbox.forEach(n => { if (n.orderId === orderId && !n.read) { n.read = true; changed = true; } });
+  if (changed) { _notifSave(); renderNotifBell(); renderNotifPanel(); }
+}
+
+function markAllNotifRead() {
+  NOTIF.inbox.forEach(n => { n.read = true; });
+  _notifSave(); renderNotifBell(); renderNotifPanel();
+  toast('모두 읽음 처리', 'success');
+}
+
+function clearNotifInbox() {
+  NOTIF.inbox = [];
+  _notifSave(); renderNotifBell(); renderNotifPanel();
+}
+
+document.addEventListener('click', () => {
+  const p = document.getElementById('notif-panel');
+  if (p && p.style.display === 'block') p.style.display = 'none';
+});
+
+// ── Settings wiring ──
+function _openNotifSettings() {
+  const sel = document.getElementById('set-notifIdentity');
+  if (sel) {
+    const names = [...new Set(DB.subbies || [])];
+    sel.innerHTML = `<option value="">— 선택 안 함 (알림 끔) —</option>` +
+      names.map(n => `<option value="${esc(n)}" ${NOTIF.me===n?'selected':''}>${esc(n)}</option>`).join('');
+  }
+  const en = document.getElementById('set-notifEnabled');
+  if (en) en.checked = NOTIF.enabled;
+  const sd = document.getElementById('set-notifSound');
+  if (sd) sd.checked = NOTIF.sound;
+  _renderNotifPermStatus();
+  _fcmRenderStatus();
+}
+
+function _renderNotifPermStatus() {
+  const el = document.getElementById('notif-perm-status');
+  if (!el) return;
+  if (!('Notification' in window)) {
+    el.innerHTML = `<span style="color:var(--yellow)">⚠ 이 브라우저는 시스템 알림을 지원하지 않습니다 (앱 내 배너만 작동)</span>`;
+    return;
+  }
+  const p = Notification.permission;
+  el.innerHTML =
+    p === 'granted' ? `<span style="color:var(--green)">✓ 시스템 알림 허용됨</span>`
+  : p === 'denied'  ? `<span style="color:var(--red)">✕ 시스템 알림 차단됨 — 브라우저 설정에서 허용 필요 (앱 내 배너는 계속 작동)</span>`
+  :                   `<span style="color:var(--text3)">미허용 — "알림 권한 요청" 버튼을 눌러주세요</span>`;
+}
+
+async function askNotifPermission() {
+  const r = await requestNotifPermission();
+  _renderNotifPermStatus();
+  if (r === 'granted')      toast('✓ 알림 권한 허용됨', 'success');
+  else if (r === 'denied')  toast('알림이 차단되었습니다. 브라우저 사이트 설정에서 변경하세요.', 'error');
+  else if (r === 'unsupported') toast('이 브라우저는 시스템 알림을 지원하지 않습니다', 'error');
+}
+
+// ── Self-test: proves the rules above actually hold, without touching real data ──
+function runNotifSimulation() {
+  const out = [];
+  const pass = (name, ok, note) => out.push({ name, ok, note: note || '' });
+
+  const realOrders = DB.orders, realSeen = NOTIF.seen, realInbox = NOTIF.inbox,
+        realMe = NOTIF.me, realEn = NOTIF.enabled, realSeeded = NOTIF.seeded,
+        realSelf = NOTIF.selfAssigned, realSound = NOTIF.sound;
+  // The de-dup gate is module-level state. Without snapshotting and clearing it,
+  // a SECOND run of this simulation would be silenced by keys the first run left
+  // behind, and every test would falsely report zero notifications.
+  const realAnnounced = new Map(_announced);
+  _announced.clear();
+
+  // Silence real side-effects during the run
+  const _osFire = _fireOsNotification, _banner = _showInAppBanner, _snd = _playNotifSound;
+  let fired = [];
+  window._fireOsNotification = (t,b,id) => fired.push({ t, id });
+  window._showInAppBanner = () => {};
+  window._playNotifSound = () => {};
+
+  const mk = (id, who, at, status) => ({
+    id, orderNumber: 'SCO-TEST-' + id, address: id + ' Test St', area: 'CA9',
+    amount: 100, subbies: who, subbiesAt: at, status: status || 'active', updatedAt: at,
+  });
+
+  try {
+    NOTIF.me = 'SK_Jacob'; NOTIF.enabled = true; NOTIF.seeded = true; NOTIF.sound = false;
+
+    // 1. Order assigned to me → fires
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); NOTIF.selfAssigned = new Set(); fired = [];
+    DB.orders = [mk('t1','SK_Jacob',1000)];
+    detectNewAssignments([]);
+    pass('내게 배정된 새 오더 → 알림 발생', fired.length === 1);
+
+    // 2. Same pull repeated 5× → still only the one alert (R3)
+    fired = [];
+    for (let i=0;i<5;i++) detectNewAssignments(DB.orders);
+    pass('동일 배정 반복 동기화 → 중복 알림 없음', fired.length === 0, '5회 pull 시뮬레이션');
+
+    // 3. Someone else's order → never fires (R2)
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); fired = [];
+    DB.orders = [mk('t2','SK_Mo',2000)];
+    detectNewAssignments([]);
+    pass('타인(SK_Mo) 배정 오더 → 알림 없음', fired.length === 0);
+
+    // 4. Merely opening/rendering another person's order changes no data (R2)
+    fired = [];
+    renderNotifBell();
+    detectNewAssignments(DB.orders);
+    pass('타인 오더 열람/렌더 → 알림 없음', fired.length === 0);
+
+    // 5. Re-assignment me → Mo → me fires again (R4)
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); fired = [];
+    DB.orders = [mk('t3','SK_Jacob',3000)];
+    detectNewAssignments([]);                                  // 1st
+    DB.orders = [mk('t3','SK_Mo',3100)];
+    detectNewAssignments([mk('t3','SK_Jacob',3000)]);           // away
+    DB.orders = [mk('t3','SK_Jacob',3200)];
+    detectNewAssignments([mk('t3','SK_Mo',3100)]);              // back
+    pass('나→타인→나 재배정 → 다시 알림 발생', fired.length === 2, '발생 ' + fired.length + '회');
+
+    // 6. Self-assignment stays silent (R5)
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); fired = [];
+    DB.orders = [mk('t4','SK_Jacob',4000)];
+    NOTIF.selfAssigned = new Set(['t4']);
+    detectNewAssignments([]);
+    pass('내가 직접 배정한 오더 → 알림 없음', fired.length === 0);
+
+    // 7. Completed / closed / cancelled never alert
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); NOTIF.selfAssigned = new Set(); fired = [];
+    DB.orders = [mk('t5','SK_Jacob',5000,'completed'), mk('t6','SK_Jacob',5000,'closed'), mk('t7','SK_Jacob',5000,'cancelled')];
+    detectNewAssignments([]);
+    pass('완료/종료/취소 오더 → 알림 없음', fired.length === 0);
+
+    // 8. Identity unset → total silence (R1)
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); fired = []; NOTIF.me = '';
+    DB.orders = [mk('t8','SK_Jacob',8000)];
+    detectNewAssignments([]);
+    pass('내 이름 미설정 → 아무 알림도 발생 안 함', fired.length === 0);
+    NOTIF.me = 'SK_Jacob';
+
+    // 9. Burst cap (R7)
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); fired = [];
+    DB.orders = Array.from({length:12},(_,i)=>mk('b'+i,'SK_Jacob',9000+i));
+    detectNewAssignments([]);
+    pass('대량(12건) 동시 배정 → 요약 알림 1건으로 통합', fired.length === 1, '실제 ' + fired.length + '건');
+
+    // 10. Inbox still records every single one even when the popup was summarised
+    pass('대량 배정도 인박스에는 12건 모두 기록', NOTIF.inbox.length === 12, '기록 ' + NOTIF.inbox.length + '건');
+
+    // 11. Baseline seeding must not alert for pre-existing work (R6)
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); fired = []; NOTIF.seeded = false;
+    DB.orders = Array.from({length:30},(_,i)=>mk('s'+i,'SK_Jacob',7000+i));
+    detectNewAssignments([]);
+    pass('최초 설정 시 기존 오더 → 알림 폭탄 없음', fired.length === 0);
+
+    // 12. Un-assign then nothing → no phantom alert
+    NOTIF.seeded = true; NOTIF.seen = {}; NOTIF.inbox = []; fired = [];
+    DB.orders = [mk('t9','SK_Jacob',9500)];
+    detectNewAssignments([]);
+    fired = [];
+    DB.orders = [mk('t9','',9600)];
+    detectNewAssignments([mk('t9','SK_Jacob',9500)]);
+    pass('배정 해제 → 알림 없음', fired.length === 0);
+
+    // 13. Name with stray whitespace still matches
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); fired = [];
+    DB.orders = [Object.assign(mk('t10','  SK_Jacob  ',9700))];
+    detectNewAssignments([]);
+    pass('이름 앞뒤 공백 → 정상 매칭', fired.length === 1);
+
+  } finally {
+    window._fireOsNotification = _osFire;
+    window._showInAppBanner = _banner;
+    window._playNotifSound = _snd;
+    DB.orders = realOrders; NOTIF.seen = realSeen; NOTIF.inbox = realInbox;
+    NOTIF.me = realMe; NOTIF.enabled = realEn; NOTIF.seeded = realSeeded;
+    NOTIF.selfAssigned = realSelf; NOTIF.sound = realSound;
+    _announced.clear(); realAnnounced.forEach((v, k) => _announced.set(k, v));
+    _notifSave(); renderNotifBell();
+  }
+
+  const failed = out.filter(r => !r.ok);
+  const body = out.map(r =>
+    `<div style="display:flex;gap:9px;padding:7px 0;border-bottom:1px solid var(--border);align-items:flex-start">
+       <span style="flex-shrink:0;font-size:13px">${r.ok ? '✅' : '❌'}</span>
+       <div style="flex:1"><div style="font-size:12.5px;font-weight:${r.ok?'500':'700'};color:${r.ok?'var(--text)':'var(--red)'}">${r.name}</div>
+       ${r.note ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${r.note}</div>` : ''}</div>
+     </div>`).join('');
+
+  document.getElementById('notif-sim-result').innerHTML =
+    `<div style="margin-top:12px;border:1px solid ${failed.length?'var(--red)':'var(--green)'};border-radius:10px;overflow:hidden">
+       <div style="padding:9px 14px;background:${failed.length?'rgba(220,38,38,0.08)':'rgba(22,163,74,0.08)'};font-weight:700;font-size:12.5px;color:${failed.length?'var(--red)':'var(--green)'}">
+         ${failed.length ? `❌ ${failed.length}개 실패 / 총 ${out.length}개` : `✅ 전체 통과 (${out.length}/${out.length})`}
+       </div>
+       <div style="padding:4px 14px 10px">${body}</div>
+     </div>`;
+}
+
+// ============================================================
+// GOOGLE SIGN-IN GATE
+// ------------------------------------------------------------
+// Ships DISABLED. Flipping AUTH_REQUIRED to true before the Firebase Console
+// steps are done would lock the owner out of their own app, so the switch is
+// deliberate and separate from deploying this code.
+//
+// What it buys once enabled:
+//   · The Google Sheets sync URL leaves the source entirely — it is read from
+//     RTDB /config/cloudUrl, which only an allow-listed signed-in user can read.
+//     A stranger who finds the GitHub Pages link gets a login screen, nothing more.
+//   · A new team member needs no setup: sign in, and the URL + their notification
+//     identity both arrive from the allowlist entry.
+//   · The same auth lets the RTDB rules be closed (see database.rules.SECURE.json).
+//
+// Offline: Firebase persists the session, and the URL/identity are cached
+// locally after first success, so a signed-in device still works with no network.
+// ============================================================
+
+const AUTH_REQUIRED = false;   // ← set to true AFTER Firebase Console setup
+
+const AUTH = { user: null, entry: null, ready: false, auth: null, db: null };
+
+// Firebase keys cannot contain '.', so emails are stored with dots as commas.
+// The RTDB rules do the identical transform — the two MUST agree or every
+// allow-list lookup silently misses and nobody can get in.
+function _emailKey(email) {
+  return (email || '').trim().toLowerCase().replace(/\./g, ',');
+}
+
+function _authSetup() {
+  if (AUTH.auth) return true;
+  if (typeof firebase === 'undefined' || !firebase.auth) return false;
+  try {
+    const app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(_RTDB_CONFIG);
+    AUTH.auth = firebase.auth(app);
+    AUTH.db   = firebase.database(app);
+    return true;
+  } catch (e) { console.warn('[AUTH] setup failed:', e); return false; }
+}
+
+function _authShow(view, text) {
+  const gate = document.getElementById('auth-gate');
+  if (!gate) return;
+  gate.style.display = 'flex';
+  document.getElementById('auth-signin-box').style.display = view === 'signin' ? 'block' : 'none';
+  document.getElementById('auth-busy').style.display       = view === 'busy'   ? 'block' : 'none';
+  if (text) document.getElementById('auth-busy-text').textContent = text;
+}
+
+function _authHide() {
+  const gate = document.getElementById('auth-gate');
+  if (gate) gate.style.display = 'none';
+}
+
+function _authError(msg) {
+  const el = document.getElementById('auth-error');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+// Popup, not redirect. signInWithRedirect relies on cross-site storage between
+// jacob-leee.github.io and homes-nsw.firebaseapp.com, which Safari's ITP and
+// Chrome's third-party cookie phase-out now partition — the redirect returns
+// and the user is still signed out, with no error. Popup avoids that entirely.
+async function authSignIn() {
+  _authError('');
+  if (!_authSetup()) { _authError('Firebase 인증 모듈을 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+  const btn = document.getElementById('auth-signin-btn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    await AUTH.auth.signInWithPopup(provider);
+    // onAuthStateChanged takes it from here.
+  } catch (e) {
+    console.warn('[AUTH] sign-in failed:', e);
+    _authError(_authErrorMessage(e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+  }
+}
+
+function _authErrorMessage(e) {
+  const c = e && e.code;
+  if (c === 'auth/popup-blocked')
+    return '팝업이 차단되었습니다.\n주소창 오른쪽의 팝업 차단 아이콘을 눌러 이 사이트를 허용한 뒤 다시 시도해주세요.';
+  if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request')
+    return '로그인 창이 닫혔습니다. 다시 시도해주세요.';
+  if (c === 'auth/unauthorized-domain')
+    return `이 주소(${location.hostname})가 Firebase에 등록되지 않았습니다.\nFirebase Console → Authentication → Settings → 승인된 도메인에 추가해주세요.`;
+  if (c === 'auth/operation-not-allowed')
+    return 'Google 로그인이 아직 활성화되지 않았습니다.\nFirebase Console → Authentication → Sign-in method에서 Google을 켜주세요.';
+  if (c === 'auth/network-request-failed')
+    return '네트워크 연결을 확인해주세요.';
+  return (e && e.message) || '알 수 없는 오류';
+}
+
+async function authSignOut() {
+  if (!_authSetup()) return;
+  // Cached credentials must go with the session, otherwise a signed-out device
+  // still holds the sync URL that the sign-out was meant to revoke.
+  lsSet('hom_auth_email', '');
+  lsSet('hom_auth_name', '');
+  lsSet('hom_cloud_url', '');
+  try { await AUTH.auth.signOut(); } catch (e) {}
+  location.reload();
+}
+
+// Runs on every load and on every sign-in/out.
+function authInit() {
+  if (!AUTH_REQUIRED) { AUTH.ready = true; return; }
+  if (!_authSetup()) {
+    // Firebase unreachable. Falling open would defeat the gate; falling closed
+    // with an explanation is the safe failure mode.
+    _authShow('signin');
+    _authError('인증 모듈을 불러오지 못했습니다. 네트워크를 확인한 뒤 새로고침해주세요.');
+    return;
+  }
+  _authShow('busy', '확인 중…');
+
+  AUTH.auth.onAuthStateChanged(async (user) => {
+    if (!user) { AUTH.user = null; _authShow('signin'); return; }
+    _authShow('busy', '권한 확인 중…');
+    try {
+      const key  = _emailKey(user.email);
+      const snap = await AUTH.db.ref('/allowedUsers/' + key).once('value');
+
+      if (!snap.exists()) {
+        // Deny, and do not leave a half-signed-in session behind.
+        await AUTH.auth.signOut();
+        _authShow('signin');
+        _authError(`${user.email} 계정은 접근 권한이 없습니다.\n관리자에게 등록을 요청해주세요.`);
+        return;
+      }
+
+      AUTH.user  = user;
+      AUTH.entry = snap.val() || {};
+      lsSet('hom_auth_email', user.email || '');
+      lsSet('hom_auth_name',  AUTH.entry.name || '');
+
+      await _authApplyConfig();
+      AUTH.ready = true;
+      _authHide();
+      _authAfterSignIn();
+
+    } catch (e) {
+      console.warn('[AUTH] allowlist check failed:', e);
+      // Permission-denied here almost always means the RTDB rules were deployed
+      // before the allowlist was seeded — say so instead of a raw error code.
+      const offline = !navigator.onLine;
+      if (offline && lsGet('hom_auth_email')) {
+        AUTH.user = user; AUTH.ready = true; _authHide(); _authAfterSignIn();
+        toast('오프라인 — 저장된 권한으로 실행 중', 'info');
+      } else {
+        _authShow('signin');
+        _authError('권한 정보를 읽지 못했습니다.\n' +
+          '허용 명단(/allowedUsers)이 아직 등록되지 않았거나 데이터베이스 규칙이 이를 막고 있습니다.\n\n' +
+          (e.message || ''));
+      }
+    }
+  });
+}
+
+// Pull the sync URL and this person's identity from their allowlist entry, so a
+// new device needs nothing typed in. Cached so it survives going offline.
+async function _authApplyConfig() {
+  try {
+    const cfg = await AUTH.db.ref('/config/cloudUrl').once('value');
+    const url = cfg.val();
+    if (url && url !== CLOUD.url) {
+      cloudSetUrl(url);
+      if (!CLOUD.enabled) cloudEnable(true); else startCloudSync();
+      console.log('[AUTH] cloud sync URL applied from server config');
+    }
+  } catch (e) {
+    console.warn('[AUTH] could not read /config/cloudUrl:', e.message);
+  }
+  // Auto-assign notification identity — the whole point of mapping email→name.
+  const name = AUTH.entry && AUTH.entry.name;
+  if (name && NOTIF.me !== name) {
+    setNotifIdentity(name);
+    if (!NOTIF.enabled) setNotifEnabled(true);
+  }
+}
+
+function _authAfterSignIn() {
+  renderAuthBadge();
+  try { initLock(); } catch (e) {}     // PIN / Face ID layers on top of sign-in
+  try { fcmMaintain(); } catch (e) {}
+}
+
+function renderAuthBadge() {
+  const el = document.getElementById('auth-badge');
+  if (!el) return;
+  if (!AUTH_REQUIRED || !AUTH.user) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  const photo = AUTH.user.photoURL;
+  const name  = (AUTH.entry && AUTH.entry.name) || AUTH.user.displayName || AUTH.user.email;
+  el.innerHTML =
+    (photo ? `<img src="${esc(photo)}" alt="" width="22" height="22" style="border-radius:50%">` : '') +
+    `<span style="font-size:12px;color:var(--text2);font-weight:600">${esc(name)}</span>` +
+    `<button onclick="authSignOut()" title="로그아웃" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;text-decoration:underline;padding:0 2px">로그아웃</button>`;
+}
+
+// ── Settings: allowlist management (admins only) ──
+async function authLoadAllowlist() {
+  const box = document.getElementById('auth-allowlist');
+  if (!box) return;
+  if (!AUTH_REQUIRED) {
+    box.innerHTML = `<div style="font-size:11.5px;color:var(--text3);line-height:1.6">
+      Google 로그인이 아직 <b>비활성</b> 상태입니다.<br>
+      Firebase Console 설정을 마친 뒤 소스에서 <code>AUTH_REQUIRED</code>를 <code>true</code>로 바꾸면 켜집니다.</div>`;
+    return;
+  }
+  if (!_authSetup() || !AUTH.user) { box.innerHTML = '<div style="font-size:11.5px;color:var(--text3)">로그인이 필요합니다.</div>'; return; }
+  try {
+    const snap = await AUTH.db.ref('/allowedUsers').once('value');
+    const all  = snap.val() || {};
+    const rows = Object.entries(all).map(([k, v]) => {
+      const email = k.replace(/,/g, '.');
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(email)}</span>
+        <span style="color:var(--text3);font-size:11px">${esc(v.name || '—')}</span>
+        ${v.role === 'admin' ? '<span class="badge badge-purple" style="font-size:9px">ADMIN</span>' : ''}
+        <button onclick="authRemoveUser('${esc(k)}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 2px" title="삭제">×</button>
+      </div>`;
+    }).join('');
+    box.innerHTML = rows || '<div style="font-size:11.5px;color:var(--text3)">등록된 사용자가 없습니다.</div>';
+  } catch (e) {
+    box.innerHTML = `<div style="font-size:11.5px;color:var(--red)">읽기 실패: ${esc(e.message)}</div>`;
+  }
+}
+
+async function authAddUser() {
+  const email = (document.getElementById('auth-new-email')?.value || '').trim();
+  const name  = (document.getElementById('auth-new-name')?.value || '').trim();
+  if (!email || !email.includes('@')) { toast('올바른 이메일을 입력해주세요', 'error'); return; }
+  if (!_authSetup()) { toast('Firebase 연결 실패', 'error'); return; }
+  try {
+    await AUTH.db.ref('/allowedUsers/' + _emailKey(email)).set({
+      name: name || '', role: 'user', addedAt: Date.now(),
+      addedBy: (AUTH.user && AUTH.user.email) || '',
+    });
+    document.getElementById('auth-new-email').value = '';
+    document.getElementById('auth-new-name').value  = '';
+    toast('✓ 추가됨: ' + email, 'success');
+    authLoadAllowlist();
+  } catch (e) { toast('추가 실패: ' + e.message, 'error'); }
+}
+
+async function authRemoveUser(key) {
+  if (AUTH.user && _emailKey(AUTH.user.email) === key) {
+    toast('본인 계정은 삭제할 수 없습니다', 'error'); return;
+  }
+  if (!confirm(key.replace(/,/g, '.') + ' 계정의 접근 권한을 삭제할까요?')) return;
+  try {
+    await AUTH.db.ref('/allowedUsers/' + key).remove();
+    toast('삭제됨', 'success');
+    authLoadAllowlist();
+  } catch (e) { toast('삭제 실패: ' + e.message, 'error'); }
+}
+
+async function authSaveCloudUrl() {
+  const url = (document.getElementById('auth-cloud-url')?.value || '').trim();
+  if (!url.startsWith('https://')) { toast('https:// 로 시작하는 주소를 입력해주세요', 'error'); return; }
+  if (!_authSetup()) { toast('Firebase 연결 실패', 'error'); return; }
+  try {
+    await AUTH.db.ref('/config/cloudUrl').set(url);
+    toast('✓ 동기화 주소 저장됨 — 팀원은 다음 로그인 시 자동 적용', 'success');
+  } catch (e) { toast('저장 실패: ' + e.message, 'error'); }
+}
+
+async function _openAuthSettings() {
+  const st = document.getElementById('auth-settings-status');
+  if (st) {
+    st.innerHTML = !AUTH_REQUIRED
+      ? '<span style="color:var(--yellow)">⚠ 비활성 — 소스의 AUTH_REQUIRED를 true로 바꾸면 켜집니다</span>'
+      : (AUTH.user
+          ? `<span style="color:var(--green)">✓ ${esc(AUTH.user.email)} 로 로그인됨</span>`
+          : '<span style="color:var(--text3)">로그인되지 않음</span>');
+  }
+  const urlEl = document.getElementById('auth-cloud-url');
+  if (urlEl && !urlEl.value) urlEl.value = CLOUD.url || '';
+  authLoadAllowlist();
+}
+
+// ============================================================
+// FCM BACKGROUND PUSH  (works when the app is closed)
+// ------------------------------------------------------------
+// Two independent delivery paths now exist, and they must not double-alert:
+//
+//   Path A (local)  cloudPull every 3 s → detectNewAssignments → banner
+//                   Only works while the tab is open.
+//   Path B (push)   RTDB /notifications → Cloud Function → FCM → Service Worker
+//                   Works with the app closed. This is the one being added here.
+//
+// _announce() is the shared gate: whichever path sees an order first claims it,
+// the other one stays quiet for ANNOUNCE_TTL. Without this you get two alerts
+// for every assignment whenever the app happens to be open.
+// ============================================================
+
+const FCM = {
+  VAPID: 'BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHjjGrYRs1v2V3HSSp-H1e3fcADA6Y',
+  SW_PATH: 'firebase-messaging-sw.js',   // resolved relative to this page — works
+                                          // at /SK_ontime/ and at the domain root
+  ALL_GROUPS: ['admin','SK_Jacob','SK_Mo','SK_June','SK_Jay','Jake_Lee','Chris_Choi','Sean_Park'],
+  msg: null, db: null, busy: false,
+};
+
+// Firebase keys cannot contain '.', '#', '$', '/', '[' or ']' — and the Cloud
+// Function derives its key the same way (spaces → underscore). Both sides MUST
+// agree or the token is written where nobody looks for it.
+function _fcmGroupKey(name) {
+  return (name || '').trim().replace(/\s+/g, '_').replace(/[.#$/\[\]]/g, '_');
+}
+
+const _announced = new Map();
+const ANNOUNCE_TTL = 90 * 1000;
+
+// The unit being de-duplicated is an ASSIGNMENT EVENT, not an order. Keying on
+// orderNumber alone silently swallowed the second alert when an order went
+// me → someone else → me inside the TTL window, which is exactly the case the
+// user needs to hear about. Both delivery paths build this key the same way.
+function _announceKey(orderNumber, subbies, subbiesAt) {
+  return (orderNumber || '') + '#' + (subbies || '').trim() + '|' + (subbiesAt || '');
+}
+
+function _announce(key) {
+  if (!key) return true;
+  const now = Date.now();
+  for (const [k, t] of _announced) if (now - t > ANNOUNCE_TTL) _announced.delete(k);
+  if (_announced.has(key)) return false;   // someone already told the user
+  _announced.set(key, now);
+  return true;
+}
+
+function _fcmSetup() {
+  if (FCM.msg) return true;
+  if (typeof firebase === 'undefined' || !firebase.messaging) return false;
+  try {
+    const app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(_RTDB_CONFIG);
+    FCM.msg = firebase.messaging(app);
+    FCM.db  = firebase.database(app);
+    return true;
+  } catch (e) { console.warn('[FCM] setup failed:', e); return false; }
+}
+
+// Foreground messages: the SW does NOT fire onBackgroundMessage while the tab is
+// visible, so the page must render these itself or they are lost.
+function _fcmAttachForeground() {
+  if (!FCM.msg || window._fcmFgAttached) return;
+  window._fcmFgAttached = true;
+  FCM.msg.onMessage(payload => {
+    const d = payload.data || {};
+    // Same key shape as the local detector — see _announceKey.
+    if (!_announce(_announceKey(d.orderNumber, d.subbies, d.subbiesAt))) return;
+    _showInAppBanner(
+      `📋 <b>${esc(d.title || '새 오더')}</b><br><span style="opacity:0.8;font-size:12px">${esc(d.body || '')}</span>`,
+      null
+    );
+    _playNotifSound();
+  });
+}
+
+async function fcmRegister(explicit) {
+  if (FCM.busy) return;
+  FCM.busy = true;
+  const setStatus = (html) => {
+    const el = document.getElementById('fcm-status');
+    if (el) el.innerHTML = html;
+  };
+  try {
+    if (!('serviceWorker' in navigator)) { setStatus('<span style="color:var(--red)">✕ 이 브라우저는 Service Worker를 지원하지 않습니다</span>'); return; }
+    if (!window.isSecureContext)         { setStatus('<span style="color:var(--red)">✕ HTTPS 환경이 아닙니다 — 푸시 불가</span>'); return; }
+    if (!NOTIF.me)                       { setStatus('<span style="color:var(--yellow)">⚠ 먼저 "내 이름"을 선택해주세요</span>'); return; }
+    if (!_fcmSetup())                    { setStatus('<span style="color:var(--red)">✕ Firebase Messaging 로드 실패</span>'); return; }
+
+    const reg = await navigator.serviceWorker.register(FCM.SW_PATH);
+    await navigator.serviceWorker.ready;
+
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      setStatus(perm === 'denied'
+        ? '<span style="color:var(--red)">✕ 알림이 차단됨 — 브라우저 사이트 설정에서 허용 후 재시도</span>'
+        : '<span style="color:var(--yellow)">⚠ 알림 권한이 필요합니다</span>');
+      return;
+    }
+
+    const token = await FCM.msg.getToken({ vapidKey: FCM.VAPID, serviceWorkerRegistration: reg });
+    if (!token) { setStatus('<span style="color:var(--red)">✕ 토큰 발급 실패</span>'); return; }
+
+    let deviceId = lsGet('fcm_device_id');
+    if (!deviceId) { deviceId = 'dev_' + Math.random().toString(36).slice(2, 12); lsSet('fcm_device_id', deviceId); }
+
+    const group = _fcmGroupKey(NOTIF.me);
+    // Write the new location BEFORE clearing the old ones, so a failure midway
+    // leaves the device over-subscribed (annoying) rather than unreachable (bad).
+    await FCM.db.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
+    await Promise.all(
+      FCM.ALL_GROUPS.filter(g => g !== group)
+        .map(g => FCM.db.ref('/fcmTokens/' + g + '/' + deviceId).remove().catch(() => {}))
+    );
+
+    lsSet('fcm_group', group);
+    lsSet('fcm_last_reg', String(Date.now()));
+    _fcmAttachForeground();
+    setStatus(`<span style="color:var(--green)">✓ 백그라운드 푸시 활성 — <b>${esc(NOTIF.me)}</b> 앞으로 수신</span>`);
+    if (explicit) toast('✓ 백그라운드 알림 등록 완료', 'success');
+  } catch (e) {
+    console.error('[FCM] register error:', e);
+    setStatus(`<span style="color:var(--red)">✕ ${esc(e.message || e.name)}</span>`);
+    if (explicit) toast('푸시 등록 실패: ' + (e.message || e.name), 'error');
+  } finally { FCM.busy = false; }
+}
+
+async function fcmUnregister() {
+  try {
+    const deviceId = lsGet('fcm_device_id');
+    if (deviceId && _fcmSetup()) {
+      await Promise.all(FCM.ALL_GROUPS.map(g =>
+        FCM.db.ref('/fcmTokens/' + g + '/' + deviceId).remove().catch(() => {})));
+    }
+    lsSet('fcm_group', '');
+    const el = document.getElementById('fcm-status');
+    if (el) el.innerHTML = '<span style="color:var(--text3)">백그라운드 푸시 해제됨</span>';
+    toast('백그라운드 알림 해제됨', 'success');
+  } catch (e) { toast('해제 실패: ' + (e.message || e.name), 'error'); }
+}
+
+// Token rotation: FCM tokens expire. Re-registering once a day keeps the
+// mapping fresh without hammering the API on every page load.
+function fcmMaintain() {
+  if (!NOTIF.enabled || !NOTIF.me) return;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  if (!_fcmSetup()) return;
+  _fcmAttachForeground();
+
+  const last  = Number(lsGet('fcm_last_reg') || 0);
+  const group = lsGet('fcm_group') || '';
+  const stale = (Date.now() - last) > 24 * 3600 * 1000;
+  // Identity changed → must re-point the token immediately, not tomorrow.
+  if (stale || group !== _fcmGroupKey(NOTIF.me)) fcmRegister(false);
+}
+
+// Tapping a background notification focuses this tab and the SW posts the order
+// number across — jump the user straight to the row they were told about.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', ev => {
+    const d = ev.data || {};
+    if (d.type !== 'SK_OPEN_ORDER' || !d.orderNumber) return;
+    const o = DB.orders.find(x => x.orderNumber === d.orderNumber);
+    if (o) _openOrderFromNotification(o.id);
+  });
+}
+
+function _fcmRenderStatus() {
+  const el = document.getElementById('fcm-status');
+  if (!el) return;
+  if (!window.isSecureContext) { el.innerHTML = '<span style="color:var(--red)">✕ HTTPS가 아니라 푸시를 쓸 수 없습니다</span>'; return; }
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+    el.innerHTML = '<span style="color:var(--text3)">미등록 — 아래 버튼으로 활성화하세요</span>'; return;
+  }
+  const g = lsGet('fcm_group') || '';
+  el.innerHTML = g
+    ? `<span style="color:var(--green)">✓ 백그라운드 푸시 활성 — <b>${esc(g)}</b> 앞으로 수신</span>`
+    : '<span style="color:var(--text3)">미등록</span>';
+}
+
+// ============================================================
 // APP LOCK — WebAuthn (Face ID / Touch ID) + PIN fallback
 // ============================================================
 
@@ -6196,25 +7382,42 @@ function toggleLockMode(mode) {
 
 async function tryBiometric(showPinOnFail = true) {
   const credId = lsGet('hom_lock_cred_id');
-  if (!credId || !window.PublicKeyCredential) {
-    if (showPinOnFail) toggleLockMode('pin');
+  const errEl  = document.getElementById('lock-bio-error');
+  const setErr = msg => { if (errEl) { errEl.textContent = msg || ''; errEl.style.display = msg ? 'block' : 'none'; } };
+  setErr('');
+
+  if (!credId || !window.PublicKeyCredential) { toggleLockMode('pin'); return; }
+
+  // A credential registered on another hostname can never verify here — say so
+  // rather than throwing a generic failure the user cannot act on.
+  const savedHost = lsGet('hom_lock_cred_host');
+  if (savedHost && savedHost !== LOCK_RP_ID) {
+    setErr(`이 주소(${LOCK_RP_ID})에서는 등록된 생체인식을 쓸 수 없습니다. PIN으로 진행하세요.`);
+    toggleLockMode('pin');
     return;
   }
+
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
     await navigator.credentials.get({
       publicKey: {
         challenge,
         rpId: LOCK_RP_ID,
-        allowCredentials: [{ type: 'public-key', id: Uint8Array.from(atob(credId), c => c.charCodeAt(0)) }],
+        allowCredentials: [{
+          type: 'public-key',
+          id: Uint8Array.from(atob(credId), c => c.charCodeAt(0)),
+          transports: ['internal'],
+        }],
         userVerification: 'required',
-        timeout: 30000,
+        timeout: 60000,
       }
     });
     hideLockScreen();
     toast('🔓 잠금 해제됨', 'success');
   } catch (e) {
-    if (showPinOnFail) toggleLockMode('pin');
+    console.warn('[LOCK] verify failed:', e);
+    setErr(_bioErrorMessage(e));
+    if (showPinOnFail) setTimeout(() => toggleLockMode('pin'), 1400);
   }
 }
 
@@ -6237,9 +7440,48 @@ async function checkLockPin() {
   }
 }
 
+// WebAuthn fails for many DIFFERENT reasons and the raw DOMException names are
+// useless to a normal user ("NotAllowedError" could mean cancelled, timed out,
+// or blocked by policy). This maps each real-world cause to an actionable message.
+function _bioErrorMessage(e) {
+  const n = e && e.name;
+  if (n === 'NotAllowedError')     return '취소되었거나 시간이 초과되었습니다. 다시 시도해주세요.';
+  if (n === 'InvalidStateError')   return '이 기기에는 이미 등록되어 있습니다. "삭제" 후 다시 등록해주세요.';
+  if (n === 'NotSupportedError')   return '이 기기는 요청한 인증 방식을 지원하지 않습니다.';
+  if (n === 'SecurityError')       return 'HTTPS 환경이 아니거나 도메인이 일치하지 않습니다. (현재: ' + location.protocol + '//' + location.hostname + ')';
+  if (n === 'AbortError')          return '중단되었습니다.';
+  if (n === 'ConstraintError')     return '기기에 화면잠금(PIN/지문/얼굴)이 설정되어 있지 않습니다. 기기 설정에서 먼저 등록해주세요.';
+  return (e && e.message) || '알 수 없는 오류';
+}
+
+// The single most common reason "Face ID didn't work": the browser supports the
+// WebAuthn API, but there is no usable platform authenticator (no Windows Hello
+// configured, no Touch ID on this Mac, screen lock off on the phone).
+// Checking this UP FRONT is the difference between a clear message and a mystery.
+async function _bioAvailable() {
+  if (!window.PublicKeyCredential) return { ok: false, why: '이 브라우저는 WebAuthn을 지원하지 않습니다.' };
+  if (!window.isSecureContext)     return { ok: false, why: 'HTTPS 연결에서만 사용할 수 있습니다. (현재: ' + location.protocol + ')' };
+  try {
+    const avail = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if (!avail) {
+      return { ok: false, why: '이 기기에 사용 가능한 생체인식이 없습니다.\n' +
+        '· iPhone/iPad: 설정 → Face ID 및 암호\n' +
+        '· Mac: 시스템 설정 → Touch ID\n' +
+        '· Windows: 설정 → 계정 → 로그인 옵션 → Windows Hello' };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, why: '지원 여부를 확인할 수 없습니다: ' + (e.message || e.name) };
+  }
+}
+
 async function registerBiometric() {
-  if (!window.PublicKeyCredential) {
-    toast('이 기기/브라우저는 생체인식을 지원하지 않습니다', 'error'); return;
+  const avail = await _bioAvailable();
+  if (!avail.ok) {
+    const st = document.getElementById('lock-bio-status');
+    if (st) st.innerHTML = `<span style="color:var(--red);white-space:pre-line">✕ ${esc(avail.why)}</span>`;
+    toast('생체인식을 사용할 수 없습니다 — 아래 안내를 확인하세요', 'error');
+    return;
   }
   try {
     const challenge = crypto.getRandomValues(new Uint8Array(32));
@@ -6255,19 +7497,67 @@ async function registerBiometric() {
         authenticatorSelection: {
           authenticatorAttachment: 'platform',
           userVerification: 'required',
+          // 'preferred' (not 'required') — some Android/Windows combos reject
+          // resident-key requirement outright and throw NotSupportedError.
           residentKey: 'preferred',
         },
-        timeout: 30000,
+        attestation: 'none',
+        timeout: 60000,
       }
     });
     const credId = btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
     lsSet('hom_lock_cred_id', credId);
+    // Pin the rpId used at registration. If the app is later opened from a
+    // different hostname the stored credential is unusable — knowing which
+    // host it belongs to lets us say so instead of failing silently.
+    lsSet('hom_lock_cred_host', LOCK_RP_ID);
     const status = document.getElementById('lock-bio-status');
-    if (status) status.textContent = '✓ 생체인식 등록됨';
+    if (status) status.innerHTML = `<span style="color:var(--green)">✓ 생체인식 등록됨 (${esc(LOCK_RP_ID)})</span>`;
     toast('✓ Face ID / Touch ID 등록 완료', 'success');
   } catch (e) {
-    toast('등록 실패: ' + (e.message || '취소됨'), 'error');
+    console.warn('[LOCK] register failed:', e);
+    const st = document.getElementById('lock-bio-status');
+    if (st) st.innerHTML = `<span style="color:var(--red);white-space:pre-line">✕ ${esc(_bioErrorMessage(e))}</span>`;
+    toast('등록 실패: ' + _bioErrorMessage(e), 'error');
   }
+}
+
+// Diagnostic — answers "why didn't Face ID work on THIS device"
+async function diagnoseBiometric() {
+  const lines = [];
+  const row = (k, v, ok) => lines.push(
+    `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:11.5px">
+       <span style="flex-shrink:0">${ok === null ? 'ℹ️' : ok ? '✅' : '❌'}</span>
+       <span style="flex-shrink:0;color:var(--text3);min-width:104px">${k}</span>
+       <span style="flex:1;word-break:break-all">${esc(String(v))}</span>
+     </div>`);
+
+  row('보안 컨텍스트', window.isSecureContext ? 'HTTPS ✓' : location.protocol + ' (불가)', !!window.isSecureContext);
+  row('WebAuthn API', window.PublicKeyCredential ? '지원됨' : '미지원', !!window.PublicKeyCredential);
+  row('현재 호스트', location.hostname || '(없음)', null);
+
+  const savedHost = lsGet('hom_lock_cred_host');
+  if (savedHost) row('등록 호스트', savedHost + (savedHost === location.hostname ? ' (일치)' : ' ⚠ 불일치'), savedHost === location.hostname);
+
+  if (window.PublicKeyCredential) {
+    try {
+      const a = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      row('기기 생체인식', a ? '사용 가능' : '사용 불가 — 기기에 Face ID/지문/Hello 미설정', a);
+    } catch (e) { row('기기 생체인식', '확인 실패: ' + e.name, false); }
+    try {
+      if (PublicKeyCredential.isConditionalMediationAvailable) {
+        const c = await PublicKeyCredential.isConditionalMediationAvailable();
+        row('자동완성 인증', c ? '지원' : '미지원', null);
+      }
+    } catch (e) {}
+  }
+  row('등록된 자격증명', lsGet('hom_lock_cred_id') ? '있음' : '없음', !!lsGet('hom_lock_cred_id'));
+  row('PIN 설정', lsGet('hom_lock_pin_hash') ? '있음' : '없음', !!lsGet('hom_lock_pin_hash'));
+  row('알림 권한', (typeof Notification !== 'undefined') ? Notification.permission : '미지원', null);
+  row('브라우저', navigator.userAgent.slice(0, 70), null);
+
+  document.getElementById('lock-diag-result').innerHTML =
+    `<div style="margin-top:10px;border:1px solid var(--border);border-radius:10px;padding:8px 12px;background:var(--cream2)">${lines.join('')}</div>`;
 }
 
 function clearBiometric() {
@@ -6303,13 +7593,25 @@ function onLockToggleChange() {
   }
 }
 
-function _openLockSettings() {
+async function _openLockSettings() {
   const enabled = lsGet('hom_lock_enabled') === 'true';
   const cb = document.getElementById('set-lockEnabled');
   if (cb) cb.checked = enabled;
   onLockToggleChange();
   const status = document.getElementById('lock-bio-status');
-  if (status) status.textContent = lsGet('hom_lock_cred_id') ? '✓ 생체인식 등록됨' : '미등록';
+  if (!status) return;
+  if (lsGet('hom_lock_cred_id')) {
+    const host = lsGet('hom_lock_cred_host') || '';
+    status.innerHTML = (host && host !== location.hostname)
+      ? `<span style="color:var(--yellow)">⚠ ${esc(host)} 에서 등록됨 — 현재 주소(${esc(location.hostname)})에서는 사용 불가</span>`
+      : `<span style="color:var(--green)">✓ 생체인식 등록됨</span>`;
+  } else {
+    // Tell the user up front whether registering will even be possible here.
+    const a = await _bioAvailable();
+    status.innerHTML = a.ok
+      ? '<span style="color:var(--text3)">미등록 — 등록 가능</span>'
+      : `<span style="color:var(--yellow);white-space:pre-line">⚠ ${esc(a.why)}</span>`;
+  }
 }
 
 function _resetInactivityTimer() {
@@ -6848,8 +8150,20 @@ document.getElementById('header-actions').innerHTML = `
   <button class="btn btn-secondary" onclick="openEmailImport()">📧 Import Email</button>
   <button class="btn btn-primary" onclick="openOrderModal()">+ New Order</button>`;
 
-// Initialise lock on startup
-initLock();
+// Startup gates, outermost first: Google sign-in → PIN/Face ID → app.
+// When sign-in is required the lock is started by _authAfterSignIn() instead,
+// otherwise the two overlays race and the PIN pad renders behind the login box.
+if (AUTH_REQUIRED) { authInit(); } else { initLock(); }
+
+// Notification bell + first-run baseline.
+// Seeding here (not on first alert) is what guarantees an existing user who
+// turns notifications on does not get a popup for every order already theirs.
+renderNotifBell();
+if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
+
+// Background push upkeep — attaches the foreground handler and refreshes a
+// stale/misfiled token. Deferred so it never delays first paint.
+window.addEventListener('load', () => { setTimeout(() => { try { fcmMaintain(); } catch (e) {} }, 2500); });
 
 // ============================================================
 // MANAGE SUBBIES
@@ -7114,6 +8428,9 @@ function _rtdbNotify(order, type) {
     address:     order.address     || '',
     area:        order.area        || '',
     subbies:     order.subbies     || '',
+    // Carried through to the push so the receiving device can build the same
+    // de-dup key the local detector builds (see _announceKey).
+    subbiesAt:   order.subbiesAt || order.formSavedAt || order.updatedAt || 0,
     type:        type || 'new',
     createdAt:   Date.now()
   };

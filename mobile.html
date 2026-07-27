@@ -7,8 +7,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SK Ontime">
-<link rel="manifest" href="/SK_ontime/manifest.json">
-<link rel="apple-touch-icon" href="/SK_ontime/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<meta name="theme-color" content="#1C1C1E">
 <meta name="mobile-web-app-capable" content="yes">
 <title>SK Ontime — Holmes Order Manager</title>
 <script>
@@ -7205,7 +7209,9 @@ async function fcmInit(userGroup) {
     if (!_fcmSetupFirebase()) return;
 
     // Register SW and wait for active state
-    await navigator.serviceWorker.register('/SK_ontime/firebase-messaging-sw.js');
+    // Relative — resolves to the same scope as the absolute path did on
+    // GitHub Pages, but keeps working if the app is served from elsewhere.
+    await navigator.serviceWorker.register('firebase-messaging-sw.js');
     const activeReg = await navigator.serviceWorker.ready;
     console.log('[FCM] SW active');
 

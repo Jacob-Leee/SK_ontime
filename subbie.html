@@ -6,8 +6,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>SK Field App</title>
-  <link rel="manifest" href="/SK_ontime/manifest.json">
-  <link rel="apple-touch-icon" href="/SK_ontime/icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <meta name="theme-color" content="#1C1C1E">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
   <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
@@ -533,7 +537,7 @@ async function sbFcmRegister() {
     if (!firebase || !_user) return;
     if (!_messaging) _messaging = firebase.messaging(_app);
 
-    const reg = await navigator.serviceWorker.register('/SK_ontime/firebase-messaging-sw.js');
+    const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
     const token = await _messaging.getToken({ vapidKey: _FCM_VAPID, serviceWorkerRegistration: reg });
     if (!token) return;
 
