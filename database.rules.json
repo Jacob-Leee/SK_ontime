@@ -1,0 +1,35 @@
+{
+  "rules": {
+    "allowedUsers": {
+      ".read": "auth != null && auth.token.email_verified == true",
+      "$emailKey": {
+        ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).child('role').val() === 'admin'"
+      }
+    },
+
+    "config": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).child('role').val() === 'admin'"
+    },
+
+    "notifications": {
+      ".read": false,
+      ".write": true
+    },
+
+    "fcmTokens": {
+      ".read": false,
+      ".write": true
+    },
+
+    "orders": {
+      ".read": true,
+      ".write": true
+    },
+
+    "issues": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
