@@ -643,6 +643,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 <!-- Firebase SDK -->
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 </head>
@@ -2230,7 +2231,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-i';
+const APP_BUILD     = '2026-07-30-j';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -3977,16 +3978,24 @@ async function srSubmit(type) {
   if (!db) return toast('Not connected', 'error');
 
   const urls = [];
-  let photoFailed = false;
+  let photoFailed = false, photoErr = null;
   try {
-    if (_srPhotos.length && firebase.storage) {
+    if (_srPhotos.length) {
+      // `if (firebase.storage)` used to guard this. firebase-storage-compat.js
+      // was never loaded on mobile, so that check was always false and every
+      // photo was dropped without a word — the report arrived with none and
+      // nothing anywhere said why.
+      if (!firebase.storage) throw new Error('Storage SDK not loaded — redeploy mobile.html');
       const st = firebase.storage(firebase.apps[0]);
       for (let i = 0; i < _srPhotos.length; i++) {
         try {
           const ref = st.ref('issues/' + _srOrder.id + '/' + Date.now() + '_' + i + '.jpg');
           await ref.put(_srPhotos[i].file);
           urls.push(await ref.getDownloadURL());
-        } catch (e) { photoFailed = true; break; }
+        } catch (e) {
+          console.error('[SR] photo upload failed:', e.code || e.message, e);
+          photoFailed = true; photoErr = e; break;
+        }
       }
     }
     // The report goes up even if the photos did not — losing what was found is
@@ -3998,26 +4007,23 @@ async function srSubmit(type) {
       address: _srOrder.address || '', createdAt: ts,
       createdBy: NOTIF.me || 'SK', by: NOTIF.me || 'SK', at: ts
     });
-    // Flip the order locally as well as filing the report. Waiting for the
-    // office app to pick it up meant the card still said "Active" right after
-    // you pressed Submit, which reads as "it did not work".
-    if (type === 'issue') {
-      _srOrder.status = 'issue';
-      _srOrder.issueFrom = NOTIF.me || 'SK';
-      _srOrder.issueAt = localDateStr();
-      _srOrder.issueNote = (_srOrder.issueNote ? _srOrder.issueNote + '\n' : '') +
-        '[' + (NOTIF.me || 'SK') + '] ' + (note || '(photo only)');
-      if (!_srOrder.issueType) _srOrder.issueType = 'hold';
-      _srOrder.updatedAt = _nowSafe();
-      save();
-      try { _rtdbSyncOrder(_srOrder); } catch (e) {}
-    }
+    // The order itself is deliberately untouched. A report from site is
+    // information, not a decision — moving the order out of Active on someone's
+    // phone tap takes that decision away from whoever is running the board.
+    // The card marker comes from the report list, so it still shows immediately.
     closeModal('sr-modal');
     srClear();
     mobRefresh();
     updateSidebar();
-    toast(photoFailed ? 'Report sent — photos failed to upload'
-                      : (type === 'issue' ? 'Issue reported' : 'Marked as done'), photoFailed ? 'error' : 'success');
+    if (photoFailed) {
+      const c = (photoErr && (photoErr.code || photoErr.message)) || '';
+      alert('Report sent, but the photos did not upload.\n\n' + c +
+        (/unauthorized|permission/i.test(c)
+          ? '\n\nStorage rules need publishing — see storage.rules.'
+          : ''));
+    } else {
+      toast(type === 'issue' ? 'Issue reported' : 'Marked as done', 'success');
+    }
   } catch (e) {
     toast('Send failed: ' + (e.message || e), 'error');
   } finally {
@@ -7183,67 +7189,52 @@ function mobRefresh() {
   mobSummaryShow(list);
 }
 
-// Two taps that used to take six: open the order, hit Edit, change a dropdown,
-// save, close, go back. Reporting from site is the common case, so it belongs
-// on the card itself.
-//
-// Complete fires straight away. Issue opens a sheet, because "there is a
-// problem" without a photo or a sentence is not something the office can act on.
+// The marker is driven by the REPORT list, not the order's status — the order
+// is never moved by a tap on a phone. It clears once someone marks the report
+// reviewed on the desktop, which is also where the actual decision gets made.
 function mobCardActions(o) {
   const st = o.status || 'active';
+  if (['cancelled','closed','paid','invoiced'].includes(st)) return '';
 
-  // Already reported — show the outcome instead of the buttons.
-  if (st === 'issue') {
-    return `<div style="margin-top:9px;display:flex;align-items:center;gap:6px;background:rgba(217,119,6,.10);
-      color:#B45309;border-radius:9px;padding:7px 10px;font-size:12px;font-weight:700">
-      &#9888; Issue reported${o.issueFrom ? ' &middot; ' + esc(o.issueFrom) : ''}</div>`;
+  const pending = (typeof frPendingFor === 'function') ? frPendingFor(o.id) : [];
+  if (pending.length) {
+    const isIssue = pending.some(r => r.type === 'issue');
+    const who = pending[0].by || '';
+    return `<div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;
+      background:${isIssue ? '#FEF3C7' : '#DCFCE7'};color:${isIssue ? '#B45309' : '#15803D'};
+      border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700">
+      ${isIssue ? '&#9888; Issue sent' : '&#10003; Done sent'}${who ? ' &middot; ' + esc(who) : ''}</div>`;
   }
-  if (['completed','claim','invoiced','paid','closed'].includes(st)) {
-    return `<div style="margin-top:9px;display:flex;align-items:center;gap:6px;background:rgba(22,163,74,.10);
-      color:#15803D;border-radius:9px;padding:7px 10px;font-size:12px;font-weight:700">
-      &#10003; ${st === 'completed' ? 'Completed' : 'Completed &middot; ' + st}</div>`;
-  }
-  if (st === 'cancelled') return '';
 
-  return `<div style="margin-top:9px;display:flex;gap:7px" onclick="event.stopPropagation()">
+  return `<div style="margin-top:8px;display:flex;gap:6px" onclick="event.stopPropagation()">
     <button onclick="mobQuickComplete('${o.id}')"
-      style="flex:1;padding:10px;border:none;border-radius:9px;background:#22C55E;color:#fff;
-      font-size:13px;font-weight:700;font-family:inherit;cursor:pointer">&#10003; Complete</button>
+      style="padding:5px 12px;border:1px solid #86EFAC;border-radius:20px;background:#DCFCE7;
+      color:#15803D;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer">&#10003; Complete</button>
     <button onclick="srOpen('${o.id}')"
-      style="flex:1;padding:10px;border:none;border-radius:9px;background:#D97706;color:#fff;
-      font-size:13px;font-weight:700;font-family:inherit;cursor:pointer">&#9888; Issue</button>
+      style="padding:5px 12px;border:1px solid #FCD34D;border-radius:20px;background:#FEF3C7;
+      color:#B45309;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer">&#9888; Issue</button>
   </div>`;
 }
 
-// One tap, no dialog. The card changes to "Completed" immediately, and the
-// report goes to the office the same way a subcontractor's does.
+// Files a completion report. Does NOT complete the order — that stays with
+// whoever is working the board on the desktop, who can see the claim side of it.
 async function mobQuickComplete(id) {
   const o = DB.orders.find(x => x.id === id);
   if (!o) return toast('Order not found', 'error');
 
-  const prev = o.status;
-  o.status = 'completed';
-  o.completedAt = localDateStr();
-  o.updatedAt = _nowSafe();
-  save();
-  try { _rtdbSyncOrder(o); } catch (e) {}
-  mobRefresh();
-  updateSidebar();
-  toast('Marked complete', 'success');
-
-  // File it as a field report too, so the office sees who closed it off and
-  // when — the status alone does not say that.
   try {
     const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
-    if (db) {
-      const ts = Date.now();
-      await db.ref('/issues/' + o.id + '/' + ts).set({
-        type: 'done', note: '', photoUrl: '', photoUrls: [], photoCount: 0,
-        orderId: o.id, orderNumber: o.orderNumber || '', address: o.address || '',
-        createdAt: ts, createdBy: NOTIF.me || 'SK', by: NOTIF.me || 'SK', at: ts
-      });
-    }
-  } catch (e) { console.warn('[SR] complete report failed:', e); }
+    if (!db) return toast('Not connected', 'error');
+    const ts = Date.now();
+    await db.ref('/issues/' + o.id + '/' + ts).set({
+      type: 'done', note: '', photoUrl: '', photoUrls: [], photoCount: 0,
+      orderId: o.id, orderNumber: o.orderNumber || '', address: o.address || '',
+      createdAt: ts, createdBy: NOTIF.me || 'SK', by: NOTIF.me || 'SK', at: ts
+    });
+    toast('Reported as done', 'success');
+  } catch (e) {
+    toast('Send failed: ' + (e.message || e), 'error');
+  }
 }
 
 function mobCopyOrder(id) {
@@ -9720,6 +9711,7 @@ function _rtdbWatchFieldReports() {
 function _frRepaint() {
   _FR.loaded = true;
   renderFieldReportBadge();
+  try { mobRefresh(); } catch (e) {}
   if (document.getElementById('fr-modal')?.classList.contains('open')) renderFieldReports();
   try { mobRender(); } catch (e) {}
 }
@@ -9902,46 +9894,15 @@ function _applyIssueReport(reportId, r, orderIdHint) {
 
   // Two kinds of report come up the same pipe. A completion is not an issue and
   // must not land in the Issues tab.
-  if (r.type === 'done') {
-    if (['completed','claim','invoiced','paid','closed','cancelled'].includes(o.status || '')) return;
-    o.status = 'completed';
-    o.completedAt = today;
-    o.updatedAt = _nowSafe();
-    save();
-    try { _rtdbSyncOrder(o); } catch (e) {}
-    try { updateSidebar(); } catch (e) {}
-    try {
-      const rr = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW,
-        completed:renderCompleted, claims:renderClaims, closed:renderClosed,
-        issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
-      (rr[currentPage] || function(){})();
-    } catch (e) {}
-    _fieldReportAlert('done', r, o);
-    return;
-  }
+  // Reports notify; they do not decide. Flipping status automatically moved
+  // orders off the board while someone was working it, and a completion still
+  // needs a human to check the claim side before it counts as done.
+  if (r.type === 'done') { _fieldReportAlert('done', r, o); return; }
   const line = '[' + stamp + ' · ' + (r.by || 'Subcontractor') + '] ' + (r.note || '(photo only)') +
                (r.photoCount ? '(photos ' + r.photoCount + ')' : '');
 
   // Append rather than overwrite — a second report on the same order is new
   // information, not a correction of the first.
-  o.issueNote = o.issueNote ? (o.issueNote + '\n' + line) : line;
-  o.issuePhotos = [...(o.issuePhotos || []), ...(r.photoUrls || [])];
-  o.issueFrom = r.by || '';
-  if (!o.issueType) o.issueType = 'hold';   // reported from site = work stopped
-  o.issueAt = _ymdLocal ? _ymdLocal(when) : when.toISOString().slice(0, 10);
-  o.status = 'issue';
-  o.updatedAt = _nowSafe();
-
-  save();
-  try { _rtdbSyncOrder(o); } catch (e) {}
-  try { updateSidebar(); } catch (e) {}
-  try {
-    const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW,
-      completed:renderCompleted, claims:renderClaims, closed:renderClosed,
-      issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
-    (renders[currentPage] || function(){})();
-  } catch (e) {}
-
   _fieldReportAlert('issue', r, o);
 }
 

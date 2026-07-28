@@ -1986,7 +1986,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-30-i';
+const APP_BUILD = '2026-07-30-j';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -10325,46 +10325,15 @@ function _applyIssueReport(reportId, r, orderIdHint) {
 
   // Two kinds of report come up the same pipe. A completion is not an issue and
   // must not land in the Issues tab.
-  if (r.type === 'done') {
-    if (['completed','claim','invoiced','paid','closed','cancelled'].includes(o.status || '')) return;
-    o.status = 'completed';
-    o.completedAt = today;
-    o.updatedAt = _nowSafe();
-    save();
-    try { _rtdbSyncOrder(o); } catch (e) {}
-    try { updateSidebar(); } catch (e) {}
-    try {
-      const rr = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW,
-        completed:renderCompleted, claims:renderClaims, closed:renderClosed,
-        issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
-      (rr[currentPage] || function(){})();
-    } catch (e) {}
-    _fieldReportAlert('done', r, o);
-    return;
-  }
+  // Reports notify; they do not decide. Flipping status automatically moved
+  // orders off the board while someone was working it, and a completion still
+  // needs a human to check the claim side before it counts as done.
+  if (r.type === 'done') { _fieldReportAlert('done', r, o); return; }
   const line = '[' + stamp + ' · ' + (r.by || '협력업체') + '] ' + (r.note || '(사진만 제출)') +
                (r.photoCount ? ' (사진 ' + r.photoCount + '장)' : '');
 
   // Append rather than overwrite — a second report on the same order is new
   // information, not a correction of the first.
-  o.issueNote = o.issueNote ? (o.issueNote + '\n' + line) : line;
-  o.issuePhotos = [...(o.issuePhotos || []), ...(r.photoUrls || [])];
-  o.issueFrom = r.by || '';
-  if (!o.issueType) o.issueType = 'hold';   // reported from site = work stopped
-  o.issueAt = _ymdLocal ? _ymdLocal(when) : when.toISOString().slice(0, 10);
-  o.status = 'issue';
-  o.updatedAt = _nowSafe();
-
-  save();
-  try { _rtdbSyncOrder(o); } catch (e) {}
-  try { updateSidebar(); } catch (e) {}
-  try {
-    const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW,
-      completed:renderCompleted, claims:renderClaims, closed:renderClosed,
-      issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
-    (renders[currentPage] || function(){})();
-  } catch (e) {}
-
   _fieldReportAlert('issue', r, o);
 }
 
