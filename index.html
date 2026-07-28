@@ -1602,9 +1602,14 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           <div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">
             여기 저장하면 팀원은 주소를 입력할 필요 없이 로그인만으로 자동 연결됩니다.
           </div>
-          <button onclick="closeModal('settings-modal');openCloudModal()" class="btn btn-secondary" style="width:100%;margin-top:8px;font-size:12px">
-            &#9729; 수동 연결 / 초기 업로드 (문제 있을 때만)
-          </button>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button onclick="closeModal('settings-modal');openCloudModal()" class="btn btn-secondary" style="flex:1;font-size:12px">
+              &#9729; 수동 연결
+            </button>
+            <button onclick="clearServerSyncUrl()" class="btn btn-secondary" style="flex:1;font-size:12px;color:var(--red);border-color:rgba(220,38,38,.3)">
+              서버 저장본 삭제
+            </button>
+          </div>
         </div>
         <div class="form-group form-full">
           <label class="form-label">허용 계정</label>
@@ -1892,7 +1897,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-28-u';
+const APP_BUILD = '2026-07-28-x';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2307,6 +2312,8 @@ var CLOUD = {
   pollMs: 3000,
   lastError: '',
   lastErrorAt: 0,
+  badUrl: false,
+  serverUrl: '',
   pushTimer: null,
   applying: false,
   _serverNow: 0,  // latest server timestamp from pull response (fixes clock skew)
@@ -2583,6 +2590,7 @@ async function cloudPull(initial) {
     lsSet('hom_cal_events', JSON.stringify(mergedCalEvents));
     lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
     CLOUD.lastSeenAt = out.updatedAt || '';
+    CLOUD.badUrl = false; CLOUD.lastError = '';
     // If any local records beat remote (local has newer data not yet on server),
     // push them so the server converges to the fully-merged state.
     const _remoteMap = {};
@@ -2629,10 +2637,20 @@ async function cloudPull(initial) {
     // "Offline" told you nothing about WHY. Keeping the real error makes the
     // difference between a dead network, a wrong URL and a rejected Apps
     // Script deployment visible in the diagnostic instead of guessed at.
-    CLOUD.lastError = (e && (e.message || e.name)) || String(e);
+    // A cross-origin 404 has no CORS headers, so fetch REJECTS before any
+    // status can be read — the browser reports "Failed to fetch" while the
+    // network panel shows 404. Online + rejected therefore means the URL is
+    // wrong far more often than it means the network is down, and saying
+    // "connection failed" sent people looking at their wifi instead.
+    const raw = (e && (e.message || e.name)) || String(e);
+    const looksLikeBadUrl = navigator.onLine && /failed to fetch|networkerror|load failed/i.test(raw);
+    CLOUD.lastError = looksLikeBadUrl
+      ? '주소에 접속할 수 없습니다 — Apps Script 배포가 없거나 주소가 틀립니다 (' + raw + ')'
+      : raw;
     CLOUD.lastErrorAt = Date.now();
-    console.warn('[CLOUD] pull failed:', CLOUD.lastError);
-    renderCloudStatus(navigator.onLine ? '연결 실패' : '오프라인');
+    CLOUD.badUrl = !!looksLikeBadUrl;
+    console.warn('[CLOUD] pull failed:', raw);
+    renderCloudStatus(!navigator.onLine ? '오프라인' : looksLikeBadUrl ? '주소 오류' : '연결 실패');
   } finally {
     CLOUD.pulling = false;
     // Safety net: if a past merge ever threw between `applying = true` and
@@ -7115,7 +7133,7 @@ function _syncHealthCheck() {
   const off = !CLOUD.enabled;
   // A URL that 404s is just as dead as no URL at all, and far more confusing
   // because everything looks configured.
-  const wrong = CLOUD.enabled && CLOUD.url && /404/.test(CLOUD.lastError || '');
+  const wrong = CLOUD.enabled && CLOUD.url && (CLOUD.badUrl || /404/.test(CLOUD.lastError || ''));
   let bar = document.getElementById('sync-health-bar');
 
   if (!bad && !off && !wrong) { if (bar) bar.remove(); return; }
@@ -7131,7 +7149,7 @@ function _syncHealthCheck() {
   }
   bar.innerHTML =
       bad   ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소가 없어 이 기기는 데이터를 받지 못합니다</span><span style="text-decoration:underline">설정</span>'
-    : wrong ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소가 잘못되었습니다 (404) — 다른 기기의 주소를 확인하세요</span><span style="text-decoration:underline">설정</span>'
+    : wrong ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소에 접속할 수 없습니다 — 다른 기기의 주소를 확인하세요</span><span style="text-decoration:underline">설정</span>'
     :         '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화가 꺼져 있습니다</span><span style="text-decoration:underline">켜기</span>';
 }
 
@@ -7167,6 +7185,8 @@ function syncDiagnostics() {
     newest:     newest ? new Date(newest).toLocaleString('en-AU') : '(없음)',
     signedIn:   (typeof AUTH !== 'undefined' && AUTH.user) ? AUTH.user.email : '(로그인 안 함)',
     identity:   mine,
+    serverFp:   CLOUD.serverUrl ? _syncFingerprint(CLOUD.serverUrl) : '(없음)',
+    serverSame: CLOUD.serverUrl ? (CLOUD.serverUrl === CLOUD.url) : null,
     lastError:  CLOUD.lastError || '',
     lastErrorAt:CLOUD.lastErrorAt ? new Date(CLOUD.lastErrorAt).toLocaleTimeString('en-AU') : '',
     online:     navigator.onLine,
@@ -7179,6 +7199,7 @@ function syncDiagnosticsText() {
     '빌드          ' + d.build,
     '동기화        ' + (d.enabled ? '켜짐' : '꺼짐'),
     '주소 지문     ' + d.fingerprint,
+    '서버 저장본   ' + d.serverFp + (d.serverSame === false ? '  ⚠ 다름' : d.serverSame ? '  (동일)' : ''),
     '마지막 수신   ' + d.lastSeen,
     '보유 오더     ' + d.orders + '건',
     '최신 수정     ' + d.newest,
@@ -7201,9 +7222,48 @@ function showSyncDiagnostics() {
     '\n\n다른 기기에서도 같은 화면을 열어\n"주소 지문"과 "빌드"를 비교해보세요.\n' +
     '지문이 다르면 서로 다른 시트를 보고 있는 것입니다.'
   );
-  // Offer the full URL only when there is one to hand over — this is how a
-  // device that lost its URL gets it back from one that still has it.
-  if (d.urlSet) copySyncUrlPrompt();
+  // Two different situations, two different offers:
+  //  · the URL works  → hand it to another device
+  //  · the URL is dead → replace it right here, rather than sending the user
+  //    off to find the Cloud Sync dialog while they are already looking at the
+  //    error that explains why they need it.
+  if (CLOUD.badUrl || /Failed to fetch|404/i.test(d.lastError)) pasteSyncUrlPrompt();
+  else if (d.urlSet) copySyncUrlPrompt();
+}
+
+// If /config holds a bad URL it will keep being offered to every new device.
+// Clearing it is the only way to stop that without touching the console.
+async function clearServerSyncUrl() {
+  if (!AUTH.user) { alert('로그인이 필요합니다.'); return; }
+  if (!confirm('서버에 저장된 동기화 주소를 삭제할까요?\n\n' +
+               '잘못된 주소가 저장돼 있으면 기기마다 계속 덮어쓰게 됩니다.\n' +
+               '삭제해도 이 기기의 주소는 그대로입니다.')) return;
+  try {
+    await AUTH.db.ref('/config/cloudUrl').remove();
+    CLOUD.serverUrl = '';
+    toast('서버 저장본을 삭제했습니다', 'success');
+  } catch (e) { alert('삭제 실패: ' + e.message); }
+}
+
+function pasteSyncUrlPrompt() {
+  const cur = CLOUD.url || '';
+  const next = prompt(
+    '이 주소로는 접속이 되지 않습니다.\n\n' +
+    '정상 동작하는 기기(휴대폰 등)의 주소를 붙여넣으세요.\n' +
+    'Apps Script 배포 화면의 웹 앱 URL이어도 됩니다. (/exec 으로 끝남)',
+    cur);
+  if (next === null) return;
+  const url = next.trim();
+  if (!url) return;
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+/.test(url)) {
+    alert('형식이 올바르지 않습니다.\n\nhttps://script.google.com/macros/s/... 형태여야 합니다.');
+    return;
+  }
+  if (url === cur) { alert('기존 주소와 동일합니다. 다른 기기의 주소를 확인해주세요.'); return; }
+  cloudSetUrl(url);
+  CLOUD.badUrl = false; CLOUD.lastError = '';
+  if (!CLOUD.enabled) cloudEnable(true); else startCloudSync();
+  toast('주소를 저장했습니다 — 연결을 시도합니다', 'success');
 }
 
 // Clipboard first, with a selectable prompt as the fallback: clipboard writes
@@ -7734,10 +7794,21 @@ async function _authApplyConfig() {
   try {
     const cfg = await AUTH.db.ref('/config/cloudUrl').once('value');
     const url = cfg.val();
-    if (url && url !== CLOUD.url) {
+    CLOUD.serverUrl = url || '';
+
+    // Only adopt the server's URL when this device has nothing usable of its
+    // own. Overwriting unconditionally meant a bad value saved to /config
+    // clobbered a working local URL on every single sign-in — fix it by hand,
+    // reload, and it silently reverted. Evidence that the local one works is
+    // lastSeenAt: a successful pull has happened with it.
+    const localWorks = CLOUD.url && CLOUD.lastSeenAt && !CLOUD.badUrl;
+    if (url && url !== CLOUD.url && !localWorks) {
       cloudSetUrl(url);
+      CLOUD.badUrl = false; CLOUD.lastError = '';
       if (!CLOUD.enabled) cloudEnable(true); else startCloudSync();
-      console.log('[AUTH] cloud sync URL applied from server config');
+      console.log('[AUTH] adopted sync URL from server config');
+    } else if (url && url !== CLOUD.url) {
+      console.warn('[AUTH] server config URL differs but local URL is working — keeping local');
     }
   } catch (e) {
     console.warn('[AUTH] could not read /config/cloudUrl:', e.message);
