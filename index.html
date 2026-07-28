@@ -1747,7 +1747,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 <div class="toast-container" id="toast-container"></div>
 
 <!-- GOOGLE SIGN-IN GATE -->
-<div id="auth-gate" style="display:none;position:fixed;inset:0;z-index:100000;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:24px">
+<div id="auth-gate" style="display:flex;position:fixed;inset:0;z-index:100000;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:24px">
   <div style="text-align:center;margin-bottom:34px">
     <img src="icon-192.png" alt="" width="72" height="72" style="border-radius:18px;margin-bottom:16px">
     <div style="font-size:26px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#C9A84C">ON</span>TIME</div>
@@ -1841,6 +1841,29 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // meant authInit() — which runs earlier — threw ReferenceError inside a
 // try/catch, silently failed to attach the auth listener, and left sign-in
 // hanging at "권한 확인 중" forever. Definition order matters here.
+// ── Access gate ──
+// ENABLED 2026-07-28 after sign-in was confirmed working on this domain.
+// To disable: set back to false and re-upload — data is untouched either way.
+//
+// Declared up here, not next to the auth code 5000 lines down, for two reasons:
+// `const` is in the temporal dead zone until its own line runs, and the gate has
+// to be resolved BEFORE anything paints.
+const AUTH_REQUIRED = true;
+
+// Shown at the bottom of Settings. A stale cached build looks identical to a
+// broken one from the outside — this makes "did my upload actually land?"
+// answerable in two seconds.
+const APP_BUILD = '2026-07-28-f';
+
+// The gate markup ships visible so it covers the app from the very first paint.
+// Bringing it up at the end of this 600 KB script instead meant the order table —
+// addresses, amounts, PRNs — rendered and was readable for a beat before the
+// login screen dropped over it. Take it down here when sign-in is not enforced.
+if (!AUTH_REQUIRED) {
+  const _g = document.getElementById('auth-gate');
+  if (_g) _g.style.display = 'none';
+}
+
 const _RTDB_CONFIG = {
   apiKey: "AIzaSyBRzLQXpX_tWdJCpxKT7DI5m402KiaiCUA",
   authDomain: "homes-nsw.firebaseapp.com",
@@ -6916,14 +6939,6 @@ function runNotifSimulation() {
 // locally after first success, so a signed-in device still works with no network.
 // ============================================================
 
-// ENABLED 2026-07-28 after sign-in was confirmed working on this domain.
-// To disable: set back to false and re-upload — data is untouched either way.
-const AUTH_REQUIRED = true;
-
-// Shown at the bottom of Settings. A stale cached build looks identical to a
-// broken one from the outside — this makes "did my upload actually land?"
-// answerable in two seconds instead of a guessing game.
-const APP_BUILD = '2026-07-28-f';
 
 const AUTH = { user: null, entry: null, ready: false, auth: null, db: null, lastError: null };
 

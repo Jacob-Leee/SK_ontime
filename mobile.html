@@ -466,7 +466,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
      z-index sits above #mob-pin-overlay (99999) on purpose: sign-in is the
      outer gate, the existing role/PIN flow runs behind it and only becomes
      visible once an allow-listed account is confirmed. -->
-<div id="auth-gate" style="display:none;position:fixed;inset:0;z-index:100001;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;padding-top:calc(28px + env(safe-area-inset-top))">
+<div id="auth-gate" style="display:flex;position:fixed;inset:0;z-index:100001;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;padding-top:calc(28px + env(safe-area-inset-top))">
   <div style="text-align:center;margin-bottom:32px">
     <img src="icon-192.png" alt="" width="66" height="66" style="border-radius:16px;margin-bottom:14px">
     <div style="font-size:24px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#C9A84C">ON</span>TIME</div>
@@ -1928,6 +1928,25 @@ const SEED_VERSION = '15';
 // ============================================================
 function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
+
+// ── Access gate ──
+// Still OFF: mobile sign-in has not been exercised in a real browser yet, and
+// signInWithPopup can behave differently on iOS / in a standalone PWA than it
+// does on desktop. Test via drawer → "Google 계정" first, then flip.
+//
+// Declared at the top, not next to the auth code below: `const` is in the
+// temporal dead zone until its own line runs, and the gate must be resolved
+// before anything paints.
+const AUTH_REQUIRED = false;
+const APP_BUILD     = '2026-07-28-f';
+
+// The gate ships visible so it covers the app from first paint. Raising it at
+// the end of the script instead let the order list render and be readable for a
+// beat first. Take it down here when sign-in is not enforced.
+if (!AUTH_REQUIRED) {
+  const _g = document.getElementById('auth-gate');
+  if (_g) _g.style.display = 'none';
+}
 
 const DEFAULT_UI_LABELS = {
   navAll: 'All Orders', navOrders: 'Orders', navCompleted: 'Completed', navClaims: 'Claim',
@@ -7561,8 +7580,6 @@ function renderNotifSheet() {
 // must wait for the load event — see the bootstrap at the bottom.
 // ══════════════════════════════════════════════════════════
 
-const AUTH_REQUIRED = false;   // ← set to true AFTER Firebase Console setup
-const APP_BUILD     = '2026-07-28-f';
 
 const AUTH = { user: null, entry: null, ready: false, auth: null, db: null, lastError: null };
 
