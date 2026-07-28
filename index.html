@@ -13,6 +13,27 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1C1C1E">
 <script>
+// Ctrl+Shift+R has no equivalent on a phone, and an installed PWA will happily
+// serve a stale cached build for days. This clears the caches and reloads with
+// a fresh query string. It does NOT touch localStorage — that is the data — and
+// it updates the service worker rather than unregistering it, which would kill
+// push notifications.
+async function hardReload() {
+  if (!confirm('앱을 강제로 새로고침할까요?\n\n최신 버전을 다시 받아옵니다.\n저장된 데이터는 지워지지 않습니다.')) return;
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.update().catch(() => {})));
+    }
+  } catch (e) { console.warn('[RELOAD] cache clear failed:', e); }
+  const base = location.origin + location.pathname;
+  location.replace(base + '?v=' + Date.now());
+}
+
 /* Chart.js v4.4.0 — embedded for offline use (MIT License) */
 /*!
  * Chart.js v4.4.0
@@ -494,6 +515,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
             <div style="height:1px;background:var(--border);margin:4px 0"></div>
 
+            <div onclick="hardReload()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#8635; 강제 새로고침</div>
             <div onclick="openSettingsModal();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#9881; 설정</div>
             <div id="hdr-menu-signout" onclick="authSignOut()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap;color:var(--red);display:none" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#10162; 로그아웃</div>
 
@@ -1907,7 +1929,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-29-s';
+const APP_BUILD = '2026-07-29-u';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2682,6 +2704,12 @@ async function cloudPull(initial) {
     renderSupList();
     updateSidebar();
     renderCloudStatus('Synced ✓');
+
+    // Keep the three apps aligned without anyone pressing anything: push what
+    // the subbie mirror is missing, and pick up any site-reported issue whose
+    // order has only just arrived on this device.
+    _rtdbAutoMirror('pull');
+    _rtdbRescanIssueReports();
   } catch (e) {
     // "Offline" told you nothing about WHY. Keeping the real error makes the
     // difference between a dead network, a wrong URL and a rejected Apps
@@ -9319,6 +9347,7 @@ setTimeout(() => { try { _syncHealthCheck(); } catch (e) {} }, 1500);
 try { startCalendarWatch(); } catch (e) {}
 // Subbie issue reports land here rather than being noticed by accident.
 try { _rtdbWatchIssueReports(); } catch (e) {}
+try { _rtdbAutoMirror('startup'); } catch (e) {}
 if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
 
 // Background push upkeep — attaches the foreground handler and refreshes a
@@ -9731,6 +9760,93 @@ function _rtdbRecord(order) {
 // rings the bell.
 // ============================================================
 
+// ============================================================
+// MIRROR AUTO-RECONCILE
+// ------------------------------------------------------------
+// The mirror used to be written only when an order was SAVED, which meant it
+// silently drifted from reality and needed a human to press a button to catch
+// up. That is not synchronisation, it is a chore — and if nobody presses it the
+// subbie app is simply wrong with no indication.
+//
+// This keeps a local record of what was last mirrored, so the diff is computed
+// without reading the remote node, and pushes only what actually changed.
+// Runs on startup and after every pull that brought in new data.
+// ============================================================
+
+function _mirrorState() {
+  try { return JSON.parse(lsGet('hom_mirror_state') || '{}'); } catch (e) { return {}; }
+}
+function _mirrorStateSave(m) { lsSet('hom_mirror_state', JSON.stringify(m)); }
+
+// Which orders belong in the mirror at all: assigned, to a real subcontractor.
+function _mirrorEligible() {
+  return (DB.orders || []).filter(o => {
+    const who = (o && o.subbies || '').trim();
+    return o && o.id && who && !who.toUpperCase().startsWith('SK_');
+  });
+}
+
+let _mirrorRunning = false;
+async function _rtdbAutoMirror(reason) {
+  if (_mirrorRunning) return;
+  if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
+
+  const state = _mirrorState();
+  const want  = _mirrorEligible();
+  const wantIds = new Set(want.map(o => o.id));
+
+  // Push anything the mirror has never seen, or that has changed since.
+  const stale = want.filter(o => state[o.id] !== (o.updatedAt || 0));
+  // Drop anything that is no longer eligible — deleted, cancelled off a subbie,
+  // or reassigned to internal staff.
+  const orphans = Object.keys(state).filter(id => !wantIds.has(id));
+
+  if (!stale.length && !orphans.length) return;
+
+  _mirrorRunning = true;
+  console.log('[MIRROR] reconcile (' + reason + '):', stale.length, 'to push,', orphans.length, 'to remove');
+  const CHUNK = 300;
+  try {
+    for (let i = 0; i < stale.length; i += CHUNK) {
+      const batch = {};
+      const slice = stale.slice(i, i + CHUNK);
+      slice.forEach(o => { batch['/orders/' + o.id] = _rtdbRecord(o); });
+      await _rtdbDB.ref().update(batch);
+      slice.forEach(o => { state[o.id] = o.updatedAt || 0; });
+      _mirrorStateSave(state);   // save per chunk so an interruption resumes
+    }
+    for (let i = 0; i < orphans.length; i += CHUNK) {
+      const batch = {};
+      const slice = orphans.slice(i, i + CHUNK);
+      slice.forEach(id => { batch['/orders/' + id] = null; });
+      await _rtdbDB.ref().update(batch);
+      slice.forEach(id => { delete state[id]; });
+      _mirrorStateSave(state);
+    }
+    console.log('[MIRROR] reconcile done');
+  } catch (e) {
+    // Leave the state as-is; the next run retries whatever did not land.
+    console.warn('[MIRROR] reconcile failed:', e.message || e);
+  } finally {
+    _mirrorRunning = false;
+  }
+}
+
+// child_added only replays existing children when the listener first attaches.
+// If a report arrived for an order this device had not synced yet, nothing
+// would fire again once the order finally landed. Re-scan after every pull that
+// brought new data, so a report is applied as soon as its order exists here.
+async function _rtdbRescanIssueReports() {
+  if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
+  try {
+    const snap = await _rtdbDB.ref('/issueReports').once('value');
+    const all  = snap.val() || {};
+    Object.keys(all).forEach(k => {
+      try { _applyIssueReport(k, all[k] || {}); } catch (e) {}
+    });
+  } catch (e) { console.warn('[ISSUE] rescan failed:', e.message || e); }
+}
+
 function _rtdbWatchIssueReports() {
   if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
   if (window._issueWatchOn) return;
@@ -9760,13 +9876,39 @@ function _issueMarkSeen(id) {
 function _applyIssueReport(reportId, r) {
   if (!reportId || !r || !r.orderId) return;
   if (_issueSeen().includes(reportId)) return;
-  _issueMarkSeen(reportId);
 
   const o = (DB.orders || []).find(x => x.id === r.orderId);
-  if (!o) return;   // not on this device yet; another device will handle it
+  // Do NOT mark it seen yet. The order may simply not have synced to this
+  // device yet — marking it here meant the report was permanently discarded on
+  // that device, and if every open device happened to be in that state the
+  // issue vanished for good. Leave it unprocessed so a later replay catches it.
+  if (!o) return;
+
+  _issueMarkSeen(reportId);
 
   const when = r.at ? new Date(r.at) : new Date();
   const stamp = when.toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
+  const today = _ymdLocal ? _ymdLocal(when) : when.toISOString().slice(0, 10);
+
+  // Two kinds of report come up the same pipe. A completion is not an issue and
+  // must not land in the Issues tab.
+  if (r.type === 'done') {
+    if (['completed','claim','invoiced','paid','closed','cancelled'].includes(o.status || '')) return;
+    o.status = 'completed';
+    o.completedAt = today;
+    o.updatedAt = _nowSafe();
+    save();
+    try { _rtdbSyncOrder(o); } catch (e) {}
+    try { updateSidebar(); } catch (e) {}
+    try {
+      const rr = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW,
+        completed:renderCompleted, claims:renderClaims, closed:renderClosed,
+        issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
+      (rr[currentPage] || function(){})();
+    } catch (e) {}
+    try { _announce('작업 완료 보고', (r.by || '협력업체') + ' · ' + (r.orderNumber || '') + ' ' + (r.address || ''), { orderId: o.id }); } catch (e) {}
+    return;
+  }
   const line = '[' + stamp + ' · ' + (r.by || '협력업체') + '] ' + (r.note || '(사진만 제출)') +
                (r.photoCount ? ' (사진 ' + r.photoCount + '장)' : '');
 

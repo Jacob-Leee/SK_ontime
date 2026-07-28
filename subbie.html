@@ -53,6 +53,10 @@
     #tabs{background:var(--card);border-top:1px solid var(--border);display:flex;flex-shrink:0;padding-bottom:env(safe-area-inset-bottom)}
     .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;border:none;background:none;cursor:pointer;color:var(--text3);font-size:10px;font-weight:600;font-family:inherit}
     .tab i{font-size:22px}
+    .tab-n{position:absolute;top:2px;right:50%;margin-right:-24px;background:var(--purple);color:#fff;
+      font-size:9px;font-weight:800;min-width:15px;padding:1px 4px;border-radius:9px;line-height:1.4}
+    .tab-n:empty{display:none}
+    .tab{position:relative}
     .tab.active{color:var(--purple)}
 
     /* Content */
@@ -72,6 +76,11 @@
     .s-invoiced{background:var(--orange)}
     .s-paid{background:#AF52DE}
     .s-cancelled{background:var(--red)}
+    .s-issue{background:var(--orange)}
+    .s-claim{background:#AF52DE}
+    .s-closed{background:var(--text3)}
+    .issue-flag{display:inline-flex;align-items:center;gap:4px;background:rgba(255,149,0,.14);
+      color:var(--orange);font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;margin-left:6px}
 
     /* Empty state */
     .empty{text-align:center;padding:60px 24px;color:var(--text3)}
@@ -187,13 +196,19 @@
 
   <div id="tabs">
     <button class="tab active" id="tab-orders" onclick="sbTab('orders')">
-      <i class="ti ti-bolt"></i>Active
+      <i class="ti ti-bolt"></i>Active<span class="tab-n" id="tn-orders"></span>
+    </button>
+    <button class="tab" id="tab-issue" onclick="sbTab('issue')">
+      <i class="ti ti-alert-triangle"></i>Issue<span class="tab-n" id="tn-issue"></span>
     </button>
     <button class="tab" id="tab-completed" onclick="sbTab('completed')">
-      <i class="ti ti-circle-check"></i>Done
+      <i class="ti ti-circle-check"></i>Completed<span class="tab-n" id="tn-completed"></span>
     </button>
     <button class="tab" id="tab-claim" onclick="sbTab('claim')">
-      <i class="ti ti-receipt"></i>Claim
+      <i class="ti ti-receipt"></i>Claim<span class="tab-n" id="tn-claim"></span>
+    </button>
+    <button class="tab" id="tab-closed" onclick="sbTab('closed')">
+      <i class="ti ti-lock"></i>Closed<span class="tab-n" id="tn-closed"></span>
     </button>
   </div>
 </div>
@@ -212,6 +227,17 @@
     <div class="modal-body">
       <div id="dm-status" style="margin-bottom:14px"></div>
       <div id="dm-fields"></div>
+
+      <!-- Mark work finished. Same queue as an issue report, opposite outcome:
+           the office sees it land in Completed instead of Issues. -->
+      <div id="dm-done-wrap" style="margin-top:14px;display:none">
+        <button class="submit-btn" id="done-btn" style="background:var(--green)" onclick="sbReportDone()">
+          <i class="ti ti-circle-check"></i> 작업 완료 보고
+        </button>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
+          사무실 Completed 목록으로 넘어가 담당자가 확인합니다.
+        </div>
+      </div>
 
       <!-- Issue upload section -->
       <div class="issue-section">
@@ -265,6 +291,27 @@
 <div id="toast"></div>
 
 <script>
+// Ctrl+Shift+R has no equivalent on a phone, and an installed PWA will happily
+// serve a stale cached build for days. This clears the caches and reloads with
+// a fresh query string. It does NOT touch localStorage — that is the data — and
+// it updates the service worker rather than unregistering it, which would kill
+// push notifications.
+async function hardReload() {
+  if (!confirm('앱을 강제로 새로고침할까요?\n\n최신 버전을 다시 받아옵니다.\n저장된 데이터는 지워지지 않습니다.')) return;
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.update().catch(() => {})));
+    }
+  } catch (e) { console.warn('[RELOAD] cache clear failed:', e); }
+  const base = location.origin + location.pathname;
+  location.replace(base + '?v=' + Date.now());
+}
+
 // ══════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════
@@ -281,7 +328,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-29-s';
+const APP_BUILD = '2026-07-29-u';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -461,10 +508,29 @@ let _mirrorSize = 0;
 // office has not sent anything yet" from "your name does not match what the
 // office typed" — cheap, because it asks for a single record, not the node.
 let _ordersQuery = null;
-async function _sbProbeMirror() {
+let _sbFellBack  = false;
+
+// The indexed query matches on subbieKey, which only exists on records written
+// by a recent build. Anything mirrored before that has no such field, so the
+// query returns nothing and the app looks empty even though the data is there.
+// Falling back to a full scan means the subbie never has to wait for the office
+// to run anything — it just works, and goes back to the fast path once the
+// office apps have re-mirrored (which they now do on their own).
+async function _sbFallbackScan() {
+  if (_sbFellBack) { _mirrorSize = -1; sbRender(); return; }
+  _sbFellBack = true;
   try {
-    const probe = await _db.ref('/orders').limitToFirst(1).once('value');
-    _mirrorSize = probe.exists() ? -1 : 0;   // -1 = has data, but none is mine
+    const snap = await _db.ref('/orders').once('value');
+    const data = snap.val() || {};
+    const me   = _subbieKey(_user);
+    const hits = Object.values(data).filter(o => o && _subbieKey(o.subbies) === me);
+    if (hits.length) {
+      console.log('[SB] indexed query empty — fell back to scan, found', hits.length);
+      _allOrders  = hits;
+      _mirrorSize = hits.length;
+    } else {
+      _mirrorSize = Object.keys(data).length ? -1 : 0;  // -1 = data exists, none mine
+    }
   } catch (e) {
     _mirrorSize = 0;
   }
@@ -492,8 +558,8 @@ function sbLoadOrders() {
     // comparison as a fallback for records mirrored before subbieKey existed.
     const me = _subbieKey(_user);
     _allOrders = Object.values(data).filter(o => o && _subbieKey(o.subbies) === me);
-    if (!_allOrders.length) _sbProbeMirror();   // work out WHY it is empty
-    else _mirrorSize = _allOrders.length;
+    if (!_allOrders.length) _sbFallbackScan();  // indexed query found nothing
+    else { _mirrorSize = _allOrders.length; _sbFellBack = false; }
     sbRender();
     // Update badge
     const active = _allOrders.filter(o => (o.status||'active') === 'active').length;
@@ -515,20 +581,26 @@ function sbRender() {
   let orders;
   const byNewest = (a, b) => (b.completedAt || b.updatedAt || 0) - (a.completedAt || a.updatedAt || 0);
 
-  if (_activeTab === 'orders') {
-    // Anything still to do. 'issue' stays here — the job is not finished.
-    orders = _allOrders
-      .filter(o => !['completed','invoiced','paid','cancelled','closed','claim'].includes(o.status || 'active'))
-      .sort(byNewest);
-  } else if (_activeTab === 'completed') {
-    // Work handed in, not yet through the office's claim process.
-    orders = _allOrders.filter(o => (o.status || '') === 'completed').sort(byNewest);
-  } else {
-    // Claimed or settled — this is the tab a subbie checks about money.
-    orders = _allOrders
-      .filter(o => ['claim', 'invoiced', 'paid', 'closed'].includes(o.status || ''))
-      .sort(byNewest);
-  }
+  // One tab per office status, in the same order and under the same names as
+  // the sidebar the office looks at. A subbie asking "where is my job up to?"
+  // and the coordinator answering are now looking at the same word.
+  const BUCKETS = {
+    orders:    o => !['completed','invoiced','paid','cancelled','closed','claim','issue'].includes(o.status || 'active'),
+    issue:     o => (o.status || '') === 'issue',
+    completed: o => (o.status || '') === 'completed',
+    claim:     o => ['claim','invoiced','paid'].includes(o.status || ''),
+    closed:    o => (o.status || '') === 'closed',
+  };
+  orders = _allOrders.filter(BUCKETS[_activeTab] || BUCKETS.orders).sort(byNewest);
+
+  // Counts on every tab, so an empty screen is obviously empty rather than
+  // possibly broken — the subbie can see at a glance where their work sits.
+  Object.keys(BUCKETS).forEach(k => {
+    const el = document.getElementById('tn-' + k);
+    if (!el) return;
+    const n = _allOrders.filter(BUCKETS[k]).length;
+    el.textContent = n || '';
+  });
 
   if (!orders.length) {
     // "Nothing here" has three very different causes and they used to look
@@ -544,10 +616,11 @@ function sbRender() {
             '<small style="margin-top:6px;display:block;line-height:1.6">' +
             '사무실에 등록된 이름과 다를 수 있습니다.<br>설정 → 알림 진단에서 확인하세요.</small>';
     } else {
-      why = '<p>' + (_activeTab === 'orders' ? '진행 중인 오더가 없습니다'
-                   : _activeTab === 'completed' ? '완료한 오더가 없습니다'
-                   : '청구된 오더가 없습니다') + '</p>' +
-            '<small style="margin-top:6px;display:block">다른 탭을 확인해보세요</small>';
+      const LABEL = { orders:'진행 중인', issue:'이슈로 등록된', completed:'완료한',
+                      claim:'청구 중인', closed:'종료된' };
+      why = '<p>' + (LABEL[_activeTab] || '해당') + ' 오더가 없습니다</p>' +
+            '<small style="margin-top:6px;display:block">내 오더 ' + _allOrders.length +
+            '건 — 다른 탭을 확인해보세요</small>';
     }
     list.innerHTML = '<div class="empty"><i class="ti ti-clipboard-off"></i>' + why + '</div>';
     return;
@@ -556,7 +629,7 @@ function sbRender() {
   list.innerHTML = orders.map(o => {
     const st = o.status || 'active';
     const stClass = 's-' + st;
-    const stLabel = st.charAt(0).toUpperCase() + st.slice(1);
+    const stLabel = st === 'issue' ? '이슈 접수됨' : st.charAt(0).toUpperCase() + st.slice(1);
     return '<div class="order-card" onclick="sbOpenOrder(\'' + o.id + '\')">' +
       '<div class="order-num">' + esc(o.orderNumber || '') + '</div>' +
       '<div class="order-addr">' + esc(o.address || 'No address') + '</div>' +
@@ -626,11 +699,13 @@ function sbOpenOrder(id) {
   document.getElementById('dm-num').textContent = o.orderNumber || '';
   document.getElementById('dm-title').textContent = o.address || 'No address';
 
-  const stColors = {active:'#007AFF',completed:'#34C759',invoiced:'#FF9500',paid:'#AF52DE',cancelled:'#FF3B30'};
+  const stColors = {active:'#007AFF',completed:'#34C759',invoiced:'#FF9500',paid:'#AF52DE',
+                    cancelled:'#FF3B30',issue:'#FF9500',claim:'#AF52DE',closed:'#8A8A8E'};
+  const stText   = {issue:'이슈 접수됨 — 사무실 확인 중', claim:'청구 중', closed:'정산 완료'};
   document.getElementById('dm-status').innerHTML =
     '<span style="display:inline-flex;align-items:center;gap:6px;background:' + (stColors[st]||'#007AFF') + '18;color:' + (stColors[st]||'#007AFF') + ';font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px">' +
     '<div style="width:6px;height:6px;border-radius:50%;background:' + (stColors[st]||'#007AFF') + '"></div>' +
-    st.charAt(0).toUpperCase() + st.slice(1) + '</span>';
+    (stText[st] || (st.charAt(0).toUpperCase() + st.slice(1))) + '</span>';
 
   // The old version showed area / workType / description / scope only. Three of
   // those four are not even fields on an order ('description' and 'scope' never
@@ -640,6 +715,9 @@ function sbOpenOrder(id) {
 
   // Reset upload UI
   sbClearPhotos();
+  // Only offer it while there is still work to finish.
+  const dw = document.getElementById('dm-done-wrap');
+  if (dw) dw.style.display = ['completed','claim','invoiced','paid','closed','cancelled'].includes(st) ? 'none' : '';
   document.getElementById('issue-note').value = '';
   document.getElementById('submit-btn').disabled = false;
   document.getElementById('submit-btn').textContent = '이슈 제출';
@@ -727,6 +805,33 @@ function sbShrink(file, maxDim = 1600, quality = 0.75) {
     img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
     img.src = url;
   });
+}
+
+async function sbReportDone() {
+  if (!_currentOrder) return;
+  if (!confirm((_currentOrder.orderNumber || '') + '\n' + (_currentOrder.address || '') +
+               '\n\n이 작업을 완료로 보고할까요?')) return;
+  const btn = document.getElementById('done-btn');
+  btn.disabled = true;
+  btn.textContent = '전송 중…';
+  try {
+    const ts = Date.now();
+    await _db.ref('/issueReports/' + _currentOrder.id + '_' + ts).set({
+      type:        'done',
+      orderId:     _currentOrder.id,
+      orderNumber: _currentOrder.orderNumber || '',
+      address:     _currentOrder.address || '',
+      by:          _user,
+      at:          ts
+    });
+    sbShowToast('완료 보고가 전달되었습니다 ✓');
+    closeModal();
+  } catch (e) {
+    sbShowToast('전송 실패 — 다시 시도해주세요');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-circle-check"></i> 작업 완료 보고';
+  }
 }
 
 async function sbSubmitIssue() {
@@ -904,6 +1009,9 @@ function sbRenderSettings() {
             '오더 동기화', online ? '실시간으로 연결되어 있습니다' : '연결을 확인하는 중입니다',
             '<span class="set-val" style="color:' + (online ? 'var(--green)' : 'var(--text3)') + '">' +
               (online ? '실시간' : '대기') + '</span>', null) +
+        row('refresh-alert', 'rgba(0,122,255,.14)', 'var(--blue)',
+            '강제 새로고침', '최신 버전을 다시 받아옵니다',
+            '', 'hardReload()') +
       '</div>' +
     '</div>' +
 
