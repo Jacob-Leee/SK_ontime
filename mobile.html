@@ -2252,7 +2252,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-u';
+const APP_BUILD     = '2026-07-30-v';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8547,6 +8547,17 @@ function _authSetup() {
     try { AUTH.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (e) {}
     AUTH.db   = firebase.database(app);
     _authAttachListener();
+    // Pick up the result when we came back from the redirect fallback. Without
+    // this the app returns from Google and simply shows the sign-in screen
+    // again, as if nothing happened.
+    if (AUTH.auth.getRedirectResult) AUTH.auth.getRedirectResult()
+      .then(res => { if (res && res.user) console.log('[AUTH] returned from redirect:', res.user.email); })
+      .catch(e => {
+        if (e && e.code && e.code !== 'auth/no-auth-event') {
+          console.warn('[AUTH] redirect result failed:', e.code, e.message);
+          _authRecordError({ stage: 'redirect-return', code: e.code || '', message: e.message || '' });
+        }
+      });
     return true;
   } catch (e) { console.warn('[AUTH] setup failed:', e); return false; }
 }
@@ -8598,7 +8609,22 @@ async function authSignIn() {
   try {
     const p = new firebase.auth.GoogleAuthProvider();
     p.setCustomParameters({ prompt: 'select_account' });
-    await AUTH.auth.signInWithPopup(p);
+    try {
+      await AUTH.auth.signInWithPopup(p);
+    } catch (pe) {
+      // A Home Screen app on iOS cannot open the sign-in popup. Firebase does
+      // not report that as a popup problem — it comes back as
+      // auth/network-request-failed, which sends people looking at their wifi.
+      // Fall back to the redirect flow, which does not need a second window.
+      const popupDead = /popup-blocked|popup-closed-by-user|network-request-failed|operation-not-supported/
+        .test(pe.code || '');
+      if (!popupDead) throw pe;
+      console.warn('[AUTH] popup failed (' + pe.code + ') — falling back to redirect');
+      _authRecordError({ stage: 'popup-failed-using-redirect', code: pe.code || '', message: pe.message || '' });
+      _authShow('busy', 'Opening Google sign-in…');
+      await AUTH.auth.signInWithRedirect(p);
+      return;
+    }
   } catch (e) {
     console.warn('[AUTH] sign-in failed:', e.code, e.message);
     // Recorded, and kept across a reload. Without this the diagnostic could
@@ -8807,6 +8833,14 @@ async function authDiagnose() {
       row('Key match', keys.includes(key) ? 'match ✓' : 'mismatch', keys.includes(key));
     } catch (e) { row('Allow-list read', 'Blocked: ' + e.message, false); }
   }
+  // The single most useful line for this failure: iOS blocks the sign-in popup
+  // in a Home Screen app, which surfaces as auth/network-request-failed rather
+  // than anything mentioning popups.
+  const _standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                      window.navigator.standalone === true;
+  const _isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent || '');
+  row('Launched as', _standalone ? 'Home Screen app' : 'Browser tab', !(_isIOS && _standalone));
+
   const le = _authLastError();
   if (le) {
     const when = le.at ? new Date(le.at).toLocaleString('en-AU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
@@ -8821,6 +8855,12 @@ async function authDiagnose() {
       row('Fix', 'Allow popups for this site, then try again', false);
     else if (/unauthorized-domain/.test(le.code || ''))
       row('Fix', 'Add ' + location.hostname + ' in Firebase → Auth → Settings', false);
+    else if (/network-request-failed/.test(le.code || '')) {
+      if (_isIOS && _standalone)
+        row('Fix', 'iOS blocks sign-in in a Home Screen app. Open the link in Safari, sign in there, then reopen.', false);
+      else
+        row('Fix', 'Check the connection. Turn off Private Relay / Low Data Mode / content blockers and retry.', false);
+    }
   }
 
   document.getElementById('auth-diag-result').innerHTML =
