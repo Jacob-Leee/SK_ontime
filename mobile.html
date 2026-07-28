@@ -1981,7 +1981,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-29-d';
+const APP_BUILD     = '2026-07-29-e';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7729,15 +7729,38 @@ function _showInAppBanner(html, orderId) {
   if (!host) {
     host = document.createElement('div');
     host.id = 'notif-banner-host';
-    host.style.cssText = 'position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;z-index:99998;display:flex;flex-direction:column;gap:8px;pointer-events:none';
+    // Bottom, above the tab bar — NOT the top. At the top it sat directly over
+    // the header and hid Switch User, search and the drawer button; if anything
+    // then stopped the removal timer the app was unreachable and looked frozen.
+    host.style.cssText =
+      'position:fixed;left:10px;right:10px;bottom:calc(74px + env(safe-area-inset-bottom));' +
+      'z-index:99996;display:flex;flex-direction:column;gap:8px;pointer-events:none';
     document.body.appendChild(host);
   }
+  // Never stack more than three — a burst used to pile up and blanket the screen.
+  while (host.children.length >= 3) host.removeChild(host.firstChild);
+
   const card = document.createElement('div');
-  card.style.cssText = 'pointer-events:auto;background:#fff;border-left:4px solid #C9A84C;border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:13px;color:#222;animation:notifSlide .25s ease-out';
-  card.innerHTML = html;
-  card.onclick = () => { if (orderId) _openOrderFromNotification(orderId); card.remove(); };
+  card.style.cssText = 'pointer-events:auto;position:relative;background:#fff;border-left:4px solid #C9A84C;' +
+    'border-radius:12px;padding:12px 34px 12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.18);' +
+    'font-size:13px;color:#222;animation:notifSlide .25s ease-out';
+  card.innerHTML = html +
+    '<span style="position:absolute;top:6px;right:8px;width:24px;height:24px;display:flex;' +
+    'align-items:center;justify-content:center;color:#999;font-size:17px;line-height:1">&times;</span>';
+
+  const kill = () => { if (card.parentNode) card.remove(); };
+  card.onclick = (ev) => {
+    // The × is part of the card, so distinguish dismiss from open by position.
+    const r = card.getBoundingClientRect();
+    if (ev.clientX > r.right - 40 && ev.clientY < r.top + 34) { kill(); return; }
+    if (orderId) _openOrderFromNotification(orderId);
+    kill();
+  };
   host.appendChild(card);
-  setTimeout(() => { card.style.opacity = '0'; card.style.transition = 'opacity .4s'; setTimeout(() => card.remove(), 400); }, 9000);
+
+  // Belt and braces: a CSS animation removes it even if the timer never runs.
+  setTimeout(() => { card.style.transition = 'opacity .4s'; card.style.opacity = '0'; setTimeout(kill, 400); }, 7000);
+  setTimeout(kill, 12000);
 }
 
 function _playNotifSound() {

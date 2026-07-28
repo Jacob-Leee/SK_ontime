@@ -1898,7 +1898,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-29-c';
+const APP_BUILD = '2026-07-29-e';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -6853,12 +6853,17 @@ function _showInAppBanner(html, orderId) {
     host.style.cssText = 'position:fixed;top:14px;right:14px;z-index:99998;display:flex;flex-direction:column;gap:8px;max-width:340px;pointer-events:none';
     document.body.appendChild(host);
   }
+  // Cap the stack — a burst used to blanket the corner of the screen.
+  while (host.children.length >= 4) host.removeChild(host.firstChild);
+
   const card = document.createElement('div');
   card.style.cssText = 'pointer-events:auto;background:var(--surface,#fff);border:1px solid var(--accent,#C9A84C);border-left:4px solid var(--accent,#C9A84C);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.18);font-size:13px;color:var(--text,#222);cursor:pointer;animation:notifSlide 0.25s ease-out';
   card.innerHTML = html;
-  card.onclick = () => { if (orderId) _openOrderFromNotification(orderId); card.remove(); };
+  const kill = () => { if (card.parentNode) card.remove(); };
+  card.onclick = () => { if (orderId) _openOrderFromNotification(orderId); kill(); };
   host.appendChild(card);
-  setTimeout(() => { card.style.opacity = '0'; card.style.transition = 'opacity 0.4s'; setTimeout(() => card.remove(), 400); }, 9000);
+  setTimeout(() => { card.style.opacity = '0'; card.style.transition = 'opacity 0.4s'; setTimeout(kill, 400); }, 9000);
+  setTimeout(kill, 14000);   // fallback if the first timer is ever missed
 }
 
 // Short two-tone chime via Web Audio — no asset file, no autoplay-policy issues
