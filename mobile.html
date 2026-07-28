@@ -466,7 +466,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
      z-index sits above #mob-pin-overlay (99999) on purpose: sign-in is the
      outer gate, the existing role/PIN flow runs behind it and only becomes
      visible once an allow-listed account is confirmed. -->
-<div id="auth-gate" style="display:flex;position:fixed;inset:0;z-index:100001;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;padding-top:calc(28px + env(safe-area-inset-top))">
+<div id="auth-gate" style="display:none;position:fixed;inset:0;z-index:100001;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;padding-top:calc(28px + env(safe-area-inset-top))">
   <div style="text-align:center;margin-bottom:32px">
     <img src="icon-192.png" alt="" width="66" height="66" style="border-radius:16px;margin-bottom:14px">
     <div style="font-size:24px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#C9A84C">ON</span>TIME</div>
@@ -1940,12 +1940,13 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 const AUTH_REQUIRED = false;
 const APP_BUILD     = '2026-07-28-f';
 
-// The gate ships visible so it covers the app from first paint. Raising it at
-// the end of the script instead let the order list render and be readable for a
-// beat first. Take it down here when sign-in is not enforced.
-if (!AUTH_REQUIRED) {
+// The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
+// the flag is false meant any error earlier in this script left a full-screen
+// overlay stuck over the app with no way past it — indistinguishable from a
+// freeze. When the flag is flipped to true, flip the markup default with it.
+if (AUTH_REQUIRED) {
   const _g = document.getElementById('auth-gate');
-  if (_g) _g.style.display = 'none';
+  if (_g) _g.style.display = 'flex';
 }
 
 const DEFAULT_UI_LABELS = {
@@ -7391,19 +7392,28 @@ function detectNewAssignments(prevOrders) {
   const prevMap = {};
   (prevOrders || []).forEach(o => { prevMap[o.id] = o; });
 
+  // Tracks whether the seen-map actually changed. Without this the "nothing
+  // happened" path still wrote to localStorage on every 3-second sync — a
+  // synchronous main-thread write over a map of every order, which is what
+  // made the phone stutter.
+  let _seenChanged = false;
   let fresh = [];
   DB.orders.forEach(o => {
     const mine = (o.subbies || '').trim() === NOTIF.me;
-    if (!mine) { if (NOTIF.seen[o.id]) delete NOTIF.seen[o.id]; return; }
+    if (!mine) {
+      // Un-assigned from me → forget the key so a future re-assign fires (R4)
+      if (NOTIF.seen[o.id]) { delete NOTIF.seen[o.id]; _seenChanged = true; }
+      return;
+    }
     if (['closed', 'cancelled', 'completed'].includes(o.status)) return;
     const key = _assignKey(o);
     if (NOTIF.seen[o.id] === key) return;
-    if (NOTIF.selfAssigned.has(o.id)) { NOTIF.seen[o.id] = key; return; }
-    NOTIF.seen[o.id] = key;
+    if (NOTIF.selfAssigned.has(o.id)) { NOTIF.seen[o.id] = key; _seenChanged = true; return; }
+    NOTIF.seen[o.id] = key; _seenChanged = true;
     fresh.push({ order: o, isNew: !prevMap[o.id] });
   });
 
-  if (!fresh.length) { _notifSave(); return; }
+  if (!fresh.length) { if (_seenChanged) _notifSave(); return; }
 
   const now = _nowSafe();
   fresh.forEach(f => {
@@ -7916,6 +7926,76 @@ async function fcmInit(userGroup) {
 // ─── PAGE LOAD: lightweight — foreground handler only ─────────────────────────
 // Does NOT re-register SW or call getToken on every load.
 // Full fcmInit runs: (a) on explicit enable, or (b) once per day to refresh token.
+// ══════════════════════════════════════════════════════════
+// ANDROID / PWA BACK BUTTON
+// ----------------------------------------------------------
+// There was no history handling at all: with a modal open, pressing back left
+// the page entirely (or, in a standalone PWA, did nothing) instead of closing
+// the modal. Both read as "the app froze".
+//
+// A sentinel history entry is pushed whenever something is open, so back pops
+// that instead of navigating. Only when nothing is open does back behave
+// normally and leave the app.
+// ══════════════════════════════════════════════════════════
+
+function _topOverlay() {
+  // Ordered outermost-first: whatever is visually on top closes first.
+  const gate = document.getElementById('auth-gate');
+  if (gate && gate.style.display === 'flex' && !AUTH_REQUIRED) return () => _authHide();
+
+  const sheet = document.getElementById('mob-notif-sheet');
+  if (sheet && sheet.style.display === 'flex') return () => closeNotifSheet();
+
+  const openModal = [...document.querySelectorAll('.modal-overlay')]
+    .reverse()
+    .find(m => m.classList.contains('active') || m.style.display === 'flex' || m.style.display === 'block');
+  if (openModal) return () => { openModal.classList.remove('active'); openModal.style.display = 'none'; };
+
+  const search = document.getElementById('mob-search-overlay');
+  if (search && search.style.display && search.style.display !== 'none') {
+    return () => { search.style.display = 'none'; };
+  }
+
+  const drawer = document.getElementById('mob-drawer');
+  if (drawer && drawer.classList.contains('open')) return () => mobDrawerClose();
+
+  return null;
+}
+
+let _backGuardArmed = false;
+
+function _armBackGuard() {
+  if (_backGuardArmed) return;
+  _backGuardArmed = true;
+  history.pushState({ skGuard: true }, '');
+}
+
+window.addEventListener('popstate', () => {
+  _backGuardArmed = false;
+  const close = _topOverlay();
+  if (close) {
+    close();
+    _armBackGuard();          // stay guarded while anything else is still open
+  }
+  // Nothing open → let the navigation proceed; the entry is already popped.
+});
+
+// Arm whenever an overlay appears. A MutationObserver is used rather than
+// patching every open/close call site, so overlays added later are covered too.
+(function watchOverlays() {
+  const check = () => { if (_topOverlay()) _armBackGuard(); };
+  const obs = new MutationObserver(check);
+  const start = () => {
+    obs.observe(document.body, {
+      subtree: true, attributes: true,
+      attributeFilter: ['style', 'class'],
+    });
+    check();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+
 // Bridges the notification module to this file's existing fcmInit(). The
 // desktop calls fcmMaintain() after identity changes and on load; without this
 // shim those calls would hit an undefined function and the token would stay

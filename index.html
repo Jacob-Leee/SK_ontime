@@ -6503,13 +6503,18 @@ function detectNewAssignments(prevOrders) {
   const prevMap = {};
   (prevOrders || []).forEach(o => { prevMap[o.id] = o; });
 
+  // Tracks whether the seen-map actually changed. Without this the "nothing
+  // happened" path still wrote to localStorage on every 3-second sync — a
+  // synchronous main-thread write over a map of every order, which is what
+  // made the phone stutter.
+  let _seenChanged = false;
   let fresh = [];
   DB.orders.forEach(o => {
     const mine = (o.subbies || '').trim() === NOTIF.me;   // R2
 
     if (!mine) {
       // Un-assigned from me → forget the key so a future re-assign fires (R4)
-      if (NOTIF.seen[o.id]) delete NOTIF.seen[o.id];
+      if (NOTIF.seen[o.id]) { delete NOTIF.seen[o.id]; _seenChanged = true; }
       return;
     }
     // Never alert for finished work
@@ -6518,10 +6523,10 @@ function detectNewAssignments(prevOrders) {
     const key = _assignKey(o);
     if (NOTIF.seen[o.id] === key) return;                 // R3 — already told
     if (NOTIF.selfAssigned.has(o.id)) {                   // R5 — I did this
-      NOTIF.seen[o.id] = key;
+      NOTIF.seen[o.id] = key; _seenChanged = true;
       return;
     }
-    NOTIF.seen[o.id] = key;
+    NOTIF.seen[o.id] = key; _seenChanged = true;
     const prev = prevMap[o.id];
     fresh.push({
       order: o,
@@ -6530,7 +6535,7 @@ function detectNewAssignments(prevOrders) {
     });
   });
 
-  if (!fresh.length) { _notifSave(); return; }
+  if (!fresh.length) { if (_seenChanged) _notifSave(); return; }
 
   // Inbox entries (always, regardless of OS permission — R8)
   const now = _nowSafe();
