@@ -411,13 +411,18 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   <div id="main">
     <div id="header">
       <h1 id="page-title">Orders</h1>
-      <div style="display:flex;gap:10px;align-items:center">
-        <a id="dcj-portal-link" href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener" class="btn btn-secondary" style="text-decoration:none;font-size:12.5px;border-color:rgba(79,126,248,0.4);color:var(--gold-dark)">
-          &#127974; <span id="navlabel-dcj">DCJ Portal</span>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:0.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-        </a>
-        <div class="header-actions" id="header-actions"></div>
-        <div id="auth-badge" style="display:none;align-items:center;gap:7px;padding:0 4px"></div>
+      <!-- Header: status on the left of the divider, one menu on the right.
+           Thirteen separate controls up here meant the things that matter —
+           whether sync is alive, whether an order is waiting — were competing
+           with buttons pressed once a month. Those moved into the menu. -->
+      <div style="display:flex;gap:9px;align-items:center">
+
+        <!-- ── STATUS ── -->
+        <div title="동기화 상태" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 8px;background:var(--cream2);border-radius:7px;border:1px solid var(--border2)">
+          <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
+          <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
+        </div>
+
         <!-- Notification bell -->
         <div style="position:relative;display:none" id="notif-bell">
           <button onclick="toggleNotifPanel(event)" title="내 알림"
@@ -439,40 +444,60 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
             <div id="notif-list" style="max-height:370px;overflow-y:auto"></div>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div title="동기화 상태 (주소는 서버에서 자동 적용)" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 2px">
-            <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
-            Cloud Sync &middot; <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
-          </div>
-          <button id="undo-btn" onclick="undo()" disabled title="Nothing to undo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+
+        <!-- Undo stays out here: it is the one control you reach for in a hurry,
+             right after realising a mistake. It hides itself when unavailable. -->
+        <button id="undo-btn" onclick="undo()" disabled title="실행 취소" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
+        </button>
+
+        <div style="width:1px;height:22px;background:var(--border2)"></div>
+
+        <!-- ── PRIMARY ACTION ── -->
+        <div class="header-actions" id="header-actions"></div>
+
+        <!-- ── ONE MENU ── -->
+        <div style="position:relative">
+          <button onclick="toggleHeaderMenu(event)" id="hdr-menu-btn" title="메뉴"
+            style="display:flex;align-items:center;gap:7px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:0 9px 0 5px;height:34px;cursor:pointer;font-family:inherit">
+            <span id="hdr-menu-avatar" style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:10.5px;font-weight:800;overflow:hidden;flex-shrink:0">SK</span>
+            <span id="hdr-menu-name" style="font-size:12px;font-weight:600;color:var(--text2);max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text3);flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
-          <button id="redo-btn" onclick="redo()" disabled title="Nothing to redo" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:default;opacity:0.35">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)" style="transform:scaleX(-1)"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.49-4.5"/></svg>
-          </button>
-          <button onclick="cloudForcePush()" title="Force Push — overwrite everyone's data with your current state" style="display:flex;align-items:center;gap:5px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:0 10px;height:34px;cursor:pointer;font-size:12px;font-family:inherit;color:var(--text2);white-space:nowrap">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--orange)"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
-            Force Push
-          </button>
-          <button onclick="openSettingsModal()" title="App Settings — rename menu/button labels" style="display:flex;align-items:center;justify-content:center;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;width:34px;height:34px;cursor:pointer">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          </button>
-          <div style="position:relative">
-            <button onclick="toggleDataMenu(event)" title="Import / Export" style="display:flex;align-items:center;gap:6px;background:var(--cream2);border:1px solid var(--border2);border-radius:7px;padding:7px 10px;cursor:pointer;font-family:inherit">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text2)"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text3)"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <div id="data-menu" style="display:none;position:absolute;right:0;top:40px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);width:200px;z-index:100;overflow:hidden">
-              <div onclick="document.getElementById('import-file-input').click(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--blue)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Import Data Backup
-              </div>
-              <div onclick="exportData(); closeDataMenu();" style="padding:10px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--gold-dark)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Export Data Backup
-              </div>
-              <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importDataFile(this.files[0])">
+
+          <div id="hdr-menu" onclick="event.stopPropagation()"
+            style="display:none;position:absolute;right:0;top:40px;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:0 12px 32px rgba(0,0,0,0.16);width:232px;z-index:9000;overflow:hidden;padding:5px 0">
+
+            <div id="hdr-menu-who" style="padding:8px 14px 10px;border-bottom:1px solid var(--border);margin-bottom:4px"></div>
+
+            <a id="dcj-portal-link" href="https://portal.dcj.nsw.gov.au/login/login.htm" target="_blank" rel="noopener"
+               style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap;text-decoration:none" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
+              &#127974; <span id="navlabel-dcj" style="flex:1">DCJ Portal</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.45"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+
+            <div style="height:1px;background:var(--border);margin:4px 0"></div>
+
+            <div onclick="exportCSV();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#128202; <span id="hdrm-csv">Export CSV</span></div>
+            <div onclick="promptMonthlyPDF();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#128196; Export PDF</div>
+            <div onclick="openEmailImport();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#128231; <span id="hdrm-email">Import Email</span></div>
+
+            <div style="height:1px;background:var(--border);margin:4px 0"></div>
+
+            <div onclick="redo();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#8635; 다시 실행</div>
+            <div onclick="cloudForcePush();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--orange)"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+              Force Push
             </div>
+            <div onclick="document.getElementById('import-file-input').click();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#128229; 백업 가져오기</div>
+            <div onclick="exportData();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#128228; 백업 내보내기</div>
+
+            <div style="height:1px;background:var(--border);margin:4px 0"></div>
+
+            <div onclick="openSettingsModal();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#9881; 설정</div>
+            <div id="hdr-menu-signout" onclick="authSignOut()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap;color:var(--red);display:none" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#10162; 로그아웃</div>
+
+            <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importDataFile(this.files[0])">
           </div>
         </div>
       </div>
@@ -1863,7 +1888,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-28-g';
+const APP_BUILD = '2026-07-28-h';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2614,6 +2639,7 @@ function applyUiLabels() {
   // URLs
   const dcj = document.getElementById('dcj-portal-link');
   if (dcj) dcj.href = L.dcjPortalUrl;
+  try { renderHeaderMenu(); } catch (e) {}
 }
 
 const COLOR_FIELDS = Object.keys(DEFAULT_UI_COLORS);
@@ -2717,6 +2743,57 @@ function resetUiLabels() {
   toast('Reset to defaults', 'success');
 }
 
+// ── Unified header menu ──
+function toggleHeaderMenu(e) {
+  if (e) e.stopPropagation();
+  const m = document.getElementById('hdr-menu');
+  if (!m) return;
+  const open = m.style.display !== 'block';
+  m.style.display = open ? 'block' : 'none';
+  if (open) renderHeaderMenu();
+}
+function closeHeaderMenu() {
+  const m = document.getElementById('hdr-menu');
+  if (m) m.style.display = 'none';
+}
+document.addEventListener('click', () => closeHeaderMenu());
+
+function renderHeaderMenu() {
+  // Labels stay renameable from Settings, so read them here rather than baking
+  // them into the markup.
+  const csv = document.getElementById('hdrm-csv');
+  if (csv) csv.textContent = DB.uiLabels.btnExportCsv;
+  const eml = document.getElementById('hdrm-email');
+  if (eml) eml.textContent = DB.uiLabels.btnImportEmail;
+
+  const who = document.getElementById('hdr-menu-who');
+  const out = document.getElementById('hdr-menu-signout');
+  if (!who) return;
+  if (AUTH.user) {
+    const name = (AUTH.entry && AUTH.entry.name) || AUTH.user.displayName || '';
+    who.innerHTML =
+      `<div style="font-size:12.5px;font-weight:700;color:var(--text)">${esc(name || AUTH.user.email)}</div>` +
+      (name ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${esc(AUTH.user.email)}</div>` : '');
+    if (out) out.style.display = 'flex';
+  } else {
+    who.innerHTML = `<div style="font-size:11.5px;color:var(--text3)">로그인되지 않음</div>`;
+    if (out) out.style.display = 'none';
+  }
+}
+
+function renderHeaderIdentity() {
+  const av = document.getElementById('hdr-menu-avatar');
+  const nm = document.getElementById('hdr-menu-name');
+  if (!av || !nm) return;
+  const name = (AUTH.entry && AUTH.entry.name) || NOTIF.me || '';
+  nm.textContent = name || '메뉴';
+  if (AUTH.user && AUTH.user.photoURL) {
+    av.innerHTML = `<img src="${esc(AUTH.user.photoURL)}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+  } else {
+    av.textContent = (name || 'SK').replace(/^SK_/, '').slice(0, 2).toUpperCase();
+  }
+}
+
 // ── Header data menu (Cloud Sync / Import / Export) ──
 function toggleDataMenu(e) {
   if (e) e.stopPropagation();
@@ -2789,25 +2866,30 @@ function showPage(page) {
   currentPage = page;
   document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
 
+  // Only the primary action for the current page lives in the header now.
+  // Everything else moved into the single menu — see toggleHeaderMenu.
   const actions = document.getElementById('header-actions');
   const newBtn  = `<button class="btn btn-primary" onclick="openOrderModal()">${DB.uiLabels.btnNewOrder}</button>`;
-  const csvBtn  = `<button class="btn btn-secondary" onclick="exportCSV()">📊 ${DB.uiLabels.btnExportCsv}</button>`;
-  const pdfBtn  = `<button class="btn btn-secondary" onclick="promptMonthlyPDF()" title="Export monthly report as PDF">📄 Export PDF</button>`;
-  const importBtn = `<button class="btn btn-secondary" onclick="openEmailImport()">📧 ${DB.uiLabels.btnImportEmail}</button>`;
+  const ORDER_PAGES = ['all','orders','vac','mpw','completed','claims','closed','issues','cancelled'];
 
-  if (page === 'all')       { actions.innerHTML = csvBtn + pdfBtn + importBtn + newBtn; renderAll(); }
-  else if (page === 'orders')    { actions.innerHTML = csvBtn + pdfBtn + importBtn + newBtn; renderOrders(); }
-  else if (page === 'vac')       { actions.innerHTML = csvBtn + pdfBtn + importBtn + newBtn; renderVAC(); }
-  else if (page === 'mpw')       { actions.innerHTML = csvBtn + pdfBtn + importBtn + newBtn; renderMPW(); }
-  else if (page === 'completed') { actions.innerHTML = csvBtn + pdfBtn; renderCompleted(); }
-  else if (page === 'claims')    { actions.innerHTML = csvBtn + pdfBtn; renderClaims(); }
-  else if (page === 'closed')    { actions.innerHTML = csvBtn + pdfBtn; renderClosed(); }
-  else if (page === 'issues')    { actions.innerHTML = csvBtn + pdfBtn; renderIssues(); }
-  else if (page === 'cancelled') { actions.innerHTML = csvBtn + pdfBtn; renderCancelled(); }
-  else if (page === 'subbies')   { actions.innerHTML = ''; subActivePerson = 'All'; renderSubbiesPage(); }
-  else if (page === 'calendar')  { actions.innerHTML = `<button class="btn btn-primary" onclick="openCalEventModal()">+ New Event</button>`; renderCalendar(); }
-  else if (page === 'dashboard') { actions.innerHTML = pdfBtn; renderDashboard(); }
-  else if (page === 'sor')       { actions.innerHTML = `<button class="btn btn-primary" onclick="openSORModal()">+ Add SOR Code</button>`; renderSOR(); }
+  if (ORDER_PAGES.includes(page)) actions.innerHTML = newBtn;
+  else if (page === 'calendar')   actions.innerHTML = `<button class="btn btn-primary" onclick="openCalEventModal()">+ New Event</button>`;
+  else if (page === 'sor')        actions.innerHTML = `<button class="btn btn-primary" onclick="openSORModal()">+ Add SOR Code</button>`;
+  else                            actions.innerHTML = '';
+
+  if      (page === 'all')       renderAll();
+  else if (page === 'orders')    renderOrders();
+  else if (page === 'vac')       renderVAC();
+  else if (page === 'mpw')       renderMPW();
+  else if (page === 'completed') renderCompleted();
+  else if (page === 'claims')    renderClaims();
+  else if (page === 'closed')    renderClosed();
+  else if (page === 'issues')    renderIssues();
+  else if (page === 'cancelled') renderCancelled();
+  else if (page === 'subbies')   { subActivePerson = 'All'; renderSubbiesPage(); }
+  else if (page === 'calendar')  renderCalendar();
+  else if (page === 'dashboard') renderDashboard();
+  else if (page === 'sor')       renderSOR();
   renderTabSummary(page);
   updateSidebar();
 }
@@ -7306,18 +7388,8 @@ function _authAfterSignIn() {
   try { fcmMaintain(); } catch (e) {}
 }
 
-function renderAuthBadge() {
-  const el = document.getElementById('auth-badge');
-  if (!el) return;
-  if (!AUTH_REQUIRED || !AUTH.user) { el.style.display = 'none'; return; }
-  el.style.display = 'flex';
-  const photo = AUTH.user.photoURL;
-  const name  = (AUTH.entry && AUTH.entry.name) || AUTH.user.displayName || AUTH.user.email;
-  el.innerHTML =
-    (photo ? `<img src="${esc(photo)}" alt="" width="22" height="22" style="border-radius:50%">` : '') +
-    `<span style="font-size:12px;color:var(--text2);font-weight:600">${esc(name)}</span>` +
-    `<button onclick="authSignOut()" title="로그아웃" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;text-decoration:underline;padding:0 2px">로그아웃</button>`;
-}
+// The standalone badge became part of the header menu button.
+function renderAuthBadge() { renderHeaderIdentity(); }
 
 // ── Settings: allowlist management (admins only) ──
 async function authLoadAllowlist() {
@@ -8460,6 +8532,7 @@ if (!AUTH_REQUIRED) initLock();
 // Seeding here (not on first alert) is what guarantees an existing user who
 // turns notifications on does not get a popup for every order already theirs.
 renderNotifBell();
+renderHeaderIdentity();
 if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
 
 // Background push upkeep — attaches the foreground handler and refreshes a
