@@ -332,7 +332,11 @@ function _stampWrap(ctx, lines, maxW) {
   return out;
 }
 
-function stampPhoto(file, order, maxDim = 1600, quality = 0.82) {
+// 1100px at q0.55 lands around 120-180 KB — roughly a quarter of what 1600/0.82
+// produced, and still far more than enough to show a cracked tile, a leak or a
+// wrong fitting. The stamp scales with the image width, so it stays legible.
+// Site reception is the bottleneck here, not the camera.
+function stampPhoto(file, order, maxDim = 1100, quality = 0.55) {
   return new Promise(resolve => {
     if (!/^image\//.test(file.type)) return resolve(file);
     const img = new Image();
@@ -426,7 +430,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-30-p';
+const APP_BUILD = '2026-07-30-r';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -855,7 +859,28 @@ async function sbPhotoChosen(input) {
     // Stamp instead of just shrinking — stampPhoto resizes as part of the same
     // canvas pass, so the photo is only re-encoded once.
     const done = await stampPhoto(f, _currentOrder);
-    _photos.push({ file: done, url: URL.createObjectURL(done) });
+    const entry = { file: done, url: URL.createObjectURL(done), state: 'uploading', url_remote: null };
+    _photos.push(entry);
+    sbRenderPhotos();
+    // Upload straight away, while the note is still being typed. Submit then
+    // has nothing left to wait for on a normal connection.
+    entry.task = sbUploadOne(entry);
+  }
+  sbRenderPhotos();
+}
+
+async function sbUploadOne(entry) {
+  try {
+    if (!_storage) throw new Error('Storage not ready');
+    const ref = _storage.ref('issues/' + (_currentOrder ? _currentOrder.id : 'unknown') + '/' +
+                             Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.jpg');
+    await ref.put(entry.file);
+    entry.url_remote = await ref.getDownloadURL();
+    entry.state = 'done';
+  } catch (e) {
+    console.error('[SB] photo upload failed:', e.code || e.message, e);
+    entry.state = 'failed';
+    entry.err = e;
   }
   sbRenderPhotos();
 }
@@ -869,9 +894,13 @@ function sbRemovePhoto(i) {
 
 function sbRenderPhotos() {
   const grid = document.getElementById('photo-grid');
-  if (grid) grid.innerHTML = _photos.map((p, i) =>
-    '<div class="ph-cell"><img src="' + p.url + '" alt="">' +
-    '<button class="ph-del" onclick="sbRemovePhoto(' + i + ')">&times;</button></div>').join('');
+  if (grid) grid.innerHTML = _photos.map((p, i) => {
+    const mark = p.state === 'done'   ? ''
+               : p.state === 'failed' ? '<div style="position:absolute;inset:0;background:rgba(255,59,48,.55);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">retry</div>'
+               : '<div style="position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">…</div>';
+    return '<div class="ph-cell"><img src="' + p.url + '" alt="">' + mark +
+      '<button class="ph-del" onclick="sbRemovePhoto(' + i + ')">&times;</button></div>';
+  }).join('');
   const c = document.getElementById('photo-count');
   if (c) c.textContent = _photos.length ? '(' + _photos.length + '/' + MAX_PHOTOS + ')' : '';
   const b = document.getElementById('add-photo-btn');
@@ -978,32 +1007,23 @@ async function sbSubmitIssue() {
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
 
-  const urls = [];
-  let photoFailed = false;
-
-  // Photos are uploaded first, but a failure here must NOT lose the report.
-  // Losing "there is asbestos behind this wall" because Storage rules were not
-  // published is far worse than losing the picture of it.
-  for (let i = 0; i < _photos.length; i++) {
-    btn.textContent = 'Uploading photo ' + (i + 1) + '/' + _photos.length;
-    try {
-      const ref = _storage.ref('issues/' + _currentOrder.id + '/' + Date.now() + '_' + i + '.jpg');
-      await ref.put(_photos[i].file);
-      urls.push(await ref.getDownloadURL());
-    } catch (e) {
-      console.warn('[REPORT] photo upload failed:', e.code || e.message);
-      photoFailed = true;
-      break;
-    }
-  }
-
   try {
-    btn.textContent = 'Submitting…';
+    // Photos started uploading the moment they were added, so this usually
+    // resolves instantly. Only a just-added photo is still in flight.
+    if (_photos.length) {
+      btn.textContent = _photos.some(p => p.state === 'uploading') ? 'Finishing photos…' : 'Submitting…';
+      await Promise.all(_photos.map(p => p.task).filter(Boolean));
+    } else {
+      btn.textContent = 'Submitting…';
+    }
+    const urls   = _photos.filter(p => p.url_remote).map(p => p.url_remote);
+    const failed = _photos.filter(p => p.state === 'failed');
+
     await _sbWriteReport('issue', note, urls);
 
-    if (photoFailed) {
-      alert('The issue was sent, but the photos failed to upload.\n\n' +
-            'Ask the office to check the Storage rules.');
+    if (failed.length) {
+      const c = (failed[0].err && (failed[0].err.code || failed[0].err.message)) || '';
+      alert('The issue was sent, but ' + failed.length + ' photo(s) failed to upload.\n\n' + c);
     } else {
       sbShowToast('Issue sent to the office ✓');
     }

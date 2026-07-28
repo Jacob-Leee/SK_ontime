@@ -71,7 +71,11 @@ function _stampWrap(ctx, lines, maxW) {
   return out;
 }
 
-function stampPhoto(file, order, maxDim = 1600, quality = 0.82) {
+// 1100px at q0.55 lands around 120-180 KB — roughly a quarter of what 1600/0.82
+// produced, and still far more than enough to show a cracked tile, a leak or a
+// wrong fitting. The stamp scales with the image width, so it stays legible.
+// Site reception is the bottleneck here, not the camera.
+function stampPhoto(file, order, maxDim = 1100, quality = 0.55) {
   return new Promise(resolve => {
     if (!/^image\//.test(file.type)) return resolve(file);
     const img = new Image();
@@ -741,7 +745,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
         </div>
         <div style="flex:1;pointer-events:none">
           <div style="font-size:16px;font-weight:700;color:#1C1C1E">View subcontractor</div>
-          <div style="font-size:12px;color:#8A8A8E;margin-top:1px">See one subcontractor\u2019s orders</div>
+          <div style="font-size:12px;color:#8A8A8E;margin-top:1px">See one subcontractor&rsquo;s orders</div>
         </div>
         <div id="mob-role-tick-sub" style="width:22px;height:22px;border-radius:50%;border:2px solid #D1D1D6;display:flex;align-items:center;justify-content:center;flex-shrink:0;pointer-events:none"></div>
       </div>
@@ -894,6 +898,19 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
 <!-- Drawer overlay -->
 <div id="mob-overlay" onclick="mobDrawerClose()"></div>
+<!-- Entry-screen event detail -->
+<div id="mob-ev-modal" onclick="if(event.target===this)mobEntryEventClose(event)"
+  style="display:none;position:fixed;inset:0;z-index:12000;background:rgba(0,0,0,.45);
+  align-items:center;justify-content:center;padding:22px">
+  <div style="background:#fff;border-radius:18px;width:100%;max-width:340px;max-height:78vh;
+    overflow-y:auto;padding:18px 18px 14px;box-shadow:0 18px 50px rgba(0,0,0,.25)">
+    <div id="mob-ev-body"></div>
+    <button onclick="mobEntryEventClose(event)" ontouchend="mobEntryEventClose(event)"
+      style="width:100%;margin-top:14px;padding:13px;border:none;border-radius:12px;background:#1C1C1E;
+      color:#fff;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer">Close</button>
+  </div>
+</div>
+
 <div id="mob-drawer">
   <div id="mob-drawer-header">
     <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.45);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">SK Ontime</div>
@@ -2231,7 +2248,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-p';
+const APP_BUILD     = '2026-07-30-r';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -3934,9 +3951,34 @@ async function srChosen(input) {
   input.value = '';
   if (!picked.length) return;
   const room = SR_MAX - _srPhotos.length;
+
   for (const f of picked.slice(0, room)) {
     const done = await stampPhoto(f, _srOrder);
-    _srPhotos.push({ file: done, url: URL.createObjectURL(done) });
+    const entry = { file: done, url: URL.createObjectURL(done), state: 'uploading', url_remote: null };
+    _srPhotos.push(entry);
+    srRender();
+    // Start the upload now, while the person is still typing the note. By the
+    // time they press Submit it is usually finished, so the button responds
+    // immediately instead of sitting on "Uploading photo 1/4".
+    entry.task = srUploadOne(entry);
+  }
+  srRender();
+}
+
+// One upload, tracked on the entry so the thumbnail can show its state.
+async function srUploadOne(entry) {
+  try {
+    if (!firebase.storage) throw new Error('Storage SDK not loaded — redeploy mobile.html');
+    const st = firebase.storage(firebase.apps[0]);
+    const ref = st.ref('issues/' + (_srOrder ? _srOrder.id : 'unknown') + '/' +
+                       Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.jpg');
+    await ref.put(entry.file);
+    entry.url_remote = await ref.getDownloadURL();
+    entry.state = 'done';
+  } catch (e) {
+    console.error('[SR] photo upload failed:', e.code || e.message, e);
+    entry.state = 'failed';
+    entry.err = e;
   }
   srRender();
 }
@@ -3956,50 +3998,41 @@ function srClear() {
 
 function srRender() {
   const g = document.getElementById('sr-grid');
-  if (g) g.innerHTML = _srPhotos.map((p, i) =>
-    '<div style="position:relative;aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--cream2)">' +
-    '<img src="' + p.url + '" style="width:100%;height:100%;object-fit:cover;display:block">' +
-    '<button onclick="srRemove(' + i + ')" style="position:absolute;top:3px;right:3px;width:20px;height:20px;' +
-    'border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0">&times;</button></div>'
-  ).join('');
+  if (g) g.innerHTML = _srPhotos.map((p, i) => {
+    const mark = p.state === 'done'   ? ''
+               : p.state === 'failed' ? '<div style="position:absolute;inset:0;background:rgba(220,38,38,.55);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700">retry</div>'
+               : '<div style="position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">…</div>';
+    return '<div style="position:relative;aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--cream2)">' +
+      '<img src="' + p.url + '" style="width:100%;height:100%;object-fit:cover;display:block">' + mark +
+      '<button onclick="srRemove(' + i + ')" style="position:absolute;top:3px;right:3px;width:20px;height:20px;' +
+      'border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0;z-index:2">&times;</button></div>';
+  }).join('');
   const c = document.getElementById('sr-count');
   if (c) c.textContent = _srPhotos.length ? '(' + _srPhotos.length + '/' + SR_MAX + ')' : '';
 }
 
 async function srSubmit(type) {
   if (!_srOrder) return;
-  const sendBtn = document.getElementById('sr-send');
-  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
-  const note = (document.getElementById('sr-note').value || '').trim();
+  const note = (document.getElementById('sr-note')?.value || '').trim();
   if (type === 'issue' && !note && !_srPhotos.length)
     return toast('Add a photo or a note first', 'error');
 
   const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
   if (!db) return toast('Not connected', 'error');
 
-  const urls = [];
-  let photoFailed = false, photoErr = null;
+  const sendBtn = document.getElementById('sr-send');
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
+
   try {
+    // Uploads were kicked off as each photo was added, so this is normally
+    // already resolved. Only a photo added a second ago is still in flight.
     if (_srPhotos.length) {
-      // `if (firebase.storage)` used to guard this. firebase-storage-compat.js
-      // was never loaded on mobile, so that check was always false and every
-      // photo was dropped without a word — the report arrived with none and
-      // nothing anywhere said why.
-      if (!firebase.storage) throw new Error('Storage SDK not loaded — redeploy mobile.html');
-      const st = firebase.storage(firebase.apps[0]);
-      for (let i = 0; i < _srPhotos.length; i++) {
-        try {
-          const ref = st.ref('issues/' + _srOrder.id + '/' + Date.now() + '_' + i + '.jpg');
-          await ref.put(_srPhotos[i].file);
-          urls.push(await ref.getDownloadURL());
-        } catch (e) {
-          console.error('[SR] photo upload failed:', e.code || e.message, e);
-          photoFailed = true; photoErr = e; break;
-        }
-      }
+      if (sendBtn && _srPhotos.some(p => p.state === 'uploading')) sendBtn.textContent = 'Finishing photos…';
+      await Promise.all(_srPhotos.map(p => p.task).filter(Boolean));
     }
-    // The report goes up even if the photos did not — losing what was found is
-    // worse than losing the picture of it.
+    const urls = _srPhotos.filter(p => p.url_remote).map(p => p.url_remote);
+    const failed = _srPhotos.filter(p => p.state === 'failed');
+
     const ts = Date.now();
     await db.ref('/issues/' + _srOrder.id + '/' + ts).set({
       type, note, photoUrl: urls[0] || '', photoUrls: urls, photoCount: urls.length,
@@ -4007,20 +4040,18 @@ async function srSubmit(type) {
       address: _srOrder.address || '', createdAt: ts,
       createdBy: NOTIF.me || 'SK', by: NOTIF.me || 'SK', at: ts
     });
-    // The order itself is deliberately untouched. A report from site is
-    // information, not a decision — moving the order out of Active on someone's
-    // phone tap takes that decision away from whoever is running the board.
-    // The card marker comes from the report list, so it still shows immediately.
+
+    // The order itself is deliberately untouched — a report is information, not
+    // a decision. The card marker comes from the report list.
     closeModal('sr-modal');
     srClear();
     mobRefresh();
     updateSidebar();
-    if (photoFailed) {
-      const c = (photoErr && (photoErr.code || photoErr.message)) || '';
-      alert('Report sent, but the photos did not upload.\n\n' + c +
-        (/unauthorized|permission/i.test(c)
-          ? '\n\nStorage rules need publishing — see storage.rules.'
-          : ''));
+
+    if (failed.length) {
+      const c = (failed[0].err && (failed[0].err.code || failed[0].err.message)) || '';
+      alert('Report sent, but ' + failed.length + ' photo(s) did not upload.\n\n' + c +
+        (/unauthorized|permission/i.test(c) ? '\n\nStorage rules need publishing — see storage.rules.' : ''));
     } else {
       toast(type === 'issue' ? 'Issue reported' : 'Marked as done', 'success');
     }
@@ -7618,11 +7649,12 @@ function mobRenderEntryUpcoming() {
   if (cnt) cnt.textContent = events.length + '';
   const todayStr = calYMD(new Date());
 
-  list.innerHTML = events.map(e => {
+  _entryEvents = events;
+  list.innerHTML = events.map((e, idx) => {
     const cat = (typeof CAL_CATS !== 'undefined' && CAL_CATS[e.category]) || { color: '#8E8E93' };
     const d = calParse(e.startDate);
     const isToday = e.startDate === todayStr;
-    return `<div style="display:flex;gap:10px;padding:9px 14px;border-bottom:1px solid #F0F0EC;align-items:center">
+    return `<div onclick="mobEntryEvent(${idx})" style="display:flex;gap:10px;padding:9px 14px;border-bottom:1px solid #F0F0EC;align-items:center;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05)">
       <div style="width:36px;text-align:center;flex-shrink:0">
         <div style="font-size:9px;font-weight:700;color:${isToday ? '#C9A84C' : '#8A8A8E'};text-transform:uppercase">
           ${isToday ? 'Today' : d.toLocaleDateString('en-AU', { weekday: 'short' })}</div>
@@ -7632,8 +7664,48 @@ function mobRenderEntryUpcoming() {
         <div style="font-size:12.5px;font-weight:600;color:#1C1C1E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
         <div style="font-size:10.5px;color:#8A8A8E;margin-top:1px">${esc(e.startTime || 'All day')}</div>
       </div>
+      <i class="ti ti-chevron-right" style="color:#C7C7CC;font-size:16px;flex-shrink:0"></i>
     </div>`;
   }).join('');
+}
+
+// The entry list truncates titles to one line, which is fine for scanning but
+// useless when the title IS the instruction — "Joint Site Inspection required -
+// Jul…" tells you nothing about where or with whom. Tap for the whole thing.
+let _entryEvents = [];
+function mobEntryEvent(idx) {
+  const e = _entryEvents[idx];
+  if (!e) return;
+  const cat = (typeof CAL_CATS !== 'undefined' && CAL_CATS[e.category]) || { color: '#8E8E93', label: '' };
+  const d = calParse(e.startDate);
+  const when = d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) +
+               (e.startTime ? '  ·  ' + e.startTime + (e.endTime ? ' – ' + e.endTime : '') : '  ·  All day');
+
+  const row = (k, v) => v ? `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #F0F0EC">
+      <div style="font-size:10.5px;font-weight:700;color:#8A8A8E;text-transform:uppercase;min-width:64px;flex-shrink:0;padding-top:2px">${k}</div>
+      <div style="font-size:13.5px;color:#1C1C1E;flex:1;white-space:pre-wrap;word-break:break-word">${esc(String(v))}</div>
+    </div>` : '';
+
+  document.getElementById('mob-ev-body').innerHTML =
+    `<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
+       <span style="width:9px;height:9px;border-radius:50%;background:${cat.color};flex-shrink:0"></span>
+       <span style="font-size:11px;font-weight:700;color:${cat.color};text-transform:uppercase">${esc(cat.label || e.category || 'Event')}</span>
+     </div>
+     <div style="font-size:17px;font-weight:800;line-height:1.35;color:#1C1C1E;margin-bottom:4px">${esc(e.title || '(no title)')}</div>
+     <div style="font-size:12.5px;color:#8A8A8E;margin-bottom:12px">${esc(when)}</div>` +
+    row('Notes', e.notes) +
+    (e.endDate && e.endDate !== e.startDate
+      ? row('Ends', calParse(e.endDate).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }))
+      : '') +
+    row('Repeats', (e.repeat && e.repeat !== 'none') ? e.repeat : '') +
+    row('Reminder', e.reminder && e.reminder !== 'none' ? e.reminder : '');
+
+  document.getElementById('mob-ev-modal').style.display = 'flex';
+}
+function mobEntryEventClose(ev) {
+  if (ev) { if (ev.type === 'touchend') ev.preventDefault(); ev.stopPropagation(); }
+  const m = document.getElementById('mob-ev-modal');
+  if (m) m.style.display = 'none';
 }
 
 function mobPickRole(role) {
