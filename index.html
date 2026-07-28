@@ -1892,7 +1892,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-28-r';
+const APP_BUILD = '2026-07-28-s';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -7390,6 +7390,10 @@ function _authSetup() {
   try {
     const app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(_RTDB_CONFIG);
     AUTH.auth = firebase.auth(app);
+    // Pin persistence to LOCAL explicitly. On the default the session can be
+    // dropped under storage pressure, and every drop means another Google
+    // popup — the thing this flow is meant to avoid after day one.
+    try { AUTH.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (e) {}
     AUTH.db   = firebase.database(app);
     // Attach here, not only in authInit(). If authInit() ever runs before
     // Firebase is usable it returns early, and a listener attached only there

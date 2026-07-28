@@ -1973,7 +1973,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-28-r';
+const APP_BUILD     = '2026-07-28-s';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7053,7 +7053,7 @@ function mobRoleAdmin() {
   // pick 1234 and never change it.
   const bio = document.getElementById('mob-lock-bio');
   if (bio) bio.style.display = lsGet('mob_lock_cred') ? 'block' : 'none';
-  if (lsGet('mob_lock_cred')) setTimeout(() => mobTryBiometric(false), 350);
+  if (lsGet('mob_lock_cred')) requestAnimationFrame(() => mobTryBiometric(false));
   const pe = document.getElementById('mob-pin-entry');
   pe.style.display = 'flex';
   _pinBuf = '';
@@ -7779,6 +7779,10 @@ function _authSetup() {
   try {
     const app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(_FCM_CONFIG);
     AUTH.auth = firebase.auth(app);
+    // Pin persistence to LOCAL explicitly. On the default the session can be
+    // dropped under storage pressure, and every drop means another Google
+    // popup — the thing this flow is meant to avoid after day one.
+    try { AUTH.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (e) {}
     AUTH.db   = firebase.database(app);
     _authAttachListener();
     return true;
@@ -8486,7 +8490,9 @@ function mobShowLock() {
   if (bio) bio.style.display = lsGet('mob_lock_cred') ? 'block' : 'none';
   document.getElementById('mob-pin-entry').style.display = 'flex';
   ov.style.display = 'flex';
-  if (lsGet('mob_lock_cred')) setTimeout(() => mobTryBiometric(false), 400);
+  // Fire on the next frame rather than a fixed delay: the OS sheet then appears
+  // as the lock screen paints, instead of a beat afterwards.
+  if (lsGet('mob_lock_cred')) requestAnimationFrame(() => mobTryBiometric(false));
 }
 
 function mobUnlock() {
