@@ -1897,7 +1897,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-28-x';
+const APP_BUILD = '2026-07-28-z';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -3320,7 +3320,7 @@ function saveOrder(e) {
   try {
     if (typeof NOTIF !== 'undefined' && NOTIF.me &&
         (order.subbies || '').trim() === NOTIF.me) {
-      markSelfAssigned(order.id);
+      notifyOwnAssignment(order);
     }
   } catch (e) { /* notification layer must never block saving an order */ }
 
@@ -6578,8 +6578,8 @@ function updateSidebar() {
 //      (it runs every 3 s — without this you'd get an alert every 3 s).
 //  R4. Re-assignment DOES re-fire.  If an order goes me → Mo → me, the key
 //      changes, so I get told again. A plain "already seen" set would miss this.
-//  R5. Self-assignment is silent. If I am the one who typed my own name into
-//      the form, I already know — markSelfAssigned() suppresses it.
+//  R5. Self-assignment DOES notify — it is how you confirm the save landed and
+//      went to the right person. It fires at save time, not on the next sync.
 //  R6. First run / first sync seeds the baseline silently. Without this,
 //      turning notifications on would instantly alert for every historical order.
 //  R7. Burst cap. If a device was offline for a day and 60 orders land at once,
@@ -6659,10 +6659,45 @@ function seedNotifBaseline() {
 }
 
 // R5 — called from saveOrder() when this device assigns work to itself
-function markSelfAssigned(orderId) {
-  NOTIF.selfAssigned.add(orderId);
-  const o = DB.orders.find(x => x.id === orderId);
-  if (o) { NOTIF.seen[o.id] = _assignKey(o); _notifSave(); }
+// Kept as a no-op rather than deleted: removing the suppression from the
+// detector was not enough, because this stamped the order as "already seen"
+// at save time and the detector then skipped it for a completely different
+// reason. Self-assignment now notifies like any other assignment.
+function markSelfAssigned(orderId) { /* intentionally does nothing */ }
+
+// Fires the confirmation right at save time instead of waiting for the next
+// sync. The shared _announce gate means the detector will not repeat it a few
+// seconds later when the same assignment comes back down.
+function notifyOwnAssignment(o) {
+  if (!NOTIF.enabled || !NOTIF.me) return;
+  // Guard the assignee. Without it, saving an order for SOMEONE ELSE fired a
+  // "saved to my orders" alert on my own device — the caller happened to check
+  // this at one call site but that is not something this function should trust.
+  if ((o.subbies || '').trim() !== NOTIF.me) return;
+  if (['closed', 'cancelled', 'completed'].includes(o.status)) return;
+  const at = o.subbiesAt || o.formSavedAt || o.updatedAt;
+  if (!_announce(_announceKey(o.orderNumber || o.id, o.subbies, at))) return;
+
+  NOTIF.seen[o.id] = _assignKey(o);
+  NOTIF.inbox.unshift({
+    id: 'n_' + o.id + '_' + _nowSafe(),
+    orderId: o.id,
+    orderNumber: o.orderNumber || '—',
+    address: o.address || '—',
+    area: o.area || '',
+    amount: Number(o.amount || 0),
+    at: _nowSafe(), read: false,
+  });
+  if (NOTIF.inbox.length > NOTIF.MAX_INBOX) NOTIF.inbox.length = NOTIF.MAX_INBOX;
+  _notifSave();
+
+  _fireOsNotification('내 오더로 저장됨 — ' + (o.orderNumber || ''),
+    `${o.address || ''}\n${o.area || ''} · $${Number(o.amount || 0).toFixed(2)}`, o.id);
+  _showInAppBanner(
+    `&#9989; <b>${esc(o.orderNumber || '')}</b> 내 오더로 저장됨<br><span style="opacity:.8;font-size:12px">${esc(o.address || '')}</span>`,
+    o.id);
+  _playNotifSound();
+  renderNotifBell();
 }
 
 async function requestNotifPermission() {
@@ -7328,8 +7363,9 @@ function showNotifDiagnostics() {
     '\n──────────────────────────\n' +
     '알림이 오는 조건\n' +
     '· 오더의 담당자가 "내 이름"과 정확히 같아야 합니다\n' +
-    '· 본인이 직접 배정한 오더는 알리지 않습니다\n' +
-    '· 완료/종료/취소 상태는 알리지 않습니다'
+    '· 본인이 배정한 오더도 알립니다 (저장 확인용)\n' +
+    '· 완료/종료/취소 상태는 알리지 않습니다\n' +
+    '· 같은 배정은 한 번만 알립니다'
   );
 }
 
