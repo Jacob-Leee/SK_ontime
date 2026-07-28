@@ -112,6 +112,11 @@ nav { flex: 1; padding: 10px 0; overflow-y: auto; }
 @keyframes notifSlide { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes authSpin { to { transform: rotate(360deg); } }
 
+/* Settings modal tabs */
+.settings-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--text3); cursor: pointer; white-space: nowrap; transition: color .15s, border-color .15s; }
+.settings-tab:hover { color: var(--text2); }
+.settings-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
 /* ── Header ── */
 #header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; height: 58px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 #header h1 { font-size: 17px; font-weight: 700; color: var(--text); }
@@ -1541,32 +1546,19 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <h2>&#9881; App Settings</h2>
       <button class="modal-close" onclick="closeModal('settings-modal')">&#215;</button>
     </div>
-    <div class="modal-body" style="max-height:65vh;overflow-y:auto">
-      <p style="font-size:12.5px;color:var(--text3);margin-bottom:14px;line-height:1.5">
-        Rename sidebar menu items and header buttons. Saved on this device only.
-      </p>
-      <div class="section-title">Sidebar menu names</div>
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">All Orders</label><input class="form-control" id="set-navAll"></div>
-        <div class="form-group"><label class="form-label">Orders</label><input class="form-control" id="set-navOrders"></div>
-        <div class="form-group"><label class="form-label">Completed</label><input class="form-control" id="set-navCompleted"></div>
-        <div class="form-group"><label class="form-label">Claim</label><input class="form-control" id="set-navClaims"></div>
-        <div class="form-group"><label class="form-label">Closed</label><input class="form-control" id="set-navClosed"></div>
-        <div class="form-group"><label class="form-label">Issues</label><input class="form-control" id="set-navIssues"></div>
-        <div class="form-group"><label class="form-label">Cancelled</label><input class="form-control" id="set-navCancelled"></div>
-        <div class="form-group"><label class="form-label">Calendar</label><input class="form-control" id="set-navCalendar"></div>
-        <div class="form-group"><label class="form-label">Subbies</label><input class="form-control" id="set-navSubbies"></div>
-        <div class="form-group"><label class="form-label">Dashboard</label><input class="form-control" id="set-navDashboard"></div>
-        <div class="form-group"><label class="form-label">Supervisors</label><input class="form-control" id="set-navSup"></div>
-        <div class="form-group"><label class="form-label">SOR Codes</label><input class="form-control" id="set-navSor"></div>
-      </div>
-      <div class="section-title">Header button names</div>
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">DCJ Portal link</label><input class="form-control" id="set-navDcj"></div>
-        <div class="form-group"><label class="form-label">Export CSV button</label><input class="form-control" id="set-btnExportCsv"></div>
-        <div class="form-group"><label class="form-label">Import Email button</label><input class="form-control" id="set-btnImportEmail"></div>
-        <div class="form-group"><label class="form-label">New Order button</label><input class="form-control" id="set-btnNewOrder"></div>
-      </div>
+    <!-- Tabs. Nine sections in a single scroll buried the sign-in controls;
+         access, notifications and appearance are separate concerns, so each
+         gets its own pane. Save still writes every field no matter which pane
+         is showing — hidden inputs are still in the DOM. -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 20px;flex-shrink:0">
+      <button id="stab-account" onclick="setSettingsTab('account')" class="settings-tab">&#128274; 계정 · 보안</button>
+      <button id="stab-notify"  onclick="setSettingsTab('notify')"  class="settings-tab">&#128276; 알림</button>
+      <button id="stab-display" onclick="setSettingsTab('display')" class="settings-tab">&#127912; 화면 설정</button>
+    </div>
+
+    <div class="modal-body" style="max-height:62vh;overflow-y:auto">
+
+      <div class="settings-pane" id="spane-account">
       <div class="section-title">Google 로그인 &amp; 접근 권한</div>
       <div class="form-grid">
         <div class="form-group form-full">
@@ -1599,7 +1591,47 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           <div id="auth-allowlist" style="max-height:190px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px 12px"></div>
         </div>
       </div>
-      <div class="section-title">Notifications</div>
+      <div class="section-title">기기 잠금 (PIN / Face ID)</div>
+      <div class="form-grid">
+        <div class="form-group form-full" style="display:flex;align-items:center;justify-content:space-between;background:var(--cream2);border-radius:10px;padding:12px 16px">
+          <div>
+            <div style="font-weight:600;font-size:13px">잠금 활성화</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">앱 열 때 / 백그라운드 복귀 시 인증 요구</div>
+          </div>
+          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0">
+            <input type="checkbox" id="set-lockEnabled" style="opacity:0;width:0;height:0" onchange="onLockToggleChange()">
+            <span style="position:absolute;cursor:pointer;inset:0;border-radius:24px;background:var(--border2);transition:0.3s" id="lock-toggle-track">
+              <span style="position:absolute;content:'';height:18px;width:18px;left:3px;bottom:3px;border-radius:50%;background:#fff;transition:0.3s" id="lock-toggle-thumb"></span>
+            </span>
+          </label>
+        </div>
+        <div class="form-group form-full" id="lock-settings-body" style="display:none">
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div>
+              <label class="form-label">PIN 설정 <span style="color:var(--text3);font-weight:400">(4~6자리 숫자)</span></label>
+              <div style="display:flex;gap:8px">
+                <input type="password" inputmode="numeric" maxlength="6" class="form-control" id="set-lockPin" placeholder="새 PIN 입력" style="letter-spacing:4px;font-size:16px">
+                <button onclick="saveLockPin()" class="btn btn-secondary" style="white-space:nowrap;flex-shrink:0">PIN 저장</button>
+              </div>
+            </div>
+            <div>
+              <label class="form-label">Face ID / Touch ID 등록</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button onclick="registerBiometric()" class="btn btn-secondary" style="flex:1">🔐 생체인식 등록</button>
+                <button onclick="clearBiometric()" class="btn btn-secondary" style="color:var(--red);border-color:rgba(220,38,38,0.3)">삭제</button>
+              </div>
+              <div id="lock-bio-status" style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5"></div>
+            </div>
+            <button onclick="diagnoseBiometric()" class="btn btn-secondary" style="width:100%">🩺 생체인식 진단 (안 될 때 눌러보세요)</button>
+            <div id="lock-diag-result"></div>
+            <button onclick="showLockScreen()" class="btn btn-secondary" style="width:100%">🔒 지금 잠금 테스트</button>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div class="settings-pane" id="spane-notify" style="display:none">
+      <div class="section-title">알림 설정</div>
       <div class="form-grid">
         <div class="form-group form-full">
           <label class="form-label">내 이름 (이 기기 사용자)</label>
@@ -1642,60 +1674,52 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           <div id="notif-sim-result"></div>
         </div>
       </div>
-      <div class="section-title">App Lock</div>
-      <div class="form-grid">
-        <div class="form-group form-full" style="display:flex;align-items:center;justify-content:space-between;background:var(--cream2);border-radius:10px;padding:12px 16px">
-          <div>
-            <div style="font-weight:600;font-size:13px">잠금 활성화</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px">앱 열 때 / 백그라운드 복귀 시 인증 요구</div>
-          </div>
-          <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0">
-            <input type="checkbox" id="set-lockEnabled" style="opacity:0;width:0;height:0" onchange="onLockToggleChange()">
-            <span style="position:absolute;cursor:pointer;inset:0;border-radius:24px;background:var(--border2);transition:0.3s" id="lock-toggle-track">
-              <span style="position:absolute;content:'';height:18px;width:18px;left:3px;bottom:3px;border-radius:50%;background:#fff;transition:0.3s" id="lock-toggle-thumb"></span>
-            </span>
-          </label>
-        </div>
-        <div class="form-group form-full" id="lock-settings-body" style="display:none">
-          <div style="display:flex;flex-direction:column;gap:12px">
-            <div>
-              <label class="form-label">PIN 설정 <span style="color:var(--text3);font-weight:400">(4~6자리 숫자)</span></label>
-              <div style="display:flex;gap:8px">
-                <input type="password" inputmode="numeric" maxlength="6" class="form-control" id="set-lockPin" placeholder="새 PIN 입력" style="letter-spacing:4px;font-size:16px">
-                <button onclick="saveLockPin()" class="btn btn-secondary" style="white-space:nowrap;flex-shrink:0">PIN 저장</button>
-              </div>
-            </div>
-            <div>
-              <label class="form-label">Face ID / Touch ID 등록</label>
-              <div style="display:flex;gap:8px;align-items:center">
-                <button onclick="registerBiometric()" class="btn btn-secondary" style="flex:1">🔐 생체인식 등록</button>
-                <button onclick="clearBiometric()" class="btn btn-secondary" style="color:var(--red);border-color:rgba(220,38,38,0.3)">삭제</button>
-              </div>
-              <div id="lock-bio-status" style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5"></div>
-            </div>
-            <button onclick="diagnoseBiometric()" class="btn btn-secondary" style="width:100%">🩺 생체인식 진단 (안 될 때 눌러보세요)</button>
-            <div id="lock-diag-result"></div>
-            <button onclick="showLockScreen()" class="btn btn-secondary" style="width:100%">🔒 지금 잠금 테스트</button>
-          </div>
-        </div>
       </div>
-      <div class="section-title">Branding</div>
+
+      <div class="settings-pane" id="spane-display" style="display:none">
+        <p style="font-size:12px;color:var(--text3);margin:0 0 14px;line-height:1.5">
+          이 기기에서만 적용됩니다. 다른 사람 화면에는 영향이 없습니다.
+        </p>
+      <div class="section-title">사이드바 메뉴 이름</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">All Orders</label><input class="form-control" id="set-navAll"></div>
+        <div class="form-group"><label class="form-label">Orders</label><input class="form-control" id="set-navOrders"></div>
+        <div class="form-group"><label class="form-label">Completed</label><input class="form-control" id="set-navCompleted"></div>
+        <div class="form-group"><label class="form-label">Claim</label><input class="form-control" id="set-navClaims"></div>
+        <div class="form-group"><label class="form-label">Closed</label><input class="form-control" id="set-navClosed"></div>
+        <div class="form-group"><label class="form-label">Issues</label><input class="form-control" id="set-navIssues"></div>
+        <div class="form-group"><label class="form-label">Cancelled</label><input class="form-control" id="set-navCancelled"></div>
+        <div class="form-group"><label class="form-label">Calendar</label><input class="form-control" id="set-navCalendar"></div>
+        <div class="form-group"><label class="form-label">Subbies</label><input class="form-control" id="set-navSubbies"></div>
+        <div class="form-group"><label class="form-label">Dashboard</label><input class="form-control" id="set-navDashboard"></div>
+        <div class="form-group"><label class="form-label">Supervisors</label><input class="form-control" id="set-navSup"></div>
+        <div class="form-group"><label class="form-label">SOR Codes</label><input class="form-control" id="set-navSor"></div>
+      </div>
+
+      <div class="section-title">헤더 버튼 이름</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">DCJ Portal 링크</label><input class="form-control" id="set-navDcj"></div>
+        <div class="form-group"><label class="form-label">Export CSV 버튼</label><input class="form-control" id="set-btnExportCsv"></div>
+        <div class="form-group"><label class="form-label">Import Email 버튼</label><input class="form-control" id="set-btnImportEmail"></div>
+        <div class="form-group"><label class="form-label">New Order 버튼</label><input class="form-control" id="set-btnNewOrder"></div>
+      </div>
+      <div class="section-title">브랜딩</div>
       <div class="form-grid">
         <div class="form-group form-full"><label class="form-label">App subtitle (sidebar)</label><input class="form-control" id="set-companySubtitle" placeholder="Holmes Order Manager"></div>
       </div>
-      <div class="section-title">Links &amp; URLs</div>
+      <div class="section-title">링크 주소</div>
       <div class="form-grid">
         <div class="form-group form-full"><label class="form-label">DCJ Portal URL</label><input class="form-control" id="set-dcjPortalUrl" placeholder="https://portal.dcj.nsw.gov.au/login/login.htm"></div>
         <div class="form-group form-full"><label class="form-label">SUI Base URL <span style="color:var(--text3);font-weight:400;font-size:11px">(SCO# 링크 앞에 붙는 주소)</span></label><input class="form-control" id="set-suiBaseUrl" placeholder="https://nsw06.my.site.com/cma/s/detail/"></div>
       </div>
-      <div class="section-title">Aging Thresholds</div>
+      <div class="section-title">경과 시간 기준</div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">VAC/MPW — Warning (hours) 🟠</label><input type="number" min="1" class="form-control" id="setnum-vacWarnHours" placeholder="24"></div>
         <div class="form-group"><label class="form-label">VAC/MPW — Critical (hours) 🔴</label><input type="number" min="1" class="form-control" id="setnum-vacCritHours" placeholder="48"></div>
         <div class="form-group"><label class="form-label">Completed — Warning (days) 🟠</label><input type="number" min="1" class="form-control" id="setnum-compWarnDays" placeholder="7"></div>
         <div class="form-group"><label class="form-label">Completed — Critical (days) 🔴</label><input type="number" min="1" class="form-control" id="setnum-compCritDays" placeholder="14"></div>
       </div>
-      <div class="section-title">Colors</div>
+      <div class="section-title">색상</div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Accent / brand color</label><input type="color" class="form-control" id="setcolor-accent" style="height:38px;padding:4px"></div>
         <div class="form-group"></div>
@@ -1705,7 +1729,13 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <div class="form-group"><label class="form-label">Claim badge</label><input type="color" class="form-control" id="setcolor-badgeClaims" style="height:38px;padding:4px"></div>
         <div class="form-group"><label class="form-label">Issues badge</label><input type="color" class="form-control" id="setcolor-badgeIssues" style="height:38px;padding:4px"></div>
       </div>
+      </div>
+
+      <div style="text-align:center;font-size:10px;color:var(--text3);margin-top:18px;padding-top:10px;border-top:1px solid var(--border)">
+        build <span id="app-build"></span>
+      </div>
     </div>
+
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="resetUiLabels()">Reset to defaults</button>
       <button class="btn btn-primary" onclick="saveUiLabels()">Save</button>
@@ -2588,6 +2618,9 @@ function openSettingsModal() {
     const el = document.getElementById('setnum-' + k);
     if (el) el.value = DB.appSettings[k];
   });
+  const b = document.getElementById('app-build');
+  if (b) b.textContent = APP_BUILD;
+  setSettingsTab(_settingsTab);
   _openAuthSettings();
   _openNotifSettings();
   _openLockSettings();
@@ -6885,6 +6918,11 @@ function runNotifSimulation() {
 
 const AUTH_REQUIRED = false;   // ← set to true AFTER Firebase Console setup
 
+// Shown at the bottom of Settings. A stale cached build looks identical to a
+// broken one from the outside — this makes "did my upload actually land?"
+// answerable in two seconds instead of a guessing game.
+const APP_BUILD = '2026-07-28-e';
+
 const AUTH = { user: null, entry: null, ready: false, auth: null, db: null, lastError: null };
 
 // Firebase keys cannot contain '.', so emails are stored with dots as commas.
@@ -7303,6 +7341,20 @@ async function authSaveCloudUrl() {
     await AUTH.db.ref('/config/cloudUrl').set(url);
     toast('✓ 동기화 주소 저장됨 — 팀원은 다음 로그인 시 자동 적용', 'success');
   } catch (e) { toast('저장 실패: ' + e.message, 'error'); }
+}
+
+let _settingsTab = 'account';
+
+function setSettingsTab(tab) {
+  _settingsTab = tab;
+  ['account', 'notify', 'display'].forEach(t => {
+    const pane = document.getElementById('spane-' + t);
+    const btn  = document.getElementById('stab-' + t);
+    if (pane) pane.style.display = (t === tab) ? 'block' : 'none';
+    if (btn)  btn.classList.toggle('active', t === tab);
+  });
+  const body = document.querySelector('#settings-modal .modal-body');
+  if (body) body.scrollTop = 0;
 }
 
 async function _openAuthSettings() {
