@@ -16,6 +16,104 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>SK Ontime — Holmes Order Manager</title>
 <script>
+// ============================================================
+// PHOTO STAMP
+// ------------------------------------------------------------
+// Burns the job details into the top-right of a site photo: date and time,
+// order number, address, PRN. Homes NSW evidence has to be self-identifying —
+// a photo in a folder six months later is worthless if nobody can say which
+// property or which job it belongs to, and file metadata does not survive
+// being emailed or re-saved.
+//
+// Drawn on a canvas, so the text is part of the image itself.
+// ============================================================
+
+function _stampText(order) {
+  const d = new Date();
+  const date = d.toLocaleDateString('en-AU', { day: 'numeric', month: 'numeric', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', hour12: true })
+                .toLowerCase().replace(/\s/g, ' ');
+  const lines = [date + ', ' + time];
+  const head = [(order && order.orderNumber) || '', (order && order.address) || '']
+                 .filter(Boolean).join('   ');
+  if (head) lines.push(head);
+  if (order && order.prn) lines.push(String(order.prn));
+  return lines;
+}
+
+// Wrap on width, keeping the order number on the first line where possible.
+function _stampWrap(ctx, lines, maxW) {
+  const out = [];
+  lines.forEach(line => {
+    if (ctx.measureText(line).width <= maxW) { out.push(line); return; }
+    let cur = '';
+    line.split(' ').forEach(word => {
+      const test = cur ? cur + ' ' + word : word;
+      if (ctx.measureText(test).width <= maxW) { cur = test; }
+      else { if (cur) out.push(cur); cur = word; }
+    });
+    if (cur) out.push(cur);
+  });
+  return out;
+}
+
+function stampPhoto(file, order, maxDim = 1600, quality = 0.82) {
+  return new Promise(resolve => {
+    if (!/^image\//.test(file.type)) return resolve(file);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const W = Math.round(img.width * scale), H = Math.round(img.height * scale);
+        const c = document.createElement('canvas');
+        c.width = W; c.height = H;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, W, H);
+
+        // Scale with the image so it reads the same on any phone.
+        const fs  = Math.max(13, Math.round(W / 26));
+        const pad = Math.round(W * 0.025);
+        ctx.font = '700 ' + fs + 'px -apple-system, "Helvetica Neue", Arial, sans-serif';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+
+        const lines = _stampWrap(ctx, _stampText(order), W - pad * 2);
+        const lh = Math.round(fs * 1.22);
+
+        // Outline behind the fill: site photos are unpredictable — white text
+        // vanishes on a rendered wall, black vanishes in a shadow.
+        ctx.lineWidth = Math.max(2, Math.round(fs / 6));
+        ctx.strokeStyle = 'rgba(0,0,0,0.72)';
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+        ctx.fillStyle = '#FFFFFF';
+
+        let y = pad;
+        lines.forEach(t => {
+          ctx.strokeText(t, W - pad, y);
+          ctx.fillText(t, W - pad, y);
+          y += lh;
+        });
+
+        c.toBlob(b => resolve(b
+          ? new File([b], (file.name || 'photo').replace(/\.\w+$/, '') + '_stamped.jpg', { type: 'image/jpeg' })
+          : file), 'image/jpeg', quality);
+      } catch (e) {
+        console.warn('[STAMP] failed, using original:', e);
+        resolve(file);
+      }
+    };
+    // HEIC or anything the browser cannot decode goes up unstamped rather than
+    // failing the whole submission.
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+
 // All four entry panes are flex columns (`flex-direction:column; align-items:center`).
 // Some code paths brought one back with `display:'block'`, which drops the flex
 // context — the contents stop being centred and the whole screen looks skewed
@@ -1752,6 +1850,34 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 </div>
 
 <!-- ISSUE MODAL -->
+<!-- SITE REPORT SHEET (SK staff, same flow the subbies get) -->
+<div class="modal-overlay" id="sr-modal" onclick="if(event.target===this)closeModal('sr-modal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Site report</h2>
+      <button class="modal-close" onclick="closeModal('sr-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="sr-order" style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5"></div>
+      <button id="sr-add" class="btn btn-secondary" style="width:100%" onclick="srPick()">
+        📷 Add photo <span id="sr-count" style="opacity:.6"></span>
+      </button>
+      <div id="sr-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
+      <textarea id="sr-note" rows="3" placeholder="What did you find? (optional)"
+        style="width:100%;margin-top:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;resize:none"></textarea>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-secondary" style="flex:1" onclick="srSubmit('done')">✅ Work done</button>
+        <button class="btn btn-primary" style="flex:1;background:#D97706;border-color:#D97706" onclick="srSubmit('issue')">⚠ Report issue</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">
+        Photos are stamped with the date, order number, address and PRN. Reports appear in Field Reports.
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="sr-input" accept="image/*" multiple style="display:none" onchange="srChosen(this)">
+
 <div class="modal-overlay" id="issue-modal">
   <div class="modal" style="width:580px">
     <div class="modal-header">
@@ -2089,7 +2215,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-d';
+const APP_BUILD     = '2026-07-30-e';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -3754,6 +3880,112 @@ function orderNumCell(o) {
 // ============================================================
 let issueTargetId = null;
 
+// ============================================================
+// SITE REPORT  (SK staff)
+// ------------------------------------------------------------
+// Staff do site work too, and until now the only way to record what they found
+// was to open the order and type into it later — by which point the photo is
+// on a phone somewhere and the detail is half remembered. Same flow the
+// subcontractors already have, writing to the same place, so both show up in
+// Field Reports side by side.
+// ============================================================
+const SR_MAX = 4;
+let _srPhotos = [];
+let _srOrder  = null;
+
+function srOpen(id) {
+  _srOrder = DB.orders.find(o => o.id === id);
+  if (!_srOrder) return toast('Order not found', 'error');
+  srClear();
+  document.getElementById('sr-note').value = '';
+  document.getElementById('sr-order').innerHTML =
+    '<b>' + esc(_srOrder.orderNumber || '') + '</b><br>' + esc(_srOrder.address || '') +
+    (_srOrder.prn ? '<br><span style="color:var(--text3)">PRN ' + esc(_srOrder.prn) + '</span>' : '');
+  openModal('sr-modal');
+}
+
+function srPick() {
+  if (_srPhotos.length >= SR_MAX) return toast('Up to ' + SR_MAX + ' photos', 'error');
+  document.getElementById('sr-input').click();
+}
+
+async function srChosen(input) {
+  const picked = Array.from(input.files || []);
+  input.value = '';
+  if (!picked.length) return;
+  const room = SR_MAX - _srPhotos.length;
+  for (const f of picked.slice(0, room)) {
+    const done = await stampPhoto(f, _srOrder);
+    _srPhotos.push({ file: done, url: URL.createObjectURL(done) });
+  }
+  srRender();
+}
+
+function srRemove(i) {
+  const p = _srPhotos[i];
+  if (p && p.url) URL.revokeObjectURL(p.url);
+  _srPhotos.splice(i, 1);
+  srRender();
+}
+
+function srClear() {
+  _srPhotos.forEach(p => { if (p.url) URL.revokeObjectURL(p.url); });
+  _srPhotos = [];
+  srRender();
+}
+
+function srRender() {
+  const g = document.getElementById('sr-grid');
+  if (g) g.innerHTML = _srPhotos.map((p, i) =>
+    '<div style="position:relative;aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--cream2)">' +
+    '<img src="' + p.url + '" style="width:100%;height:100%;object-fit:cover;display:block">' +
+    '<button onclick="srRemove(' + i + ')" style="position:absolute;top:3px;right:3px;width:20px;height:20px;' +
+    'border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0">&times;</button></div>'
+  ).join('');
+  const c = document.getElementById('sr-count');
+  if (c) c.textContent = _srPhotos.length ? '(' + _srPhotos.length + '/' + SR_MAX + ')' : '';
+}
+
+async function srSubmit(type) {
+  if (!_srOrder) return;
+  const note = (document.getElementById('sr-note').value || '').trim();
+  if (type === 'issue' && !note && !_srPhotos.length)
+    return toast('Add a photo or a note first', 'error');
+
+  const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
+  if (!db) return toast('Not connected', 'error');
+
+  const urls = [];
+  let photoFailed = false;
+  try {
+    if (_srPhotos.length && firebase.storage) {
+      const st = firebase.storage(firebase.apps[0]);
+      for (let i = 0; i < _srPhotos.length; i++) {
+        try {
+          const ref = st.ref('issues/' + _srOrder.id + '/' + Date.now() + '_' + i + '.jpg');
+          await ref.put(_srPhotos[i].file);
+          urls.push(await ref.getDownloadURL());
+        } catch (e) { photoFailed = true; break; }
+      }
+    }
+    // The report goes up even if the photos did not — losing what was found is
+    // worse than losing the picture of it.
+    const ts = Date.now();
+    await db.ref('/issues/' + _srOrder.id + '/' + ts).set({
+      type, note, photoUrl: urls[0] || '', photoUrls: urls, photoCount: urls.length,
+      orderId: _srOrder.id, orderNumber: _srOrder.orderNumber || '',
+      address: _srOrder.address || '', createdAt: ts,
+      createdBy: NOTIF.me || 'SK', by: NOTIF.me || 'SK', at: ts
+    });
+    closeModal('sr-modal');
+    srClear();
+    toast(photoFailed ? 'Report sent — photos failed to upload'
+                      : (type === 'issue' ? 'Issue reported' : 'Marked as done'), photoFailed ? 'error' : 'success');
+  } catch (e) {
+    toast('Send failed: ' + (e.message || e), 'error');
+  }
+}
+
 function openIssueModal(id) {
   issueTargetId = id;
   document.getElementById('iss-date').value = localDateStr();
@@ -5129,6 +5361,7 @@ function renderOrders() {
           <button class="icon-btn" title="Edit" onclick="openOrderModal('${o.id}')">✏️</button>
           <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">Complete →</button>
           <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="openIssueModal('${o.id}')">⚠️ Issue</button>
+          <button class="btn btn-sm" style="background:rgba(37,99,235,0.08);color:#2563EB;border:1px solid rgba(37,99,235,0.2);font-size:11px" onclick="srOpen('${o.id}')">📷 Site</button>
           <button class="btn btn-sm" style="background:rgba(107,87,68,0.08);color:var(--text2);border:1px solid rgba(107,87,68,0.2);font-size:11px" onclick="setOrderStatus('${o.id}','cancelled')">✕ Cancel</button>
           <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
         </div>
