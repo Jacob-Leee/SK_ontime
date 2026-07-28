@@ -1892,7 +1892,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-28-s';
+const APP_BUILD = '2026-07-28-u';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2305,6 +2305,8 @@ var CLOUD = {
   pulling: false,
   pullTimer: null,
   pollMs: 3000,
+  lastError: '',
+  lastErrorAt: 0,
   pushTimer: null,
   applying: false,
   _serverNow: 0,  // latest server timestamp from pull response (fixes clock skew)
@@ -2487,8 +2489,10 @@ async function cloudPush() {
       CLOUD.pushTimer = setTimeout(cloudPush, 3000);
     }
   } catch (e) {
-    console.log('[CLOUD DEBUG] cloudPush threw an exception:', e);
-    renderCloudStatus('Offline');
+    CLOUD.lastError = (e && (e.message || e.name)) || String(e);
+    CLOUD.lastErrorAt = Date.now();
+    console.warn('[CLOUD] push failed:', CLOUD.lastError);
+    renderCloudStatus(navigator.onLine ? '전송 실패' : '오프라인');
   } finally {
     CLOUD.pushing = false;
   }
@@ -2508,7 +2512,17 @@ async function cloudPull(initial) {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action: 'pull' }),
     });
-    console.log('[PULL DEBUG] pull POST status=', res.status);
+    // A 404 here is not a network problem — Google is saying that deployment
+    // does not exist. Letting it fall through to res.json() turned a precise
+    // answer ("wrong URL") into a vague JSON parse error.
+    if (!res.ok) {
+      CLOUD.lastError = res.status === 404
+        ? 'HTTP 404 — 이 주소의 Apps Script 배포가 존재하지 않습니다 (주소가 틀렸거나 재배포되어 주소가 바뀜)'
+        : 'HTTP ' + res.status;
+      CLOUD.lastErrorAt = Date.now();
+      renderCloudStatus(res.status === 404 ? '주소 오류' : 'HTTP ' + res.status);
+      return;
+    }
     let out;
     try { out = await res.json(); } catch(jsonErr) { console.log('[PULL DEBUG] res.json() PARSE ERROR:', jsonErr.message); throw jsonErr; }
     console.log('[PULL DEBUG] pull response ok=', out?.ok, 'hasData=', !!out?.data, 'updatedAt=', out?.updatedAt);
@@ -2612,8 +2626,13 @@ async function cloudPull(initial) {
     updateSidebar();
     renderCloudStatus('Synced ✓');
   } catch (e) {
-    console.log('[PULL DEBUG] cloudPull CATCH:', e.message || e);
-    renderCloudStatus('Offline');
+    // "Offline" told you nothing about WHY. Keeping the real error makes the
+    // difference between a dead network, a wrong URL and a rejected Apps
+    // Script deployment visible in the diagnostic instead of guessed at.
+    CLOUD.lastError = (e && (e.message || e.name)) || String(e);
+    CLOUD.lastErrorAt = Date.now();
+    console.warn('[CLOUD] pull failed:', CLOUD.lastError);
+    renderCloudStatus(navigator.onLine ? '연결 실패' : '오프라인');
   } finally {
     CLOUD.pulling = false;
     // Safety net: if a past merge ever threw between `applying = true` and
@@ -7094,9 +7113,12 @@ function runNotifSimulation() {
 function _syncHealthCheck() {
   const bad = CLOUD.enabled && !CLOUD.url;
   const off = !CLOUD.enabled;
+  // A URL that 404s is just as dead as no URL at all, and far more confusing
+  // because everything looks configured.
+  const wrong = CLOUD.enabled && CLOUD.url && /404/.test(CLOUD.lastError || '');
   let bar = document.getElementById('sync-health-bar');
 
-  if (!bad && !off) { if (bar) bar.remove(); return; }
+  if (!bad && !off && !wrong) { if (bar) bar.remove(); return; }
   if (!bar) {
     bar = document.createElement('div');
     bar.id = 'sync-health-bar';
@@ -7107,9 +7129,10 @@ function _syncHealthCheck() {
     bar.onclick = () => { try { openCloudModal(); } catch (e) {} };
     document.body.appendChild(bar);
   }
-  bar.innerHTML = bad
-    ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소가 없어 이 기기는 데이터를 받지 못합니다</span><span style="text-decoration:underline">설정</span>'
-    : '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화가 꺼져 있습니다</span><span style="text-decoration:underline">켜기</span>';
+  bar.innerHTML =
+      bad   ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소가 없어 이 기기는 데이터를 받지 못합니다</span><span style="text-decoration:underline">설정</span>'
+    : wrong ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소가 잘못되었습니다 (404) — 다른 기기의 주소를 확인하세요</span><span style="text-decoration:underline">설정</span>'
+    :         '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화가 꺼져 있습니다</span><span style="text-decoration:underline">켜기</span>';
 }
 
 // ============================================================
@@ -7144,6 +7167,9 @@ function syncDiagnostics() {
     newest:     newest ? new Date(newest).toLocaleString('en-AU') : '(없음)',
     signedIn:   (typeof AUTH !== 'undefined' && AUTH.user) ? AUTH.user.email : '(로그인 안 함)',
     identity:   mine,
+    lastError:  CLOUD.lastError || '',
+    lastErrorAt:CLOUD.lastErrorAt ? new Date(CLOUD.lastErrorAt).toLocaleTimeString('en-AU') : '',
+    online:     navigator.onLine,
   };
 }
 
@@ -7158,7 +7184,8 @@ function syncDiagnosticsText() {
     '최신 수정     ' + d.newest,
     '로그인        ' + d.signedIn,
     '내 이름       ' + d.identity,
-  ].join('\n');
+    '네트워크      ' + (d.online ? '온라인' : '오프라인'),
+  ].concat(d.lastError ? ['', '마지막 오류   ' + d.lastError + (d.lastErrorAt ? ' (' + d.lastErrorAt + ')' : '')] : []).join('\n');
 }
 
 function showSyncDiagnostics() {
