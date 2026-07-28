@@ -430,7 +430,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-30-r';
+const APP_BUILD = '2026-07-30-u';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -887,9 +887,17 @@ async function sbUploadOne(entry) {
 
 function sbRemovePhoto(i) {
   const p = _photos[i];
-  if (p && p.url) URL.revokeObjectURL(p.url);
+  if (!p) return;
+  if (p.url) URL.revokeObjectURL(p.url);
   _photos.splice(i, 1);
   sbRenderPhotos();
+  // The upload already started when the photo was added, so clean up the copy
+  // in Storage as well. Wait for an in-flight upload to finish before deleting.
+  Promise.resolve(p.task).then(() => {
+    if (!p.url_remote || !_storage) return;
+    _storage.refFromURL(p.url_remote).delete()
+      .catch(e => console.warn('[SB] could not delete photo:', e.code || e.message));
+  });
 }
 
 function sbRenderPhotos() {

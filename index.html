@@ -1986,7 +1986,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-30-r';
+const APP_BUILD = '2026-07-30-u';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -10324,7 +10324,13 @@ function renderFieldReports() {
       }</div>` : ''}
       <div style="font-size:12px;color:var(--text3)">By: ${esc(r.by || '—')}</div>
       ${r.note ? `<div style="font-size:12.5px;margin-top:6px;padding:7px 9px;background:var(--cream);border-radius:7px;white-space:pre-wrap">${esc(r.note)}</div>` : ''}
-      ${r.photos.length ? `<div style="display:flex;gap:5px;margin-top:7px">${r.photos.slice(0,4).map(u=>`<img src="${u}" onclick="window.open('${u}')" style="width:54px;height:54px;object-fit:cover;border-radius:6px;cursor:zoom-in">`).join('')}</div>` : ''}
+      ${r.photos.length ? `<div style="display:flex;gap:5px;margin-top:7px;flex-wrap:wrap">${r.photos.slice(0,4).map((u,pi)=>
+        `<div style="position:relative;width:54px;height:54px">
+           <img src="${u}" onclick="window.open('${u}')" style="width:54px;height:54px;object-fit:cover;border-radius:6px;cursor:zoom-in;display:block">
+           <button title="Remove this photo" onclick="frDeletePhoto('${r.key}',${pi})"
+             style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;border:none;
+             background:#DC2626;color:#fff;font-size:12px;line-height:1;cursor:pointer;padding:0">&times;</button>
+         </div>`).join('')}</div>` : ''}
       <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;align-items:center">
         ${o
           ? `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="${open}">Open order</button>`
@@ -10332,6 +10338,7 @@ function renderFieldReports() {
         ${r.reviewedAt
           ? `<span style="font-size:11px;color:var(--green)">✓ Reviewed by ${esc(r.reviewedBy||'')}</span>`
           : `<button class="btn btn-sm" style="font-size:11px;background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25)" onclick="frMarkReviewed('${r.key}')">Reviewed</button>`}
+        <button class="btn btn-sm" title="Delete this report" style="font-size:11px;background:transparent;color:var(--text3);border:1px solid var(--border);margin-left:auto" onclick="frDeleteReport('${r.key}')">&#128465;</button>
       </div>
     </div>`;
   };
@@ -10346,6 +10353,61 @@ function renderFieldReports() {
 // Stored on the report, not locally: whether the office has looked at this is a
 // fact about the report, and the next person to open any device needs the same
 // answer rather than a fresh copy of the same alert.
+// Removing a photo that should not have been sent — a mis-shot, the wrong
+// property, someone's face. Deletes it from the report and from Storage, so it
+// is gone rather than merely unlinked.
+async function frDeletePhoto(key, idx) {
+  const r = (_FR.list || []).find(x => x.key === key);
+  if (!r || !r.photos[idx]) return;
+  if (!confirm('Remove this photo?\n\nIt is deleted from the report and from storage.')) return;
+
+  const url = r.photos[idx];
+  const path = key.startsWith('__legacy__/')
+    ? '/issueReports/' + key.slice('__legacy__/'.length)
+    : '/issues/' + key;
+  const remaining = r.photos.filter((_, i) => i !== idx);
+
+  try {
+    await _rtdbDB.ref(path).update({
+      photoUrls: remaining,
+      photoUrl: remaining[0] || '',
+      photoCount: remaining.length
+    });
+    // Best effort — the record is already corrected, and a leftover blob is a
+    // smaller problem than a half-updated report.
+    try {
+      if (firebase.storage) await firebase.storage(firebase.apps[0]).refFromURL(url).delete();
+    } catch (e) { console.warn('[FR] storage delete failed:', e.code || e.message); }
+    toast('Photo removed', 'success');
+  } catch (e) {
+    toast('Could not remove: ' + (e.message || e), 'error');
+  }
+}
+
+// Removes the whole report — for a duplicate, or one filed against the wrong
+// order. The order is untouched; only the report goes.
+async function frDeleteReport(key) {
+  const r = (_FR.list || []).find(x => x.key === key);
+  if (!r) return;
+  if (!confirm('Delete this whole report?\n\n' + (r.orderNumber || '') + '\nFrom ' + (r.by || '—') +
+               (r.photos.length ? '\n' + r.photos.length + ' photo(s) will be deleted too.' : ''))) return;
+
+  const path = key.startsWith('__legacy__/')
+    ? '/issueReports/' + key.slice('__legacy__/'.length)
+    : '/issues/' + key;
+  try {
+    for (const u of r.photos) {
+      try {
+        if (firebase.storage) await firebase.storage(firebase.apps[0]).refFromURL(u).delete();
+      } catch (e) { console.warn('[FR] storage delete failed:', e.code || e.message); }
+    }
+    await _rtdbDB.ref(path).remove();
+    toast('Report deleted', 'success');
+  } catch (e) {
+    toast('Could not delete: ' + (e.message || e), 'error');
+  }
+}
+
 async function frMarkReviewed(key) {
   if (!_rtdbDB) return;
   try {

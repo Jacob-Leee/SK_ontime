@@ -899,8 +899,12 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 <!-- Drawer overlay -->
 <div id="mob-overlay" onclick="mobDrawerClose()"></div>
 <!-- Entry-screen event detail -->
+<!-- z-index must clear #mob-pin-overlay (99999): this popup is opened FROM the
+     entry screen, and at 12000 it rendered behind it — the tap worked, the
+     dialog was simply invisible until you had already signed in past the
+     overlay. It stays below #auth-gate (100001), which must always win. -->
 <div id="mob-ev-modal" onclick="if(event.target===this)mobEntryEventClose(event)"
-  style="display:none;position:fixed;inset:0;z-index:12000;background:rgba(0,0,0,.45);
+  style="display:none;position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.45);
   align-items:center;justify-content:center;padding:22px">
   <div style="background:#fff;border-radius:18px;width:100%;max-width:340px;max-height:78vh;
     overflow-y:auto;padding:18px 18px 14px;box-shadow:0 18px 50px rgba(0,0,0,.25)">
@@ -2248,7 +2252,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-r';
+const APP_BUILD     = '2026-07-30-u';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -3985,9 +3989,19 @@ async function srUploadOne(entry) {
 
 function srRemove(i) {
   const p = _srPhotos[i];
-  if (p && p.url) URL.revokeObjectURL(p.url);
+  if (!p) return;
+  if (p.url) URL.revokeObjectURL(p.url);
   _srPhotos.splice(i, 1);
   srRender();
+  // Uploads now start the moment a photo is added, so removing one after the
+  // fact has to clean up the copy already sitting in Storage — otherwise a
+  // mis-shot photo is billed and stored forever even though nobody can see it.
+  // If it is still in flight, wait for it to land first, then delete.
+  Promise.resolve(p.task).then(() => {
+    if (!p.url_remote || !firebase.storage) return;
+    firebase.storage(firebase.apps[0]).refFromURL(p.url_remote).delete()
+      .catch(e => console.warn('[SR] could not delete photo:', e.code || e.message));
+  });
 }
 
 function srClear() {
@@ -8587,6 +8601,10 @@ async function authSignIn() {
     await AUTH.auth.signInWithPopup(p);
   } catch (e) {
     console.warn('[AUTH] sign-in failed:', e.code, e.message);
+    // Recorded, and kept across a reload. Without this the diagnostic could
+    // only ever report "Session: None", which says nothing about WHY — and the
+    // on-screen message is gone the moment the app is reopened.
+    _authRecordError({ stage: 'sign-in', code: e.code || '', message: e.message || '' });
     _authFeedback(_authErrorMessage(e));
   } finally {
     if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
@@ -8632,11 +8650,12 @@ async function _authOnStateChanged(user) {
     const snap = await AUTH.db.ref('/allowedUsers/' + key).once('value');
 
     if (!snap.exists()) {
-      AUTH.lastError = { stage: 'allowlist-miss', key, email: user.email };
+      _authRecordError({ stage: 'not-on-allow-list', key, email: user.email });
       if (AUTH_REQUIRED) {
         await AUTH.auth.signOut();
         _authShow('signin');
-        _authError(`${user.email} 계정은 접근 권한이 없습니다.\n관리자에게 등록을 요청해주세요.`);
+        _authError(`${user.email} is not on the access list.\n\n` +
+                   `Ask the office to add this account.\nKey: ${key}`);
       } else {
         AUTH.user = user;
         _authFeedback(`허용 명단에 없습니다.\n찾은 키: ${key}`);
@@ -8668,7 +8687,7 @@ async function _authOnStateChanged(user) {
 
   } catch (e) {
     console.warn('[AUTH] allowlist check failed:', e);
-    AUTH.lastError = { stage: 'allowlist-read', message: e.message };
+    _authRecordError({ stage: 'allow-list-read', code: e.code || '', message: e.message || '' });
     // A signed-in device that loses network must stay usable — field work does
     // not stop because the auth server is unreachable.
     if (!navigator.onLine && lsGet('hom_auth_email')) {
@@ -8744,6 +8763,17 @@ function authInit() {
   if (AUTH_REQUIRED) _authShow('busy', 'Checking…');
 }
 
+// Sign-in failures survive a reload so the diagnostic can still name the cause
+// after someone closes the app and reopens it, which is what always happens.
+function _authRecordError(err) {
+  AUTH.lastError = Object.assign({ at: Date.now() }, err);
+  try { localStorage.setItem('hom_auth_last_error', JSON.stringify(AUTH.lastError)); } catch (e) {}
+}
+function _authLastError() {
+  if (AUTH.lastError) return AUTH.lastError;
+  try { return JSON.parse(localStorage.getItem('hom_auth_last_error') || 'null'); } catch (e) { return null; }
+}
+
 async function authDiagnose() {
   const L = [];
   const row = (k, v, ok) => L.push(
@@ -8777,7 +8807,21 @@ async function authDiagnose() {
       row('Key match', keys.includes(key) ? 'match ✓' : 'mismatch', keys.includes(key));
     } catch (e) { row('Allow-list read', 'Blocked: ' + e.message, false); }
   }
-  if (AUTH.lastError) row('Last error', AUTH.lastError.stage + (AUTH.lastError.message ? ' — ' + AUTH.lastError.message : ''), false);
+  const le = _authLastError();
+  if (le) {
+    const when = le.at ? new Date(le.at).toLocaleString('en-AU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+    row('Last error', le.stage + (le.code ? ' (' + le.code + ')' : ''), false);
+    if (le.email) row('Account tried', le.email, false);
+    if (le.key)   row('Key needed', le.key, false);
+    if (when)     row('When', when, true);
+    // The two causes that account for nearly every failure, named outright.
+    if (le.stage === 'not-on-allow-list')
+      row('Fix', 'Office: Settings → Accounts → add this email', false);
+    else if (/popup-blocked|popup-closed/.test(le.code || ''))
+      row('Fix', 'Allow popups for this site, then try again', false);
+    else if (/unauthorized-domain/.test(le.code || ''))
+      row('Fix', 'Add ' + location.hostname + ' in Firebase → Auth → Settings', false);
+  }
 
   document.getElementById('auth-diag-result').innerHTML =
     `<div style="margin-top:10px;border:1px solid rgba(255,255,255,0.12);border-radius:9px;padding:8px 11px;background:rgba(255,255,255,0.04)">${L.join('')}</div>`;
@@ -10030,12 +10074,19 @@ function renderFieldReports() {
       <div style="font-size:12.5px;color:var(--text2);margin-bottom:3px">${esc(r.address || o?.address || '')}</div>
       <div style="font-size:12px;color:var(--text3)">By: ${esc(r.by || '—')}</div>
       ${r.note ? `<div style="font-size:12.5px;margin-top:6px;padding:7px 9px;background:var(--cream);border-radius:7px;white-space:pre-wrap">${esc(r.note)}</div>` : ''}
-      ${r.photos.length ? `<div style="display:flex;gap:5px;margin-top:7px">${r.photos.slice(0,4).map(u=>`<img src="${u}" onclick="window.open('${u}')" style="width:54px;height:54px;object-fit:cover;border-radius:6px;cursor:zoom-in">`).join('')}</div>` : ''}
+      ${r.photos.length ? `<div style="display:flex;gap:5px;margin-top:7px;flex-wrap:wrap">${r.photos.slice(0,4).map((u,pi)=>
+        `<div style="position:relative;width:54px;height:54px">
+           <img src="${u}" onclick="window.open('${u}')" style="width:54px;height:54px;object-fit:cover;border-radius:6px;cursor:zoom-in;display:block">
+           <button title="Remove this photo" onclick="frDeletePhoto('${r.key}',${pi})"
+             style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;border:none;
+             background:#DC2626;color:#fff;font-size:12px;line-height:1;cursor:pointer;padding:0">&times;</button>
+         </div>`).join('')}</div>` : ''}
       <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">
         ${o ? `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="closeModal('fr-modal');openOrderModal('${r.orderId}')">Open order</button>` : '<span style="font-size:11px;color:var(--text3)">Order not found — it may have been deleted</span>'}
         ${r.reviewedAt
-          ? `<span style="font-size:11px;color:var(--green);align-self:center">✓ ${esc(r.reviewedBy||'')} </span>`
+          ? `<span style="font-size:11px;color:var(--green);align-self:center">✓ Reviewed by ${esc(r.reviewedBy||'')}</span>`
           : `<button class="btn btn-sm" style="font-size:11px;background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25)" onclick="frMarkReviewed('${r.key}')">Reviewed</button>`}
+        <button class="btn btn-sm" title="Delete this report" style="font-size:11px;background:transparent;color:var(--text3);border:1px solid var(--border);margin-left:auto" onclick="frDeleteReport('${r.key}')">&#128465;</button>
       </div>
     </div>`;
   };
@@ -10050,6 +10101,61 @@ function renderFieldReports() {
 // Stored on the report, not locally: whether the office has looked at this is a
 // fact about the report, and the next person to open any device needs the same
 // answer rather than a fresh copy of the same alert.
+// Removing a photo that should not have been sent — a mis-shot, the wrong
+// property, someone's face. Deletes it from the report and from Storage, so it
+// is gone rather than merely unlinked.
+async function frDeletePhoto(key, idx) {
+  const r = (_FR.list || []).find(x => x.key === key);
+  if (!r || !r.photos[idx]) return;
+  if (!confirm('Remove this photo?\n\nIt is deleted from the report and from storage.')) return;
+
+  const url = r.photos[idx];
+  const path = key.startsWith('__legacy__/')
+    ? '/issueReports/' + key.slice('__legacy__/'.length)
+    : '/issues/' + key;
+  const remaining = r.photos.filter((_, i) => i !== idx);
+
+  try {
+    await _rtdbDB.ref(path).update({
+      photoUrls: remaining,
+      photoUrl: remaining[0] || '',
+      photoCount: remaining.length
+    });
+    // Best effort — the record is already corrected, and a leftover blob is a
+    // smaller problem than a half-updated report.
+    try {
+      if (firebase.storage) await firebase.storage(firebase.apps[0]).refFromURL(url).delete();
+    } catch (e) { console.warn('[FR] storage delete failed:', e.code || e.message); }
+    toast('Photo removed', 'success');
+  } catch (e) {
+    toast('Could not remove: ' + (e.message || e), 'error');
+  }
+}
+
+// Removes the whole report — for a duplicate, or one filed against the wrong
+// order. The order is untouched; only the report goes.
+async function frDeleteReport(key) {
+  const r = (_FR.list || []).find(x => x.key === key);
+  if (!r) return;
+  if (!confirm('Delete this whole report?\n\n' + (r.orderNumber || '') + '\nFrom ' + (r.by || '—') +
+               (r.photos.length ? '\n' + r.photos.length + ' photo(s) will be deleted too.' : ''))) return;
+
+  const path = key.startsWith('__legacy__/')
+    ? '/issueReports/' + key.slice('__legacy__/'.length)
+    : '/issues/' + key;
+  try {
+    for (const u of r.photos) {
+      try {
+        if (firebase.storage) await firebase.storage(firebase.apps[0]).refFromURL(u).delete();
+      } catch (e) { console.warn('[FR] storage delete failed:', e.code || e.message); }
+    }
+    await _rtdbDB.ref(path).remove();
+    toast('Report deleted', 'success');
+  } catch (e) {
+    toast('Could not delete: ' + (e.message || e), 'error');
+  }
+}
+
 async function frMarkReviewed(key) {
   if (!_rtdbDB) return;
   try {
