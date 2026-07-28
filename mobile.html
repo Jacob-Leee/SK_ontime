@@ -2231,7 +2231,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-j';
+const APP_BUILD     = '2026-07-30-l';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7148,12 +7148,26 @@ function mobRefresh() {
   if (!el) return;
 
   if (!list.length) {
-    el.innerHTML = '<div class="mob-empty">No orders found</div>';
+    if (el._sig !== '__empty__') { el.innerHTML = '<div class="mob-empty">No orders found</div>'; el._sig = '__empty__'; }
     mobSummaryHide();
     return;
   }
 
   const _esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Rewriting innerHTML destroys the element under the user's finger, and a tap
+  // that started on a node which no longer exists never becomes a click. The
+  // list was being redrawn on the sync poll and on every field-report event, so
+  // on a busy screen taps were landing in the gap and doing nothing.
+  //
+  // Skip the rewrite when the visible content has not actually changed.
+  const sig = _mobPage + '|' + (window._SELECTED_SUBBIE || '') + '|' + list.map(o =>
+    [o.id, o.status, o.orderNumber, o.address, o.area, o.subbies, o.amount, o.prn, o.comments,
+     (typeof frPendingFor === 'function' ? frPendingFor(o.id).length : 0)].join('~')
+  ).join(';');
+  if (el._sig === sig) { mobSummaryShow(list); return; }
+  el._sig = sig;
+
   el.innerHTML = list.map(o => {
     const st = o.status || 'active';
     const col = _MOB_COL[st] || '#4f7ef8';
@@ -7176,12 +7190,14 @@ function mobRefresh() {
       </div>
       <div class="mc-addr">${_esc(o.address||'—')}</div>
       <div class="mc-bot">
-        <span class="mc-meta">${_esc(o.area||'')}</span>
+        <span class="mc-meta">${_esc([o.area, o.prn ? 'PRN ' + o.prn : ''].filter(Boolean).join(' · '))}</span>
         <span class="mc-amt">${(()=>{
           if (window._ADMIN_MODE && _mobPage !== 'all') return '$'+Number(o.amount||0).toFixed(2);
           return '';
         })()}</span>
       </div>
+      ${o.comments ? `<div style="font-size:11.5px;color:var(--text3);margin-top:3px;overflow:hidden;
+        text-overflow:ellipsis;white-space:nowrap">&#128172; ${_esc(o.comments)}</div>` : ''}
       ${mobCardActions(o)}
     </div>`;
   }).join('');
@@ -9493,8 +9509,16 @@ function _mirrorEligible() {
 }
 
 // (declared at the top of the script — see the note there)
+let _mirrorLastRun = 0;
 async function _rtdbAutoMirror(reason) {
   if (_mirrorRunning) return;
+  // Rate-limited. This walks every order, builds records and writes them in
+  // batches of 300, saving a full localStorage snapshot after each batch. Doing
+  // that on the 3-second sync poll is enough to lock up a phone on its own —
+  // and the mirror does not need to be second-accurate.
+  const now = Date.now();
+  if (reason !== 'startup' && now - _mirrorLastRun < 120000) return;
+  _mirrorLastRun = now;
   if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
 
   const state = _mirrorState();
@@ -9666,6 +9690,7 @@ function _rtdbWatchFieldReports() {
     const out = [..._FR._main, ..._FR._legacy].sort((a, b) => b.ts - a.ts);
     _FR.list = out;
     _FR.loaded = true;
+    _frIndex = null;          // rebuilt lazily on next read
     _frRepaint();
   };
 
@@ -9708,12 +9733,21 @@ function _rtdbWatchFieldReports() {
   });
 }
 
+let _frRepaintTimer = null;
 function _frRepaint() {
+  // Both listeners fire on the same change, and RTDB replays the whole node.
+  // Coalesce into one repaint instead of several back to back.
+  if (_frRepaintTimer) clearTimeout(_frRepaintTimer);
+  _frRepaintTimer = setTimeout(_frRepaintNow, 150);
+}
+function _frRepaintNow() {
   _FR.loaded = true;
   renderFieldReportBadge();
-  try { mobRefresh(); } catch (e) {}
   if (document.getElementById('fr-modal')?.classList.contains('open')) renderFieldReports();
-  try { mobRender(); } catch (e) {}
+  // One repaint, not two. This called mobRefresh() AND mobRender() — and it
+  // runs from two separate listeners, so a single change redrew the card list
+  // four times.
+  try { mobRefresh(); } catch (e) {}
 }
 
 // When the inbox is empty there are three very different reasons and no way to
@@ -9760,8 +9794,21 @@ async function frDiagnose() {
 }
 
 // Same marker the desktop table shows, for staff working off a phone.
+// Called once per row on every render. Filtering the whole report list for each
+// order turned an O(orders) render into O(orders x reports); with a few hundred
+// of each that is enough to make the list feel stuck. Index it once instead.
+let _frIndex = null;
+function _frBuildIndex() {
+  _frIndex = new Map();
+  (_FR.list || []).forEach(r => {
+    if (r.reviewedAt) return;
+    if (!_frIndex.has(r.orderId)) _frIndex.set(r.orderId, []);
+    _frIndex.get(r.orderId).push(r);
+  });
+}
 function frPendingFor(orderId) {
-  return (_FR.list || []).filter(r => r.orderId === orderId && !r.reviewedAt);
+  if (!_frIndex) _frBuildIndex();
+  return _frIndex.get(orderId) || [];
 }
 function frTag(o) {
   const p = frPendingFor(o.id);
