@@ -1718,6 +1718,15 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           <button onclick="runNotifSimulation()" class="btn btn-secondary" style="width:100%">🧪 알림 동작 검증 (시뮬레이션)</button>
           <div id="notif-sim-result"></div>
         </div>
+        <div class="form-group form-full" style="border-top:1px solid var(--border2);padding-top:14px;margin-top:4px">
+          <label class="form-label">협력업체 앱 데이터</label>
+          <button onclick="rtdbRebuildMirror()" class="btn btn-secondary" style="width:100%">🔄 협력업체 앱 데이터 새로고침</button>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
+            협력업체 앱에 오더 정보가 비어 보이거나, 삭제한 오더가 남아 있을 때 실행하세요.
+            현재 오더를 다시 내려보내고 없는 오더는 정리합니다.
+          </div>
+          <div id="rtdb-rebuild-result" style="font-size:11px;margin-top:8px;line-height:1.6"></div>
+        </div>
       </div>
       </div>
 
@@ -1898,7 +1907,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-29-m';
+const APP_BUILD = '2026-07-29-n';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -1957,6 +1966,11 @@ const DB = {
   subbies: JSON.parse(lsGet('hom_subbies') || 'null') || ['SK_Mo', 'SK_Jay', 'SK_Jacob', 'SK_June', 'Jake Lee', 'Sean Park', 'Chris Choi'],
   // Deletion log for sync: { orders: {id: deletedAtMs}, ... } — lets merges know a record was removed.
   tombstones: JSON.parse(lsGet('hom_tombstones') || 'null') || { orders: {}, claims: {} },
+  // Names deliberately taken off the roster. This has to be stored, not just
+  // spliced out of DB.subbies: every sync union-merges the remote list back in
+  // (`[...new Set([...DB.subbies, ...remote.subbies])]`), so without a record of
+  // the intent a removed subbie reappears on the next pull, on every device.
+  removedSubbies: JSON.parse(lsGet('hom_removed_subbies') || 'null') || [],
 };
 // Backfill new tombstone categories for anyone who saved DB.tombstones before sorCodes/supervisors/calEvents were added.
 ['sorCodes', 'supervisors', 'calEvents'].forEach(k => { if (!DB.tombstones[k]) DB.tombstones[k] = {}; });
@@ -2022,11 +2036,20 @@ const DB = {
   // Use the in-app "+ Add Supervisor" button, or Import Backup, to repopulate on a new device.
 })();
 
+// Run after any merge that unions a remote subbie list in. Names on the removal
+// list lose — that is the whole point of keeping the list.
+function applySubbieRemovals() {
+  const gone = new Set(DB.removedSubbies || []);
+  if (!gone.size) return;
+  DB.subbies = (DB.subbies || []).filter(n => !gone.has(n));
+}
+
 function save() {
   lsSet('hom_orders', JSON.stringify(DB.orders));
   lsSet('hom_claims', JSON.stringify(DB.claims));
   lsSet('hom_sor', JSON.stringify(DB.sorCodes));
   lsSet('hom_subbies', JSON.stringify(DB.subbies));
+  lsSet('hom_removed_subbies', JSON.stringify(DB.removedSubbies || []));
   lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
   cloudPushDebounced();
 }
@@ -2463,7 +2486,7 @@ async function cloudPush() {
   renderCloudStatus('Saving…');
   try {
     const blob = JSON.stringify({
-      orders: DB.orders, claims: DB.claims, subbies: DB.subbies,
+      orders: DB.orders, claims: DB.claims, subbies: DB.subbies, removedSubbies: DB.removedSubbies || [],
       sorCodes: DB.sorCodes, supervisors: loadSupervisors(), calEvents: loadCalEvents(),
       tombstones: DB.tombstones,
       savedAt: new Date().toISOString(),
@@ -2579,6 +2602,8 @@ async function cloudPull(initial) {
     }
     DB.claims = mergeRecords(DB.claims, remote.claims || [], DB.tombstones.claims);
     if (remote.subbies) DB.subbies = [...new Set([...DB.subbies, ...remote.subbies])];
+    if (Array.isArray(remote.removedSubbies)) DB.removedSubbies = [...new Set([...(DB.removedSubbies||[]), ...remote.removedSubbies])];
+    applySubbieRemovals();
     if (remote.sorCodes) DB.sorCodes = mergeRecordsBy(DB.sorCodes, remote.sorCodes, DB.tombstones.sorCodes, s => s.code);
     const mergedSupervisors = mergeRecordsBy(loadSupervisors(), remote.supervisors || [], DB.tombstones.supervisors, s => s.id);
     const mergedCalEvents   = mergeRecordsBy(loadCalEvents(), remote.calEvents || [], DB.tombstones.calEvents, e => e.id);
@@ -9266,7 +9291,11 @@ function addTrackedSubbie() {
   if (list.includes(name)) { toast('Already in list', 'error'); return; }
   list.push(name);
   saveTrackedSubbies(list);
-  if (!DB.subbies.includes(name)) { DB.subbies.push(name); save(); }
+  // Re-adding someone must lift the tombstone, or applySubbieRemovals() strips
+  // them straight back out on the next sync and the add looks like it failed.
+  DB.removedSubbies = (DB.removedSubbies || []).filter(n => n !== name);
+  if (!DB.subbies.includes(name)) DB.subbies.push(name);
+  save();
   input.value = '';
   renderManageSubbiesList();
   renderSubbiesPage();
@@ -9276,13 +9305,23 @@ function addTrackedSubbie() {
 function removeTrackedSubbie(idx) {
   const list = getTrackedSubbies();
   const name = list[idx];
+  if (!name) return;
   const count = DB.orders.filter(o => o.subbies === name).length;
-  const msg = count > 0
-    ? 'Remove ' + name + ' from the Subbies tab? They have ' + count + ' orders assigned - those orders will not be deleted, just hidden from this tab.'
-    : 'Remove ' + name + ' from the Subbies tab?';
+  const msg = (count > 0
+    ? name + ' 님을 명단에서 삭제할까요?\n\n배정된 오더가 ' + count + '건 있습니다. 오더는 삭제되지 않고 그대로 남지만,\n앞으로 이 이름으로 새 오더를 배정할 수 없습니다.'
+    : name + ' 님을 명단에서 삭제할까요?')
+    + '\n\n모든 기기에서 사라집니다. 다시 추가하면 되돌릴 수 있습니다.';
   if (!confirm(msg)) return;
+
   list.splice(idx, 1);
   saveTrackedSubbies(list);
+  // Removing from the tracked list alone did nothing outside this tab — the
+  // name stayed in DB.subbies, so it kept appearing in the order-form dropdown
+  // and in the phone app's name picker. Drop it there too and tombstone it so
+  // the next sync does not resurrect it.
+  DB.subbies = (DB.subbies || []).filter(n => n !== name);
+  DB.removedSubbies = [...new Set([...(DB.removedSubbies || []), name])];
+  save();
   renderManageSubbiesList();
   if (subActivePerson === name) { subActivePerson = 'All'; }
   renderSubbiesPage();
@@ -9332,6 +9371,8 @@ function importDataFile(file) {
 
     if (Array.isArray(data.subbies)) {
       DB.subbies = [...new Set([...DB.subbies, ...data.subbies])];
+      if (Array.isArray(data.removedSubbies)) DB.removedSubbies = [...new Set([...(DB.removedSubbies||[]), ...data.removedSubbies])];
+      applySubbieRemovals();
     }
     if (Array.isArray(data.sorCodes)) {
       DB.sorCodes = mergeRecordsBy(DB.sorCodes, data.sorCodes, DB.tombstones.sorCodes, s => s.code);
@@ -9501,6 +9542,57 @@ function _rtdbNotify(order, type) {
 // The mirror at /orders is what the subcontractor app reads. Nothing ever
 // removed from it, so deleted orders lived on there forever and subbies kept
 // seeing work that no longer exists.
+// The mirror is written one order at a time as orders are saved, so a schema
+// change (or a delete that happened before _rtdbDeleteOrder existed) leaves old
+// records behind indefinitely. This rewrites every assigned order and removes
+// anything in the mirror that no longer exists locally.
+async function rtdbRebuildMirror() {
+  const out = document.getElementById('rtdb-rebuild-result');
+  const say = (h) => { if (out) out.innerHTML = h; };
+
+  if (!_rtdbDB) { _rtdbInit(); }
+  if (!_rtdbDB) return say('<span style="color:var(--red)">데이터베이스에 연결되지 않았습니다.</span>');
+
+  // Only orders with someone on them belong in the mirror — an unassigned order
+  // has no subbie who could read it, and pushing it just leaks addresses.
+  const mine = (DB.orders || []).filter(o => o && o.id && (o.subbies || '').trim());
+  if (!mine.length) return say('<span style="color:var(--text3)">배정된 오더가 없습니다.</span>');
+
+  if (!confirm('협력업체 앱 데이터를 다시 만들까요?\n\n오더 ' + mine.length + '건을 새로 내려보내고,\n삭제된 오더는 협력업체 앱에서 정리됩니다.\n\n로컬 데이터는 변경되지 않습니다.'))
+    return;
+
+  say('<span style="color:var(--text3)">진행 중…</span>');
+  let pushed = 0, removed = 0, failed = 0;
+
+  try {
+    for (const o of mine) {
+      try { _rtdbSyncOrder(o); pushed++; }
+      catch (e) { failed++; }
+    }
+
+    // Wait for the writes to land before reading back, otherwise the sweep
+    // below sees a half-written mirror and deletes what we just pushed.
+    await new Promise(r => setTimeout(r, 1200));
+
+    const snap   = await _rtdbDB.ref('/orders').once('value');
+    const remote = snap.val() || {};
+    const keep   = new Set(mine.map(o => o.id));
+    for (const id of Object.keys(remote)) {
+      if (keep.has(id)) continue;
+      try { await _rtdbDB.ref('/orders/' + id).remove(); removed++; }
+      catch (e) { failed++; }
+    }
+
+    say('<span style="color:var(--green)">✅ 완료</span><br>' +
+        '내려보낸 오더 <b>' + pushed + '</b>건' +
+        (removed ? ' · 정리한 오더 <b>' + removed + '</b>건' : '') +
+        (failed  ? ' · <span style="color:var(--red)">실패 ' + failed + '건</span>' : '') +
+        '<br><span style="color:var(--text3)">협력업체 앱은 새로고침 없이 바로 반영됩니다.</span>');
+  } catch (e) {
+    say('<span style="color:var(--red)">실패: ' + (e.message || e) + '</span>');
+  }
+}
+
 function _rtdbDeleteOrder(orderId) {
   const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
   if (!db || !orderId) return;
@@ -9511,6 +9603,10 @@ function _rtdbDeleteOrder(orderId) {
 function _rtdbSyncOrder(order) {
   if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
   if (!order || !order.id) return;
+  // What the subbie app can show is exactly what we put here — there is no
+  // second source. 'description' and 'scope' were mirrored for a long time but
+  // are not fields on an order (the real names are 'detail' and 'comments'), so
+  // the subbie detail sheet came through almost empty. Mirror the real schema.
   const rec = {
     id:          order.id,
     orderNumber: order.orderNumber || '',
@@ -9519,10 +9615,18 @@ function _rtdbSyncOrder(order) {
     subbies:     order.subbies     || '',
     status:      order.status      || 'active',
     workType:    order.workType    || '',
-    description: order.description || '',
-    scope:       order.scope       || '',
+    sorCode:     order.sorCode     || '',
+    orderDate:   order.orderDate   || '',
+    prn:         order.prn         || '',
+    supervisor:  order.supervisor  || '',
+    detail:      order.detail      || '',
+    comments:    order.comments    || '',
+    completedAt: order.completedAt || '',
     updatedAt:   order.updatedAt   || Date.now()
   };
+  // Deliberately NOT mirrored: amount, baseAmount, extraItems, subbiePaid.
+  // Subbies are paid on their own rates, not the Homes NSW claim value, and
+  // showing the office's figure invites an argument that should not exist.
   _rtdbDB.ref('/orders/' + order.id).set(rec)
     .then(() => console.log('[RTDB] Order synced:', order.orderNumber))
     .catch(err => console.error('[RTDB] Order sync error:', err));

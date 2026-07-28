@@ -1984,7 +1984,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-29-m';
+const APP_BUILD     = '2026-07-29-n';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -2024,6 +2024,11 @@ const DB = {
   subbies: JSON.parse(lsGet('hom_subbies') || 'null') || ['SK_Mo', 'SK_Jay', 'SK_Jacob', 'SK_June', 'Jake Lee', 'Sean Park', 'Chris Choi'],
   // Deletion log for sync: { orders: {id: deletedAtMs}, ... } — lets merges know a record was removed.
   tombstones: JSON.parse(lsGet('hom_tombstones') || 'null') || { orders: {}, claims: {} },
+  // Names deliberately taken off the roster. This has to be stored, not just
+  // spliced out of DB.subbies: every sync union-merges the remote list back in
+  // (`[...new Set([...DB.subbies, ...remote.subbies])]`), so without a record of
+  // the intent a removed subbie reappears on the next pull, on every device.
+  removedSubbies: JSON.parse(lsGet('hom_removed_subbies') || 'null') || [],
 };
 // Backfill new tombstone categories for anyone who saved DB.tombstones before sorCodes/supervisors/calEvents were added.
 ['sorCodes', 'supervisors', 'calEvents'].forEach(k => { if (!DB.tombstones[k]) DB.tombstones[k] = {}; });
@@ -2089,11 +2094,20 @@ const DB = {
   // Use the in-app "+ Add Supervisor" button, or Import Backup, to repopulate on a new device.
 })();
 
+// Run after any merge that unions a remote subbie list in. Names on the removal
+// list lose — that is the whole point of keeping the list.
+function applySubbieRemovals() {
+  const gone = new Set(DB.removedSubbies || []);
+  if (!gone.size) return;
+  DB.subbies = (DB.subbies || []).filter(n => !gone.has(n));
+}
+
 function save() {
   lsSet('hom_orders', JSON.stringify(DB.orders));
   lsSet('hom_claims', JSON.stringify(DB.claims));
   lsSet('hom_sor', JSON.stringify(DB.sorCodes));
   lsSet('hom_subbies', JSON.stringify(DB.subbies));
+  lsSet('hom_removed_subbies', JSON.stringify(DB.removedSubbies || []));
   lsSet('hom_tombstones', JSON.stringify(DB.tombstones));
   cloudPushDebounced();
 }
@@ -2525,7 +2539,7 @@ async function cloudPush() {
   renderCloudStatus('Saving…');
   try {
     const blob = JSON.stringify({
-      orders: DB.orders, claims: DB.claims, subbies: DB.subbies,
+      orders: DB.orders, claims: DB.claims, subbies: DB.subbies, removedSubbies: DB.removedSubbies || [],
       sorCodes: DB.sorCodes, supervisors: loadSupervisors(), calEvents: loadCalEvents(),
       tombstones: DB.tombstones,
       savedAt: new Date().toISOString(),
@@ -2640,6 +2654,8 @@ async function cloudPull(initial) {
     }
     DB.claims = mergeRecords(DB.claims, remote.claims || [], DB.tombstones.claims);
     if (remote.subbies) DB.subbies = [...new Set([...DB.subbies, ...remote.subbies])];
+    if (Array.isArray(remote.removedSubbies)) DB.removedSubbies = [...new Set([...(DB.removedSubbies||[]), ...remote.removedSubbies])];
+    applySubbieRemovals();
     if (remote.sorCodes) DB.sorCodes = mergeRecordsBy(DB.sorCodes, remote.sorCodes, DB.tombstones.sorCodes, s => s.code);
     const mergedSupervisors = mergeRecordsBy(loadSupervisors(), remote.supervisors || [], DB.tombstones.supervisors, s => s.id);
     const mergedCalEvents   = mergeRecordsBy(loadCalEvents(), remote.calEvents || [], DB.tombstones.calEvents, e => e.id);
@@ -6263,7 +6279,11 @@ function addTrackedSubbie() {
   if (list.includes(name)) { toast('Already in list', 'error'); return; }
   list.push(name);
   saveTrackedSubbies(list);
-  if (!DB.subbies.includes(name)) { DB.subbies.push(name); save(); }
+  // Re-adding someone must lift the tombstone, or applySubbieRemovals() strips
+  // them straight back out on the next sync and the add looks like it failed.
+  DB.removedSubbies = (DB.removedSubbies || []).filter(n => n !== name);
+  if (!DB.subbies.includes(name)) DB.subbies.push(name);
+  save();
   input.value = '';
   renderManageSubbiesList();
   renderSubbiesPage();
@@ -6273,13 +6293,23 @@ function addTrackedSubbie() {
 function removeTrackedSubbie(idx) {
   const list = getTrackedSubbies();
   const name = list[idx];
+  if (!name) return;
   const count = DB.orders.filter(o => o.subbies === name).length;
-  const msg = count > 0
-    ? 'Remove ' + name + ' from the Subbies tab? They have ' + count + ' orders assigned - those orders will not be deleted, just hidden from this tab.'
-    : 'Remove ' + name + ' from the Subbies tab?';
+  const msg = (count > 0
+    ? name + ' 님을 명단에서 삭제할까요?\n\n배정된 오더가 ' + count + '건 있습니다. 오더는 삭제되지 않고 그대로 남지만,\n앞으로 이 이름으로 새 오더를 배정할 수 없습니다.'
+    : name + ' 님을 명단에서 삭제할까요?')
+    + '\n\n모든 기기에서 사라집니다. 다시 추가하면 되돌릴 수 있습니다.';
   if (!confirm(msg)) return;
+
   list.splice(idx, 1);
   saveTrackedSubbies(list);
+  // Removing from the tracked list alone did nothing outside this tab — the
+  // name stayed in DB.subbies, so it kept appearing in the order-form dropdown
+  // and in the phone app's name picker. Drop it there too and tombstone it so
+  // the next sync does not resurrect it.
+  DB.subbies = (DB.subbies || []).filter(n => n !== name);
+  DB.removedSubbies = [...new Set([...(DB.removedSubbies || []), name])];
+  save();
   renderManageSubbiesList();
   if (subActivePerson === name) { subActivePerson = 'All'; }
   renderSubbiesPage();
@@ -6329,6 +6359,8 @@ function importDataFile(file) {
 
     if (Array.isArray(data.subbies)) {
       DB.subbies = [...new Set([...DB.subbies, ...data.subbies])];
+      if (Array.isArray(data.removedSubbies)) DB.removedSubbies = [...new Set([...(DB.removedSubbies||[]), ...data.removedSubbies])];
+      applySubbieRemovals();
     }
     if (Array.isArray(data.sorCodes)) {
       DB.sorCodes = mergeRecordsBy(DB.sorCodes, data.sorCodes, DB.tombstones.sorCodes, s => s.code);
@@ -8942,6 +8974,9 @@ function _rtdbDeleteOrder(orderId) {
 function _rtdbSyncOrder(order) {
   const db = _rtdbDb();
   if (!db || !order || !order.id) return;
+  // Must stay identical to the desktop mirror in index.html. If mobile writes
+  // fewer fields, saving the same order from a phone silently strips detail
+  // and comments out of the subbie's view.
   db.ref('/orders/' + order.id).set({
     id:          order.id,
     orderNumber: order.orderNumber || '',
@@ -8950,6 +8985,13 @@ function _rtdbSyncOrder(order) {
     subbies:     order.subbies     || '',
     status:      order.status      || 'active',
     workType:    order.workType    || '',
+    sorCode:     order.sorCode     || '',
+    orderDate:   order.orderDate   || '',
+    prn:         order.prn         || '',
+    supervisor:  order.supervisor  || '',
+    detail:      order.detail      || '',
+    comments:    order.comments    || '',
+    completedAt: order.completedAt || '',
     updatedAt:   order.updatedAt   || Date.now(),
   }).catch(err => console.warn('[RTDB] order sync failed:', err.message));
 }
