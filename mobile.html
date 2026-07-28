@@ -755,6 +755,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-bell-ringing" style="color:#4285F4"></i></span>
       <span style="flex:1">테스트 알림</span>
     </div>
+    <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()">
+      <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-cloud-cog" style="color:#007AFF"></i></span>
+      <span style="flex:1">동기화 주소 설정</span>
+    </div>
     <div class="mob-dl" onclick="showSyncDiagnostics();mobDrawerClose()">
       <span class="dl-i" style="background:#ECFDF5"><i class="ti ti-refresh-alert" style="color:#10B981"></i></span>
       <span style="flex:1">동기화 진단</span>
@@ -1969,7 +1973,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-28-n';
+const APP_BUILD     = '2026-07-28-o';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -2429,7 +2433,13 @@ async function cloudForcePush() {
 }
 
 function startCloudSync() {
-  if (!CLOUD.url) return;
+  if (!CLOUD.url) {
+    // Fail loudly. This used to return in silence, so a device with sync
+    // "on" but no URL looked healthy while syncing nothing at all.
+    console.warn('[CLOUD] sync enabled but no URL is set — nothing will sync');
+    renderCloudStatus('주소 없음');
+    return;
+  }
   stopCloudSync();
   cloudPull(true);
   CLOUD.pullTimer = setInterval(() => cloudPull(false), 3000);  // every 3s
@@ -6749,6 +6759,20 @@ function mobVEdit() {
 
 // ── Drawer ──────────────────────────────────────────────────────
 function mobBackToHome() {
+  // Subbie mode: go back to the SUBBIE name list, not all the way out to the
+  // role screen. Dropping a subbie at the very first screen made them re-pick
+  // "Subcontractor" every time just to switch person.
+  if (window._SUBBIE_MODE && !_SUBBIE_PARAM) {
+    const overlay = document.getElementById('mob-pin-overlay');
+    if (overlay) overlay.style.display = 'flex';
+    ['mob-role-select','mob-pin-entry','mob-sk-pick'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+    window._SELECTED_SUBBIE = null;
+    mobRoleSubbie();           // rebuilds and shows the subbie list
+    return;
+  }
+
   // If in SK admin mode, just go back to name picker (no PIN re-entry needed)
   if (window._ADMIN_MODE && !window._SUBBIE_MODE) {
     const overlay = document.getElementById('mob-pin-overlay');
@@ -7070,9 +7094,13 @@ function mobRoleSubbiePick(name) {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  // Show back button
+  // Show back button — labelled for what it actually does here: swap person.
   const backBtn = document.getElementById('mob-back-btn');
-  if (backBtn) backBtn.style.display = '';
+  if (backBtn) {
+    backBtn.style.display = 'inline-flex';
+    backBtn.style.alignItems = 'center';
+    backBtn.textContent = '⇄ Switch User';
+  }
   mobApplySubbieUI();
   mobNav('orders');
   // FCM for subbie: auto-register if already granted, else show banner
@@ -7516,7 +7544,9 @@ function detectNewAssignments(prevOrders) {
     if (['closed', 'cancelled', 'completed'].includes(o.status)) return;
     const key = _assignKey(o);
     if (NOTIF.seen[o.id] === key) return;
-    if (NOTIF.selfAssigned.has(o.id)) { NOTIF.seen[o.id] = key; _seenChanged = true; return; }
+    // Self-assignment used to be suppressed on the reasoning that you already
+    // know what you just typed. In practice the confirmation is wanted — it is
+    // how you know the save actually landed and reached the right person.
     NOTIF.seen[o.id] = key; _seenChanged = true;
     fresh.push({ order: o, isNew: !prevMap[o.id] });
   });
@@ -7802,7 +7832,10 @@ async function authSignOut() {
   if (!_authSetup()) return;
   lsSet('hom_auth_email', '');
   lsSet('hom_auth_name', '');
-  lsSet('hom_cloud_url', '');
+  // The sync URL is team configuration, not a credential — wiping it on sign-out
+  // stranded the device with no way back once the Cloud Sync dialog moved out of
+  // the header. Access is already controlled by the sign-in gate.
+
   try { await AUTH.auth.signOut(); } catch (e) {}
   location.reload();
 }

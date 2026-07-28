@@ -418,7 +418,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <div style="display:flex;gap:9px;align-items:center">
 
         <!-- ── STATUS ── -->
-        <div onclick="showSyncDiagnostics()" title="클릭하면 동기화 진단" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 8px;background:var(--cream2);border-radius:7px;border:1px solid var(--border2);cursor:pointer">
+        <div onclick="CLOUD.enabled && !CLOUD.url ? openCloudModal() : showSyncDiagnostics()" title="클릭: 동기화 진단 (주소 없음이면 설정 열기)" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 8px;background:var(--cream2);border-radius:7px;border:1px solid var(--border2);cursor:pointer">
           <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
           <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
         </div>
@@ -1892,7 +1892,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-28-n';
+const APP_BUILD = '2026-07-28-o';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2292,6 +2292,11 @@ document.addEventListener('keydown', function(ev) {
 // CLOUD SYNC (Google Sheets via Apps Script) — HTTPS version
 // Standard fetch GET/POST. Works when the app is served over https://
 // ============================================================
+// User activity means work is happening — drop back to the fast interval so a
+// change made on another device shows up right away.
+['touchstart','mousedown','keydown'].forEach(ev =>
+  document.addEventListener(ev, () => { try { cloudPollNow(); } catch (e) {} }, { passive: true }));
+
 var CLOUD = {
   url: lsGet('hom_cloud_url') || '',
   enabled: lsGet('hom_cloud_enabled') === '1',
@@ -2299,6 +2304,7 @@ var CLOUD = {
   pushing: false,
   pulling: false,
   pullTimer: null,
+  pollMs: 3000,
   pushTimer: null,
   applying: false,
   _serverNow: 0,  // latest server timestamp from pull response (fixes clock skew)
@@ -2373,11 +2379,41 @@ async function cloudForcePush() {
   toast('Force Push complete ✓ — others will update within 5 seconds', 'success');
 }
 
+// Adaptive polling.
+//
+// A fixed 3-second poll downloads and JSON-parses the ENTIRE dataset every
+// time — thousands of orders, several megabytes — and only then discovers
+// nothing changed. On a phone that is a stutter every three seconds, all day.
+//
+// The interval stretches while the data is quiet and snaps back to 3s the
+// moment anything changes or the user touches the app, so a fresh assignment
+// still lands promptly.
+const _POLL_MIN = 3000, _POLL_MAX = 30000;
+
+function _pollBump(changed) {
+  const prev = CLOUD.pollMs || _POLL_MIN;
+  CLOUD.pollMs = changed ? _POLL_MIN : Math.min(_POLL_MAX, Math.round(prev * 1.6));
+  if (CLOUD.pollMs !== prev && CLOUD.pullTimer) _rearmPoll();
+}
+function _rearmPoll() {
+  if (CLOUD.pullTimer) clearInterval(CLOUD.pullTimer);
+  CLOUD.pullTimer = setInterval(() => cloudPull(false), CLOUD.pollMs || _POLL_MIN);
+}
+function cloudPollNow() {
+  CLOUD.pollMs = _POLL_MIN;
+  if (CLOUD.pullTimer) { _rearmPoll(); cloudPull(false); }
+}
+
 function startCloudSync() {
-  if (!CLOUD.url) return;
+  if (!CLOUD.url) {
+    console.warn('[CLOUD] sync enabled but no URL is set — nothing will sync');
+    renderCloudStatus('주소 없음');
+    return;
+  }
   stopCloudSync();
+  CLOUD.pollMs = _POLL_MIN;
   cloudPull(true);
-  CLOUD.pullTimer = setInterval(() => cloudPull(false), 3000);  // every 3s
+  _rearmPoll();
 }
 function stopCloudSync() { if (CLOUD.pullTimer) { clearInterval(CLOUD.pullTimer); CLOUD.pullTimer = null; } }
 
@@ -2478,7 +2514,7 @@ async function cloudPull(initial) {
     console.log('[PULL DEBUG] pull response ok=', out?.ok, 'hasData=', !!out?.data, 'updatedAt=', out?.updatedAt);
     if (!out || !out.ok) { console.log('[PULL DEBUG] pull failed. ok=', out?.ok, 'error=', out?.error); renderCloudStatus('Offline'); return; }
     if (!out.data) { renderCloudStatus(initial ? 'Connected (empty)' : 'Synced ✓'); return; }
-    if (out.updatedAt && out.updatedAt === CLOUD.lastSeenAt) { console.log('[PULL DEBUG] same updatedAt — skipping merge'); renderCloudStatus('Synced ✓'); return; }
+    if (out.updatedAt && out.updatedAt === CLOUD.lastSeenAt) { _pollBump(false); renderCloudStatus('Synced ✓'); return; }
 
     const remote = JSON.parse(out.data);
     console.log('[PULL DEBUG] remote orders=', remote.orders?.length, 'local orders=', DB.orders.length);
@@ -2554,7 +2590,7 @@ async function cloudPull(initial) {
       console.log('[SYNC DEBUG] clock skew=', CLOUD._skewMs, 'ms (positive = local behind server)');
     }
     CLOUD.applying = false;
-    console.log('[PULL DEBUG] merge done. DB.orders now=', DB.orders.length);
+    _pollBump(true);            // something changed — stay responsive
 
     // Assignment notifications. `initial` = the first pull of this session, which
     // is also the point where a fresh device learns about every existing order —
@@ -2601,9 +2637,13 @@ async function cloudPushInitial() {
 }
 
 function renderCloudStatus(msg) {
+  // enabled but no URL means startCloudSync() returns immediately and nothing
+  // ever runs — showing "Sync on" for that state hid a dead sync behind a
+  // healthy-looking label.
+  const broken = CLOUD.enabled && !CLOUD.url;
   const el = document.getElementById('cloud-status');
-  if (el) el.textContent = msg || (CLOUD.enabled ? 'Sync on' : 'off');
-  const color = CLOUD.enabled ? 'var(--green)' : 'var(--text3)';
+  if (el) el.textContent = msg || (broken ? '주소 없음' : CLOUD.enabled ? 'Sync on' : 'off');
+  const color = broken ? 'var(--red)' : CLOUD.enabled ? 'var(--green)' : 'var(--text3)';
   const dot = document.getElementById('cloud-dot');
   if (dot) dot.style.background = color;
   const dot2 = document.getElementById('cloud-dot-2');
@@ -6623,10 +6663,9 @@ function detectNewAssignments(prevOrders) {
 
     const key = _assignKey(o);
     if (NOTIF.seen[o.id] === key) return;                 // R3 — already told
-    if (NOTIF.selfAssigned.has(o.id)) {                   // R5 — I did this
-      NOTIF.seen[o.id] = key; _seenChanged = true;
-      return;
-    }
+    // Self-assignment used to be suppressed on the reasoning that you already
+    // know what you just typed. In practice the confirmation is wanted — it is
+    // how you know the save actually landed and reached the right person.
     NOTIF.seen[o.id] = key; _seenChanged = true;
     const prev = prevMap[o.id];
     fresh.push({
@@ -7500,7 +7539,10 @@ async function authSignOut() {
   // still holds the sync URL that the sign-out was meant to revoke.
   lsSet('hom_auth_email', '');
   lsSet('hom_auth_name', '');
-  lsSet('hom_cloud_url', '');
+  // The sync URL is team configuration, not a credential — wiping it on sign-out
+  // stranded the device with no way back once the Cloud Sync dialog moved out of
+  // the header. Access is already controlled by the sign-in gate.
+
   try { await AUTH.auth.signOut(); } catch (e) {}
   location.reload();
 }
