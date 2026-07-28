@@ -2009,7 +2009,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-29-u';
+const APP_BUILD     = '2026-07-29-w';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -9169,10 +9169,13 @@ async function _rtdbAutoMirror(reason) {
 async function _rtdbRescanIssueReports() {
   if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
   try {
-    const snap = await _rtdbDB.ref('/issueReports').once('value');
-    const all  = snap.val() || {};
-    Object.keys(all).forEach(k => {
-      try { _applyIssueReport(k, all[k] || {}); } catch (e) {}
+    const snap = await _rtdbDB.ref('/issues').once('value');
+    const byOrder = snap.val() || {};
+    Object.keys(byOrder).forEach(orderId => {
+      const entries = byOrder[orderId] || {};
+      Object.keys(entries).forEach(ts => {
+        try { _applyIssueReport(orderId + '_' + ts, entries[ts] || {}, orderId); } catch (e) {}
+      });
     });
   } catch (e) { console.warn('[ISSUE] rescan failed:', e.message || e); }
 }
@@ -9182,9 +9185,21 @@ function _rtdbWatchIssueReports() {
   if (window._issueWatchOn) return;
   window._issueWatchOn = true;
 
-  _rtdbDB.ref('/issueReports').on('child_added', snap => {
-    try { _applyIssueReport(snap.key, snap.val() || {}); }
-    catch (e) { console.warn('[ISSUE] apply failed:', e); }
+  // Watch /issues, which is where the subbie app writes and which the rules
+  // have always allowed. The previous version listened on /issueReports — a new
+  // path that needed a rules change nobody had made, so every report was
+  // rejected at the source and the office never heard about any of it.
+  // Entries are nested one level (orderId → timestamp → report), so this needs
+  // a value listener rather than child_added.
+  _rtdbDB.ref('/issues').on('value', snap => {
+    const byOrder = snap.val() || {};
+    Object.keys(byOrder).forEach(orderId => {
+      const entries = byOrder[orderId] || {};
+      Object.keys(entries).forEach(ts => {
+        try { _applyIssueReport(orderId + '_' + ts, entries[ts] || {}, orderId); }
+        catch (e) { console.warn('[ISSUE] apply failed:', e); }
+      });
+    });
   });
 }
 
@@ -9203,11 +9218,20 @@ function _issueMarkSeen(id) {
   lsSet('hom_issue_seen', JSON.stringify(seen.slice(-400)));
 }
 
-function _applyIssueReport(reportId, r) {
-  if (!reportId || !r || !r.orderId) return;
+function _applyIssueReport(reportId, r, orderIdHint) {
+  if (!reportId || !r) return;
+  const orderId = r.orderId || orderIdHint;
+  if (!orderId) return;
+
+  // Only entries written as an explicit report are acted on. /issues already
+  // held photo-and-note records from the older subbie app; treating those as
+  // fresh reports would reach back through months of finished work and flip it
+  // all to Issue status the first time this ran.
+  if (r.type !== 'issue' && r.type !== 'done') return;
+
   if (_issueSeen().includes(reportId)) return;
 
-  const o = (DB.orders || []).find(x => x.id === r.orderId);
+  const o = (DB.orders || []).find(x => x.id === orderId);
   // Do NOT mark it seen yet. The order may simply not have synced to this
   // device yet — marking it here meant the report was permanently discarded on
   // that device, and if every open device happened to be in that state the

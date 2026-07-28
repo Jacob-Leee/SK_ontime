@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// Firebase Storage — 현장 사진 전용
+//
+// Console → Storage → Rules 에 붙여넣고 [게시]
+//
+// RTDB 규칙(database.rules.json)과는 별개입니다. 이걸 게시하지 않으면
+// 사진 업로드만 실패하고 이슈 본문은 정상 전달됩니다.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // 오더별 현장 사진. 로그인한 사용자만.
+    match /issues/{orderId}/{fileName} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // 그 외 경로는 모두 차단
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

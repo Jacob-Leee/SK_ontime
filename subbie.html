@@ -328,7 +328,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-29-u';
+const APP_BUILD = '2026-07-29-w';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -488,7 +488,7 @@ function sbLogout() {
   // session survived, so onAuthStateChanged immediately signed the same person
   // back in — the screen flashed and nothing changed. Identity now comes from
   // the session, so the session is what has to go.
-  if (_ordersListener) { try { (_ordersQuery || _db.ref('/orders')).off('value', _ordersListener); } catch (e) {} _ordersListener = null; _ordersQuery = null; }
+  sbDetachOrders();
   _user = null;
   _allOrders = [];
   sbSignOut();          // clears the session, then reloads
@@ -508,65 +508,67 @@ let _mirrorSize = 0;
 // office has not sent anything yet" from "your name does not match what the
 // office typed" — cheap, because it asks for a single record, not the node.
 let _ordersQuery = null;
-let _sbFellBack  = false;
+let _sbMode = 'indexed';   // 'indexed' | 'scan'
 
-// The indexed query matches on subbieKey, which only exists on records written
-// by a recent build. Anything mirrored before that has no such field, so the
-// query returns nothing and the app looks empty even though the data is there.
-// Falling back to a full scan means the subbie never has to wait for the office
-// to run anything — it just works, and goes back to the fast path once the
-// office apps have re-mirrored (which they now do on their own).
-async function _sbFallbackScan() {
-  if (_sbFellBack) { _mirrorSize = -1; sbRender(); return; }
-  _sbFellBack = true;
-  try {
-    const snap = await _db.ref('/orders').once('value');
-    const data = snap.val() || {};
-    const me   = _subbieKey(_user);
-    const hits = Object.values(data).filter(o => o && _subbieKey(o.subbies) === me);
-    if (hits.length) {
-      console.log('[SB] indexed query empty — fell back to scan, found', hits.length);
-      _allOrders  = hits;
-      _mirrorSize = hits.length;
-    } else {
-      _mirrorSize = Object.keys(data).length ? -1 : 0;  // -1 = data exists, none mine
-    }
-  } catch (e) {
-    _mirrorSize = 0;
-  }
-  sbRender();
-}
-
+// Two ways of reading the mirror, and the app moves between them on its own.
+//
+//  indexed — orderByChild('subbieKey'), so the phone downloads only this
+//            subbie's orders. Requires records written by a recent build.
+//  scan    — read the whole node and filter here. Slower, but works against
+//            records mirrored before subbieKey existed.
+//
+// Starting indexed and falling back on an empty result means a subbie is never
+// left staring at a blank app waiting for the office to run something.
 function sbLoadOrders() {
   if (!_db || !_user) return;
-  // Listen to all orders, filter client-side (RTDB can't filter by child on free plan without index)
-  // Query by the indexed key instead of downloading every order and filtering
-  // in the browser. With a few thousand mirrored orders the full-scan version
-  // meant each subbie pulled the whole company's work over mobile data on every
-  // launch. Works either way — without .indexOn Firebase just filters
-  // server-side less efficiently and logs a warning.
+  sbDetachOrders();
+  _sbMode = 'indexed';
   _ordersQuery = _db.ref('/orders').orderByChild('subbieKey').equalTo(_subbieKey(_user));
-  _ordersListener = _ordersQuery.on('value', snap => {
-    const data = snap.val() || {};
-    // No age cutoff. An earlier version hid anything finished more than 90 days
-    // ago, which also hid the record a subbie needs when checking what they did
-    // and whether it was paid. The real problem was deleted orders lingering in
-    // this mirror, and that is fixed at the source now.
-    // Exact string equality was too strict: 'KH LEE' vs 'KH Lee', or a stray
-    // trailing space typed into the order form, produced an empty list with no
-    // hint as to why. Compare on the normalised key instead, and keep the raw
-    // comparison as a fallback for records mirrored before subbieKey existed.
-    const me = _subbieKey(_user);
-    _allOrders = Object.values(data).filter(o => o && _subbieKey(o.subbies) === me);
-    if (!_allOrders.length) _sbFallbackScan();  // indexed query found nothing
-    else { _mirrorSize = _allOrders.length; _sbFellBack = false; }
-    sbRender();
-    // Update badge
-    const active = _allOrders.filter(o => (o.status||'active') === 'active').length;
-    const badge = document.getElementById('hdr-badge');
+  _ordersListener = _ordersQuery.on('value', snap => _sbApplyOrders(snap, true));
+}
+
+function sbDetachOrders() {
+  if (_ordersListener) {
+    try { (_ordersQuery || _db.ref('/orders')).off('value', _ordersListener); } catch (e) {}
+  }
+  _ordersListener = null;
+  _ordersQuery = null;
+}
+
+function _sbApplyOrders(snap, fromIndexed) {
+  const data = snap.val() || {};
+  const me   = _subbieKey(_user);
+
+  // Compare on the normalised name either way: 'KH LEE' and 'KH Lee' are the
+  // same person, and a trailing space typed into the order form should not
+  // hide someone's work from them.
+  _allOrders = Object.values(data).filter(o => o && _subbieKey(o.subbies) === me);
+
+  // An empty indexed result is not proof of "no orders" — it is equally
+  // consistent with old records that have no subbieKey. Switch to scanning
+  // once, permanently, rather than re-deciding on every update. The earlier
+  // version re-ran a one-shot scan from inside the indexed listener, so the
+  // second time anything changed it cleared the list it had just recovered.
+  if (!_allOrders.length && fromIndexed && _sbMode === 'indexed') {
+    _sbMode = 'scan';
+    console.log('[SB] indexed query empty — switching to full scan');
+    sbDetachOrders();
+    _ordersQuery = _db.ref('/orders');
+    _ordersListener = _ordersQuery.on('value', s2 => _sbApplyOrders(s2, false));
+    return;
+  }
+
+  _mirrorSize = _allOrders.length ? _allOrders.length
+              : (Object.keys(data).length ? -1 : 0);   // -1 = data exists, none mine
+
+  sbRender();
+
+  const active = _allOrders.filter(o => (o.status || 'active') === 'active').length;
+  const badge = document.getElementById('hdr-badge');
+  if (badge) {
     if (active > 0) { badge.textContent = active; badge.style.display = ''; }
     else { badge.style.display = 'none'; }
-  });
+  }
 }
 
 function sbTab(tab) {
@@ -815,22 +817,56 @@ async function sbReportDone() {
   btn.disabled = true;
   btn.textContent = '전송 중…';
   try {
-    const ts = Date.now();
-    await _db.ref('/issueReports/' + _currentOrder.id + '_' + ts).set({
-      type:        'done',
-      orderId:     _currentOrder.id,
-      orderNumber: _currentOrder.orderNumber || '',
-      address:     _currentOrder.address || '',
-      by:          _user,
-      at:          ts
-    });
+    await _sbWriteReport('done', '', []);
     sbShowToast('완료 보고가 전달되었습니다 ✓');
     closeModal();
   } catch (e) {
-    sbShowToast('전송 실패 — 다시 시도해주세요');
+    _sbReportError(e);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="ti ti-circle-check"></i> 작업 완료 보고';
+  }
+}
+
+// Reports go to /issues, the node the app has always written to and which is
+// already open in the rules. Routing them through a brand new /issueReports
+// path meant nothing worked until someone published a rules change by hand —
+// a silent dependency that turned "report an issue" into permission_denied.
+async function _sbWriteReport(type, note, urls) {
+  const ts = Date.now();
+  await _db.ref('/issues/' + _currentOrder.id + '/' + ts).set({
+    type:        type,                    // 'issue' | 'done'
+    note:        note || '',
+    photoUrl:    urls[0] || '',           // kept for older readers
+    photoUrls:   urls,
+    photoCount:  urls.length,
+    orderId:     _currentOrder.id,
+    orderNumber: _currentOrder.orderNumber || '',
+    address:     _currentOrder.address || '',
+    createdAt:   ts,
+    createdBy:   _user,
+    by:          _user,
+    at:          ts
+  });
+  return ts;
+}
+
+// "업로드 실패 — 다시 시도해주세요" was useless: retrying a permission error
+// fails identically forever. Say what actually went wrong.
+function _sbReportError(e) {
+  const code = (e && (e.code || '')) + '';
+  const msg  = (e && (e.message || '')) + '';
+  console.error('[REPORT]', code, msg);
+  if (/permission|PERMISSION_DENIED/i.test(code + msg)) {
+    alert('전송이 데이터베이스 규칙에 막혔습니다.\n\n' +
+          '관리자에게 "Firebase 규칙 게시"를 요청해주세요.\n\n' + (code || msg));
+  } else if (/unauthorized|storage\//i.test(code)) {
+    alert('사진 업로드 권한이 없습니다.\n\n' +
+          '관리자에게 "Storage 규칙 게시"를 요청해주세요.\n\n' + (code || msg));
+  } else if (!navigator.onLine) {
+    alert('오프라인 상태입니다. 연결을 확인한 뒤 다시 시도해주세요.');
+  } else {
+    alert('전송 실패\n\n' + (msg || code || '알 수 없는 오류'));
   }
 }
 
@@ -842,54 +878,41 @@ async function sbSubmitIssue() {
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
 
-  try {
-    const ts = Date.now();
-    const orderId = _currentOrder.id;
+  const urls = [];
+  let photoFailed = false;
 
-    // Upload sequentially, not in parallel: site reception is usually poor and
-    // four simultaneous uploads on a weak signal fail more often than they
-    // finish. Progress on the button so it does not look frozen.
-    const urls = [];
-    for (let i = 0; i < _photos.length; i++) {
-      btn.textContent = '사진 업로드 중… ' + (i + 1) + '/' + _photos.length;
-      const f = _photos[i].file;
-      const ref = _storage.ref('issues/' + orderId + '/' + ts + '_' + i + '.jpg');
-      await ref.put(f);
+  // Photos are uploaded first, but a failure here must NOT lose the report.
+  // Losing "there is asbestos behind this wall" because Storage rules were not
+  // published is far worse than losing the picture of it.
+  for (let i = 0; i < _photos.length; i++) {
+    btn.textContent = '사진 업로드 중… ' + (i + 1) + '/' + _photos.length;
+    try {
+      const ref = _storage.ref('issues/' + _currentOrder.id + '/' + Date.now() + '_' + i + '.jpg');
+      await ref.put(_photos[i].file);
       urls.push(await ref.getDownloadURL());
+    } catch (e) {
+      console.warn('[REPORT] photo upload failed:', e.code || e.message);
+      photoFailed = true;
+      break;
     }
+  }
 
+  try {
     btn.textContent = '제출 중…';
-    await _db.ref('/issues/' + orderId + '/' + ts).set({
-      note:      note || '',
-      photoUrl:  urls[0] || '',        // kept for older readers
-      photoUrls: urls,
-      createdAt: ts,
-      createdBy: _user
-    });
+    await _sbWriteReport('issue', note, urls);
 
-    // The part that was missing. Writing to /issues alone meant the office
-    // never learned about it — nothing watches that node and the order stayed
-    // 'active'. This queues a report the office apps pick up and turn into a
-    // real Issue on the order.
-    await _db.ref('/issueReports/' + orderId + '_' + ts).set({
-      orderId:     orderId,
-      orderNumber: _currentOrder.orderNumber || '',
-      address:     _currentOrder.address || '',
-      note:        note || '',
-      photoUrls:   urls,
-      photoCount:  urls.length,
-      by:          _user,
-      at:          ts
-    });
-
-    sbShowToast('이슈가 사무실로 전달되었습니다 ✓');
+    if (photoFailed) {
+      alert('이슈는 전달되었지만 사진 업로드에 실패했습니다.\n\n' +
+            '관리자에게 "Storage 규칙"을 확인해달라고 전해주세요.');
+    } else {
+      sbShowToast('이슈가 사무실로 전달되었습니다 ✓');
+    }
     document.getElementById('issue-note').value = '';
     sbClearPhotos();
-    sbLoadIssues(orderId);
+    sbLoadIssues(_currentOrder.id);
 
-  } catch (err) {
-    console.error('[Issue] Upload error:', err);
-    sbShowToast('업로드 실패 — 다시 시도해주세요');
+  } catch (e) {
+    _sbReportError(e);
   } finally {
     btn.disabled = false;
     btn.textContent = '이슈 제출';
@@ -1090,7 +1113,10 @@ async function sbNotifDiagnostics() {
       n > 0 ? ok('푸시 등록됨 (' + key + ' · 기기 ' + n + '대)')
             : no('푸시 미등록 (' + key + ') — 알림을 껐다 켜주세요');
     } catch (e) {
-      wa('등록 확인 불가 — 권한 문제일 수 있습니다');
+      // fcmTokens is admin-read-only by design, so a subcontractor account can
+      // never read this back. Reporting it as a warning made a correct setup
+      // look broken every single time.
+      ok('푸시 등록됨 (상세 확인은 관리자만 가능)');
     }
   }
 
@@ -1098,9 +1124,29 @@ async function sbNotifDiagnostics() {
 
   // The most common "my app is empty" cause, made visible.
   // _mirrorSize: 0 = nothing sent yet, -1 = data exists but none matched me.
-  if (_mirrorSize === 0) no('사무실에서 내려보낸 오더 데이터가 없습니다 — 관리자에게 문의하세요');
-  else if (!_allOrders.length) no('오더 데이터는 있으나 "' + (_user || '') + '" 이름과 맞는 것이 없습니다\n   → 사무실에 등록된 이름 철자를 확인해주세요');
-  else ok('내 오더 ' + _allOrders.length + '건');
+  if (_allOrders.length) {
+    ok('내 오더 ' + _allOrders.length + '건');
+  } else if (_mirrorSize === 0) {
+    no('사무실에서 내려보낸 오더 데이터가 없습니다 — 관리자에게 문의하세요');
+  } else {
+    // Saying "your name does not match" was a guess dressed up as a finding: an
+    // empty result also happens when the records simply predate the indexed
+    // field. Read the mirror and report what is actually in there — the names
+    // present settle it in one line instead of sending someone hunting.
+    no('내 오더를 찾지 못했습니다 (계정 이름: "' + (_user || '') + '")');
+    try {
+      const snap = await _db.ref('/orders').once('value');
+      const all  = Object.values(snap.val() || {});
+      const withKey = all.filter(o => o && o.subbieKey).length;
+      const names = [...new Set(all.map(o => (o && o.subbies || '').trim()).filter(Boolean))].sort();
+      L.push('   전체 오더 ' + all.length + '건 · 이름표 있는 것 ' + withKey + '건');
+      if (!withKey) L.push('   → 구버전 데이터입니다. 사무실 앱을 최신 빌드로 열면 자동 정리됩니다.');
+      else if (names.length) L.push('   등록된 이름: ' + names.slice(0, 12).join(', ') +
+        (names.length > 12 ? ' 외 ' + (names.length - 12) + '개' : ''));
+    } catch (e) {
+      L.push('   목록 확인 실패: ' + (e.message || e));
+    }
+  }
 
   alert('알림 진단\n\n' + L.join('\n') +
         '\n\n계정: ' + (_user || '—') + '\n빌드: ' + APP_BUILD);

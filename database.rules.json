@@ -26,10 +26,6 @@
     "issues": {
       ".read": true,
       ".write": true
-    },
-    "issueReports": {
-      ".read": true,
-      ".write": true
     }
   }
 }
