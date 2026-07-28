@@ -6916,12 +6916,14 @@ function runNotifSimulation() {
 // locally after first success, so a signed-in device still works with no network.
 // ============================================================
 
-const AUTH_REQUIRED = false;   // ← set to true AFTER Firebase Console setup
+// ENABLED 2026-07-28 after sign-in was confirmed working on this domain.
+// To disable: set back to false and re-upload — data is untouched either way.
+const AUTH_REQUIRED = true;
 
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds instead of a guessing game.
-const APP_BUILD = '2026-07-28-e';
+const APP_BUILD = '2026-07-28-f';
 
 const AUTH = { user: null, entry: null, ready: false, auth: null, db: null, lastError: null };
 
