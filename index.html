@@ -1986,7 +1986,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-30-l';
+const APP_BUILD = '2026-07-30-n';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -9918,55 +9918,107 @@ function _mirrorEligible() {
 
 // (declared at the top of the script — see the note there)
 let _mirrorLastRun = 0;
+
+// Runs a callback when the browser is idle, so a long backfill never lands in
+// the middle of someone's tap. Falls back to a timeout where unsupported.
+const _idle = (fn) => (window.requestIdleCallback
+  ? requestIdleCallback(fn, { timeout: 400 })
+  : setTimeout(() => fn({ timeRemaining: () => 8 }), 0));
+
+// Mirror reconcile.
+//
+// The first version walked every order, wrote 300 at a time, and saved a full
+// localStorage snapshot after each batch — on the 3-second poll that was enough
+// to stall the phone, so it got throttled to two minutes. Throttling made it
+// slow without making it cheap.
+//
+// This version is cheap first and therefore does not need throttling:
+//   · one pass to find what changed, no intermediate arrays in the common case
+//   · a handful of changes goes straight out — the normal case, so edits appear
+//     in the subbie app within a second or two
+//   · a large backfill is spread across idle slices instead of blocking
+//   · state is written once at the end of a run, not once per batch
 async function _rtdbAutoMirror(reason) {
   if (_mirrorRunning) return;
-  // Rate-limited. This walks every order, builds records and writes them in
-  // batches of 300, saving a full localStorage snapshot after each batch. Doing
-  // that on the 3-second sync poll is enough to lock up a phone on its own —
-  // and the mirror does not need to be second-accurate.
   const now = Date.now();
-  if (reason !== 'startup' && now - _mirrorLastRun < 120000) return;
-  _mirrorLastRun = now;
+  // Just a thrash guard — two pulls landing together should not both run.
+  if (reason !== 'startup' && now - _mirrorLastRun < 4000) return;
+
   if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
 
   const state = _mirrorState();
-  const want  = _mirrorEligible();
-  const wantIds = new Set(want.map(o => o.id));
-
-  // Push anything the mirror has never seen, or that has changed since.
-  const stale = want.filter(o => state[o.id] !== (o.updatedAt || 0));
-  // Drop anything that is no longer eligible — deleted, cancelled off a subbie,
-  // or reassigned to internal staff.
-  const orphans = Object.keys(state).filter(id => !wantIds.has(id));
+  const stale = [];
+  const seen = new Set();
+  for (const o of (DB.orders || [])) {
+    const who = (o && o.subbies || '').trim();
+    if (!o || !o.id || !who || who.toUpperCase().startsWith('SK_')) continue;
+    seen.add(o.id);
+    if (state[o.id] !== (o.updatedAt || 0)) stale.push(o);
+  }
+  const orphans = [];
+  for (const id of Object.keys(state)) if (!seen.has(id)) orphans.push(id);
 
   if (!stale.length && !orphans.length) return;
 
   _mirrorRunning = true;
-  console.log('[MIRROR] reconcile (' + reason + '):', stale.length, 'to push,', orphans.length, 'to remove');
-  const CHUNK = 300;
+  _mirrorLastRun = now;
+  const total = stale.length + orphans.length;
+  console.log('[MIRROR] ' + reason + ': ' + stale.length + ' to push, ' + orphans.length + ' to remove');
+
+  // Small change set — the everyday case. Send it in one write, immediately.
+  const SMALL = 40;
   try {
-    for (let i = 0; i < stale.length; i += CHUNK) {
+    if (total <= SMALL) {
       const batch = {};
-      const slice = stale.slice(i, i + CHUNK);
-      slice.forEach(o => { batch['/orders/' + o.id] = _rtdbRecord(o); });
+      stale.forEach(o => { batch['/orders/' + o.id] = _rtdbRecord(o); });
+      orphans.forEach(id => { batch['/orders/' + id] = null; });
       await _rtdbDB.ref().update(batch);
-      slice.forEach(o => { state[o.id] = o.updatedAt || 0; });
-      _mirrorStateSave(state);   // save per chunk so an interruption resumes
-    }
-    for (let i = 0; i < orphans.length; i += CHUNK) {
-      const batch = {};
-      const slice = orphans.slice(i, i + CHUNK);
-      slice.forEach(id => { batch['/orders/' + id] = null; });
-      await _rtdbDB.ref().update(batch);
-      slice.forEach(id => { delete state[id]; });
+      stale.forEach(o => { state[o.id] = o.updatedAt || 0; });
+      orphans.forEach(id => { delete state[id]; });
       _mirrorStateSave(state);
+      _mirrorRunning = false;
+      return;
     }
-    console.log('[MIRROR] reconcile done');
+
+    // Large set — backfill or first run. Give the UI a breath between batches
+    // and only touch localStorage once the whole run is done.
+    const CHUNK = 150;
+    let i = 0, j = 0;
+    const step = async () => {
+      try {
+        if (i < stale.length) {
+          const batch = {};
+          const slice = stale.slice(i, i + CHUNK);
+          slice.forEach(o => { batch['/orders/' + o.id] = _rtdbRecord(o); });
+          await _rtdbDB.ref().update(batch);
+          slice.forEach(o => { state[o.id] = o.updatedAt || 0; });
+          i += CHUNK;
+        } else if (j < orphans.length) {
+          const batch = {};
+          const slice = orphans.slice(j, j + CHUNK);
+          slice.forEach(id => { batch['/orders/' + id] = null; });
+          await _rtdbDB.ref().update(batch);
+          slice.forEach(id => { delete state[id]; });
+          j += CHUNK;
+        } else {
+          _mirrorStateSave(state);
+          _mirrorRunning = false;
+          console.log('[MIRROR] done');
+          return;
+        }
+        _idle(step);
+      } catch (e) {
+        // Save what did land so the next run resumes rather than starting over.
+        _mirrorStateSave(state);
+        _mirrorRunning = false;
+        console.warn('[MIRROR] failed:', e.message || e);
+      }
+    };
+    _idle(step);
   } catch (e) {
-    // Leave the state as-is; the next run retries whatever did not land.
-    console.warn('[MIRROR] reconcile failed:', e.message || e);
-  } finally {
+    _mirrorStateSave(state);
     _mirrorRunning = false;
+    console.warn('[MIRROR] failed:', e.message || e);
   }
 }
 
