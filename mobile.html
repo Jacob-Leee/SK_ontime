@@ -1973,7 +1973,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-28-o';
+const APP_BUILD     = '2026-07-28-q';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -2358,6 +2358,7 @@ var CLOUD = {
   pushing: false,
   pulling: false,
   pullTimer: null,
+  pollMs: 3000,
   pushTimer: null,
   applying: false,
   _serverNow: 0,  // latest server timestamp from pull response (fixes clock skew)
@@ -2432,17 +2433,41 @@ async function cloudForcePush() {
   toast('Force Push complete ✓ — others will update within 5 seconds', 'success');
 }
 
+// Adaptive polling.
+//
+// A fixed 3-second poll downloads and JSON-parses the ENTIRE dataset every
+// time — thousands of orders, several megabytes — and only THEN discovers
+// nothing changed. On a phone that is a stutter every three seconds, all day.
+//
+// The interval stretches while the data is quiet and snaps back to 3s the
+// moment anything changes or the user touches the screen, so a fresh
+// assignment still lands promptly.
+const _POLL_MIN = 3000, _POLL_MAX = 30000;
+
+function _pollBump(changed) {
+  const prev = CLOUD.pollMs || _POLL_MIN;
+  CLOUD.pollMs = changed ? _POLL_MIN : Math.min(_POLL_MAX, Math.round(prev * 1.6));
+  if (CLOUD.pollMs !== prev && CLOUD.pullTimer) _rearmPoll();
+}
+function _rearmPoll() {
+  if (CLOUD.pullTimer) clearInterval(CLOUD.pullTimer);
+  CLOUD.pullTimer = setInterval(() => cloudPull(false), CLOUD.pollMs || _POLL_MIN);
+}
+function cloudPollNow() {
+  CLOUD.pollMs = _POLL_MIN;
+  if (CLOUD.pullTimer) { _rearmPoll(); cloudPull(false); }
+}
+
 function startCloudSync() {
   if (!CLOUD.url) {
-    // Fail loudly. This used to return in silence, so a device with sync
-    // "on" but no URL looked healthy while syncing nothing at all.
     console.warn('[CLOUD] sync enabled but no URL is set — nothing will sync');
     renderCloudStatus('주소 없음');
     return;
   }
   stopCloudSync();
+  CLOUD.pollMs = _POLL_MIN;
   cloudPull(true);
-  CLOUD.pullTimer = setInterval(() => cloudPull(false), 3000);  // every 3s
+  _rearmPoll();
 }
 function stopCloudSync() { if (CLOUD.pullTimer) { clearInterval(CLOUD.pullTimer); CLOUD.pullTimer = null; } }
 
@@ -2543,7 +2568,7 @@ async function cloudPull(initial) {
     console.log('[PULL DEBUG] pull response ok=', out?.ok, 'hasData=', !!out?.data, 'updatedAt=', out?.updatedAt);
     if (!out || !out.ok) { console.log('[PULL DEBUG] pull failed. ok=', out?.ok, 'error=', out?.error); renderCloudStatus('Offline'); return; }
     if (!out.data) { renderCloudStatus(initial ? 'Connected (empty)' : 'Synced ✓'); return; }
-    if (out.updatedAt && out.updatedAt === CLOUD.lastSeenAt) { console.log('[PULL DEBUG] same updatedAt — skipping merge'); renderCloudStatus('Synced ✓'); return; }
+    if (out.updatedAt && out.updatedAt === CLOUD.lastSeenAt) { _pollBump(false); renderCloudStatus('Synced ✓'); return; }
 
     const remote = JSON.parse(out.data);
     console.log('[PULL DEBUG] remote orders=', remote.orders?.length, 'local orders=', DB.orders.length);
@@ -2618,6 +2643,7 @@ async function cloudPull(initial) {
       console.log('[SYNC DEBUG] clock skew=', CLOUD._skewMs, 'ms (positive = local behind server)');
     }
     CLOUD.applying = false;
+    _pollBump(true);            // something changed — stay responsive
 
     // Assignment notifications. `initial` is the first pull of a session, which
     // is also where a fresh device learns every existing order — seeding there
@@ -6304,6 +6330,7 @@ function initApp() {
   try {
     renderNotifBell();
     startCalendarWatch();
+    setTimeout(() => { try { _syncHealthCheck(); } catch (e) {} }, 1500);
     if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
     setTimeout(() => { try { fcmMaintain(); } catch (e) {} }, 2500);
   } catch (e) { console.warn('[NOTIF] init:', e); }
@@ -8097,6 +8124,37 @@ async function fcmInit(userGroup) {
 // Full fcmInit runs: (a) on explicit enable, or (b) once per day to refresh token.
 
 
+
+// ══════════════════════════════════════════════════════════
+// SYNC HEALTH BANNER
+// ------------------------------------------------------------
+// A device with sync switched on but no URL does nothing, forever, in silence.
+// That state used to be reachable (sign-out wiped the URL) and looked identical
+// to a working app, so "the desktop change never arrived" had no visible cause.
+// This makes the broken state impossible to walk past.
+// ══════════════════════════════════════════════════════════
+
+function _syncHealthCheck() {
+  const bad = CLOUD.enabled && !CLOUD.url;
+  const off = !CLOUD.enabled;
+  let bar = document.getElementById('sync-health-bar');
+
+  if (!bad && !off) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'sync-health-bar';
+    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99990;' +
+      'background:#DC2626;color:#fff;padding:11px 16px;padding-bottom:calc(11px + env(safe-area-inset-bottom));' +
+      'font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px;cursor:pointer;' +
+      'box-shadow:0 -4px 16px rgba(0,0,0,.2)';
+    bar.onclick = () => { try { openCloudModal(); } catch (e) {} };
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = bad
+    ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소가 없어 이 기기는 데이터를 받지 못합니다</span><span style="text-decoration:underline">설정</span>'
+    : '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화가 꺼져 있습니다</span><span style="text-decoration:underline">켜기</span>';
+}
+
 // ══════════════════════════════════════════════════════════
 // SYNC DIAGNOSTIC
 // ------------------------------------------------------------
@@ -8499,6 +8557,9 @@ let _idleTick = 0;
     if (_locked || now - _idleTick < 1000) return;
     _idleTick = now;
     mobResetIdle();
+    // Touching the screen means work is happening — pull back to the fast
+    // interval so a change made elsewhere shows up right away.
+    try { cloudPollNow(); } catch (e) {}
   }, { passive:true }));
 
 // Returning from the background is the moment a phone most often changes hands.

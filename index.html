@@ -1892,7 +1892,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-28-o';
+const APP_BUILD = '2026-07-28-q';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2637,6 +2637,7 @@ async function cloudPushInitial() {
 }
 
 function renderCloudStatus(msg) {
+  try { _syncHealthCheck(); } catch (e) {}
   // enabled but no URL means startCloudSync() returns immediately and nothing
   // ever runs — showing "Sync on" for that state hid a dead sync behind a
   // healthy-looking label.
@@ -7080,6 +7081,37 @@ function runNotifSimulation() {
 
 
 
+
+// ============================================================
+// SYNC HEALTH BANNER
+// ------------------------------------------------------------
+// A device with sync switched on but no URL does nothing, forever, in silence.
+// That state used to be reachable (sign-out wiped the URL) and looked identical
+// to a working app, so "the desktop change never arrived" had no visible cause.
+// This makes the broken state impossible to walk past.
+// ============================================================
+
+function _syncHealthCheck() {
+  const bad = CLOUD.enabled && !CLOUD.url;
+  const off = !CLOUD.enabled;
+  let bar = document.getElementById('sync-health-bar');
+
+  if (!bad && !off) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'sync-health-bar';
+    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99990;' +
+      'background:#DC2626;color:#fff;padding:11px 16px;padding-bottom:calc(11px + env(safe-area-inset-bottom));' +
+      'font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px;cursor:pointer;' +
+      'box-shadow:0 -4px 16px rgba(0,0,0,.2)';
+    bar.onclick = () => { try { openCloudModal(); } catch (e) {} };
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = bad
+    ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소가 없어 이 기기는 데이터를 받지 못합니다</span><span style="text-decoration:underline">설정</span>'
+    : '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화가 꺼져 있습니다</span><span style="text-decoration:underline">켜기</span>';
+}
+
 // ============================================================
 // SYNC DIAGNOSTIC
 // ------------------------------------------------------------
@@ -8872,6 +8904,7 @@ if (!AUTH_REQUIRED) initLock();
 // turns notifications on does not get a popup for every order already theirs.
 renderNotifBell();
 renderHeaderIdentity();
+setTimeout(() => { try { _syncHealthCheck(); } catch (e) {} }, 1500);
 try { startCalendarWatch(); } catch (e) {}
 if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
 
