@@ -747,9 +747,9 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-world" style="color:#16A34A"></i></span>DCJ Portal
     </a>
     <div class="mob-drawer-title">Settings</div>
-    <div class="mob-dl" onclick="testPushServer();mobDrawerClose()">
-      <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-server-cog" style="color:#16A34A"></i></span>
-      <span style="flex:1">푸시 서버 테스트</span>
+    <div class="mob-dl" onclick="showPushRegistry();mobDrawerClose()">
+      <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-users-group" style="color:#16A34A"></i></span>
+      <span style="flex:1">푸시 등록 현황</span>
     </div>
     <div class="mob-dl" onclick="showPushDiagnostics();mobDrawerClose()">
       <span class="dl-i" style="background:#FEF2F2"><i class="ti ti-device-mobile-message" style="color:#DC2626"></i></span>
@@ -8329,6 +8329,54 @@ function _syncHealthCheck() {
       bad   ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소가 없어 이 기기는 데이터를 받지 못합니다</span><span style="text-decoration:underline">설정</span>'
     : wrong ? '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화 주소에 접속할 수 없습니다 — 다른 기기의 주소를 확인하세요</span><span style="text-decoration:underline">설정</span>'
     :         '<span style="font-size:16px">&#9888;</span><span style="flex:1">동기화가 꺼져 있습니다</span><span style="text-decoration:underline">켜기</span>';
+}
+
+
+// ══════════════════════════════════════════════════════════
+// WHO IS ACTUALLY REGISTERED FOR PUSH
+// ----------------------------------------------------------
+// Every "X is not getting notifications" question came down to one unknown:
+// does a token exist under that person's name? Nobody could see, so each case
+// turned into guesswork. Admins can now just look.
+// ══════════════════════════════════════════════════════════
+
+async function showPushRegistry() {
+  const db = (typeof AUTH !== 'undefined' && AUTH.db) ||
+             (typeof _rtdbDb === 'function' ? _rtdbDb() : null);
+  if (!db) { alert('Firebase에 연결되어 있지 않습니다.'); return; }
+
+  let all;
+  try {
+    all = (await db.ref('/fcmTokens').once('value')).val() || {};
+  } catch (e) {
+    alert('등록 현황을 읽지 못했습니다.\n\n' + e.message +
+          '\n\n관리자 계정으로 로그인했는지, 데이터베이스 규칙을 게시했는지 확인해주세요.');
+    return;
+  }
+
+  // Names people are actually assigned work under
+  const assignees = [...new Set((DB.orders || [])
+    .map(o => (o.subbies || '').trim()).filter(Boolean))].sort();
+  const key = n => n.replace(/\s+/g, '_');
+
+  const lines = assignees.map(n => {
+    const devices = all[key(n)] ? Object.keys(all[key(n)]).length : 0;
+    return (devices ? '  ✅ ' : '  ❌ ') + n.padEnd(14) + (devices ? devices + '대' : '등록 없음');
+  });
+
+  // Tokens filed under a name nobody is assigned work under — usually a stale
+  // 'admin' entry from before the identity fix.
+  const orphans = Object.keys(all).filter(k => !assignees.some(n => key(n) === k));
+
+  alert(
+    '푸시 등록 현황\n' +
+    '──────────────────────────\n' +
+    (lines.length ? lines.join('\n') : '  (배정된 담당자가 없습니다)') +
+    (orphans.length ? '\n\n사용되지 않는 등록\n  ' + orphans.join(', ') : '') +
+    '\n\n❌ 인 사람은 자기 기기에서\n' +
+    '   서랍 → 알림(Push) 을 켜야 합니다.\n' +
+    '   관리자가 대신 켜줄 수는 없습니다.'
+  );
 }
 
 // ══════════════════════════════════════════════════════════

@@ -1712,7 +1712,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <div class="form-group form-full" style="display:flex;gap:8px">
           <button onclick="showNotifDiagnostics()" class="btn btn-secondary" style="flex:1">🩺 알림 진단</button>
           <button onclick="testNotification()" class="btn btn-secondary" style="flex:1">🔔 테스트 알림</button>
-          <button onclick="testPushServer()" class="btn btn-secondary" style="flex:1">🖥 서버 테스트</button>
+          <button onclick="showPushRegistry()" class="btn btn-secondary" style="flex:1">👥 등록 현황</button>
         </div>
         <div class="form-group form-full">
           <button onclick="runNotifSimulation()" class="btn btn-secondary" style="width:100%">🧪 알림 동작 검증 (시뮬레이션)</button>
@@ -1898,7 +1898,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-29-e';
+const APP_BUILD = '2026-07-29-f';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -7276,6 +7276,54 @@ async function testPushServer() {
       '  → 백그라운드 알림 진단 에서 브라우저를 확인하세요'
     );
   }
+}
+
+
+// ============================================================
+// WHO IS ACTUALLY REGISTERED FOR PUSH
+// ----------------------------------------------------------
+// Every "X is not getting notifications" question came down to one unknown:
+// does a token exist under that person's name? Nobody could see, so each case
+// turned into guesswork. Admins can now just look.
+// ============================================================
+
+async function showPushRegistry() {
+  const db = (typeof AUTH !== 'undefined' && AUTH.db) ||
+             (typeof _rtdbDb === 'function' ? _rtdbDb() : null);
+  if (!db) { alert('Firebase에 연결되어 있지 않습니다.'); return; }
+
+  let all;
+  try {
+    all = (await db.ref('/fcmTokens').once('value')).val() || {};
+  } catch (e) {
+    alert('등록 현황을 읽지 못했습니다.\n\n' + e.message +
+          '\n\n관리자 계정으로 로그인했는지, 데이터베이스 규칙을 게시했는지 확인해주세요.');
+    return;
+  }
+
+  // Names people are actually assigned work under
+  const assignees = [...new Set((DB.orders || [])
+    .map(o => (o.subbies || '').trim()).filter(Boolean))].sort();
+  const key = n => n.replace(/\s+/g, '_');
+
+  const lines = assignees.map(n => {
+    const devices = all[key(n)] ? Object.keys(all[key(n)]).length : 0;
+    return (devices ? '  ✅ ' : '  ❌ ') + n.padEnd(14) + (devices ? devices + '대' : '등록 없음');
+  });
+
+  // Tokens filed under a name nobody is assigned work under — usually a stale
+  // 'admin' entry from before the identity fix.
+  const orphans = Object.keys(all).filter(k => !assignees.some(n => key(n) === k));
+
+  alert(
+    '푸시 등록 현황\n' +
+    '──────────────────────────\n' +
+    (lines.length ? lines.join('\n') : '  (배정된 담당자가 없습니다)') +
+    (orphans.length ? '\n\n사용되지 않는 등록\n  ' + orphans.join(', ') : '') +
+    '\n\n❌ 인 사람은 자기 기기에서\n' +
+    '   서랍 → 알림(Push) 을 켜야 합니다.\n' +
+    '   관리자가 대신 켜줄 수는 없습니다.'
+  );
 }
 
 // ============================================================
