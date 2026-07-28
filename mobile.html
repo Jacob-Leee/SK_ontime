@@ -1977,7 +1977,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-28-z';
+const APP_BUILD     = '2026-07-29-a';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8551,8 +8551,18 @@ function pushDiagnostics() {
                 (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const standalone = window.matchMedia('(display-mode: standalone)').matches ||
                      window.navigator.standalone === true;
+  // On iOS every browser runs on WebKit, but only Safari can install a real
+  // PWA. A shortcut created from Chrome or Firefox looks identical on the home
+  // screen and never receives push — so the browser it was added FROM matters
+  // more than anything else here.
+  const iosChrome  = isIOS && /CriOS/.test(ua);
+  const iosFirefox = isIOS && /FxiOS/.test(ua);
+  const iosEdge    = isIOS && /EdgiOS/.test(ua);
+  const iosOther   = iosChrome || iosFirefox || iosEdge;
+  const browser    = iosChrome ? 'Chrome' : iosFirefox ? 'Firefox' : iosEdge ? 'Edge'
+                   : isIOS ? 'Safari' : (/Chrome/.test(ua) ? 'Chrome' : /Firefox/.test(ua) ? 'Firefox' : '기타');
   return {
-    isIOS, standalone,
+    isIOS, standalone, iosOther, browser,
     perm:   (typeof Notification !== 'undefined') ? Notification.permission : '미지원',
     swSupported: 'serviceWorker' in navigator,
     secure: window.isSecureContext,
@@ -8577,9 +8587,14 @@ async function showPushDiagnostics() {
   } catch (e) { swState = '오류: ' + e.message; }
 
   const blockers = [];
-  if (d.isIOS && !d.standalone) {
+  if (d.iosOther) {
+    blockers.push('★★ ' + d.browser + '(으)로 열려 있습니다.\n' +
+                  '   아이폰에서 웹 푸시는 사파리로 홈 화면에 추가한 경우에만 동작합니다.\n' +
+                  '   ' + d.browser + '으로 만든 아이콘은 푸시를 받지 못합니다.\n' +
+                  '   → 그 아이콘을 지우고, 사파리에서 다시 추가하세요.');
+  } else if (d.isIOS && !d.standalone) {
     blockers.push('★ 아이폰에서는 홈 화면에 추가해야만 백그라운드 알림이 옵니다.\n' +
-                  '   사파리 탭으로 열어두면 앱이 닫힌 동안 알림이 전혀 오지 않습니다.\n' +
+                  '   사파리 탭으로 열어두면 앱이 닫힌 동안 알림이 오지 않습니다.\n' +
                   '   공유 버튼 → "홈 화면에 추가" → 그 아이콘으로 실행하세요.');
   }
   if (d.perm !== 'granted') blockers.push('· 알림 권한이 허용되지 않았습니다 (' + d.perm + ')');
@@ -8591,7 +8606,8 @@ async function showPushDiagnostics() {
     '백그라운드 알림 진단\n' +
     '──────────────────────────\n' +
     '기기          ' + (d.isIOS ? 'iOS' : '기타') + '\n' +
-    '실행 방식     ' + (d.standalone ? '홈 화면 앱 ✓' : '브라우저 탭') + '\n' +
+    '브라우저      ' + d.browser + (d.iosOther ? '  ⚠ 푸시 불가' : '') + '\n' +
+    '실행 방식     ' + (d.standalone ? '홈 화면 앱 ✓' : '브라우저 탭  ⚠') + '\n' +
     '알림 권한     ' + d.perm + '\n' +
     '서비스 워커   ' + swState + '\n' +
     '토큰 등록명   ' + d.group + '\n' +
