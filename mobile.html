@@ -466,7 +466,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
      z-index sits above #mob-pin-overlay (99999) on purpose: sign-in is the
      outer gate, the existing role/PIN flow runs behind it and only becomes
      visible once an allow-listed account is confirmed. -->
-<div id="auth-gate" style="display:none;position:fixed;inset:0;z-index:100001;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;padding-top:calc(28px + env(safe-area-inset-top))">
+<div id="auth-gate" style="display:flex;position:fixed;inset:0;z-index:100001;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;padding-top:calc(28px + env(safe-area-inset-top))">
   <div style="text-align:center;margin-bottom:32px">
     <img src="icon-192.png" alt="" width="66" height="66" style="border-radius:16px;margin-bottom:14px">
     <div style="font-size:24px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#C9A84C">ON</span>TIME</div>
@@ -747,7 +747,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-world" style="color:#16A34A"></i></span>DCJ Portal
     </a>
     <div class="mob-drawer-title">Settings</div>
-    <div class="mob-dl" onclick="showPushRegistry();mobDrawerClose()">
+    <div class="mob-dl" id="mob-dl-registry" style="display:none" onclick="showPushRegistry();mobDrawerClose()">
       <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-users-group" style="color:#16A34A"></i></span>
       <span style="flex:1">푸시 등록 현황</span>
     </div>
@@ -1980,16 +1980,22 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // Declared at the top, not next to the auth code below: `const` is in the
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
-const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-29-f';
+// ENABLED 2026-07-29 — mobile sign-in was confirmed working (the drawer showed
+// the account resolved to its allow-list name before this was switched on).
+// To disable: set back to false and re-upload. Data is untouched either way.
+const AUTH_REQUIRED = true;
+const APP_BUILD     = '2026-07-29-j';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
 // overlay stuck over the app with no way past it — indistinguishable from a
 // freeze. When the flag is flipped to true, flip the markup default with it.
-if (AUTH_REQUIRED) {
+// Markup ships visible so the gate covers the app from the first paint — the
+// order list must never be readable before sign-in. Take it down only when the
+// gate is not being enforced.
+if (!AUTH_REQUIRED) {
   const _g = document.getElementById('auth-gate');
-  if (_g) _g.style.display = 'flex';
+  if (_g) _g.style.display = 'none';
 }
 
 const DEFAULT_UI_LABELS = {
@@ -6912,6 +6918,12 @@ function mobDrawerOpen() {
   // The old "Admin Mode: ON" label was replaced by the lock rows — refresh
   // those instead so the drawer always shows the real current state.
   try { mobDrawerLockStatus(); renderAuthDrawerStatus(); } catch (e) {}
+  // Admin-only tools stay hidden rather than erroring when tapped.
+  try {
+    const isAdmin = !!(AUTH.entry && AUTH.entry.role === 'admin');
+    const reg = document.getElementById('mob-dl-registry');
+    if (reg) reg.style.display = isAdmin ? '' : 'none';
+  } catch (e) {}
   document.getElementById('mob-drawer').style.display = 'block';
   document.getElementById('mob-overlay').style.display = 'block';
   // Always refresh notification toggle to reflect current user/subbie
@@ -8266,8 +8278,26 @@ async function fcmInit(userGroup) {
 
     const group = (userGroup || 'admin').replace(/\s+/g, '_');
 
-    // Write token FIRST (no gap), then clean other groups
-    await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
+    // Write token FIRST (no gap), then clean other groups.
+    // A permission error here is not a device problem: this app runs with
+    // AUTH_REQUIRED off, so nobody is signed in to Firebase, and any rule that
+    // demands `auth != null` on /fcmTokens rejects every registration. Saying
+    // so beats a raw "permission_denied" during setup.
+    try {
+      await _fcmDB.ref('/fcmTokens/' + group + '/' + deviceId).set(token);
+    } catch (err) {
+      const denied = /permission|denied/i.test(err.message || '');
+      alert(denied
+        ? '알림 등록이 거부되었습니다.\n' +
+          '──────────────────────────\n' +
+          '데이터베이스 규칙이 로그인을 요구하는데\n' +
+          '이 앱은 아직 로그인 없이 동작합니다.\n\n' +
+          '관리자에게 전달해주세요:\n' +
+          'Realtime Database 규칙에서 fcmTokens 의\n' +
+          '".write" 를 true 로 두어야 합니다.'
+        : '알림 등록 실패: ' + err.message);
+      return;
+    }
     const ALL_GROUPS = ['admin','SK_Jacob','SK_Mo','SK_June','SK_Jay','Jake_Lee','Chris_Choi','Sean_Park'];
     await Promise.all(
       ALL_GROUPS.filter(g => g !== group)
@@ -8345,12 +8375,37 @@ async function showPushRegistry() {
              (typeof _rtdbDb === 'function' ? _rtdbDb() : null);
   if (!db) { alert('Firebase에 연결되어 있지 않습니다.'); return; }
 
+  // Check the role BEFORE attempting the read. A plain user pressing this got a
+  // raw permission error, which — seen while they were in the middle of
+  // enabling notifications — read as "my registration failed".
+  const role = (typeof AUTH !== 'undefined' && AUTH.entry && AUTH.entry.role) || '';
+  if (role !== 'admin') {
+    alert(
+      '이 화면은 관리자만 볼 수 있습니다.\n' +
+      '──────────────────────────\n' +
+      '알림 등록에는 영향이 없습니다.\n\n' +
+      '내 알림 상태는 "백그라운드 알림 진단" 에서 확인하세요.'
+    );
+    return;
+  }
+
   let all;
   try {
     all = (await db.ref('/fcmTokens').once('value')).val() || {};
   } catch (e) {
-    alert('등록 현황을 읽지 못했습니다.\n\n' + e.message +
-          '\n\n관리자 계정으로 로그인했는지, 데이터베이스 규칙을 게시했는지 확인해주세요.');
+    alert(
+      '등록 현황을 읽지 못했습니다.\n' +
+      '──────────────────────────\n' +
+      e.message + '\n\n' +
+      '이 조회는 관리자만 가능하며, 규칙을 먼저 게시해야 합니다.\n\n' +
+      'Firebase Console → Realtime Database → 규칙\n' +
+      'fcmTokens 의 ".read" 를 아래로 바꾸고 게시:\n\n' +
+      '"fcmTokens": {\n' +
+      '  ".read": "auth != null && root.child(\'allowedUsers\')' +
+      '.child(auth.token.email.replace(\'.\', \',\')).child(\'role\').val() === \'admin\'",\n' +
+      '  ".write": true\n' +
+      '}'
+    );
     return;
   }
 
@@ -8827,13 +8882,21 @@ async function showPushDiagnostics() {
     '──────────────────────────\n' +
     '기기          ' + (d.isIOS ? 'iOS' : '기타') + '\n' +
     '브라우저      ' + d.browser + (d.iosOther ? '  ⚠ 푸시 불가' : '') + '\n' +
-    '실행 방식     ' + (d.standalone ? '홈 화면 앱 ✓' : '브라우저 탭  ⚠') + '\n' +
+    '실행 방식     ' + (d.standalone ? '홈 화면 앱 ✓'
+                     : d.isIOS ? '브라우저 탭  ⚠ (iOS는 홈 화면 필요)'
+                     : '브라우저 탭 ✓ (안드로이드는 정상)') + '\n' +
     '알림 권한     ' + d.perm + '\n' +
     '서비스 워커   ' + swState + '\n' +
     '토큰 등록명   ' + d.group + ((NOTIF.me && d.group !== (NOTIF.me||'').trim().replace(/\s+/g,'_')) ? '  ⚠ 내 이름과 다름' : '') + '\n' +
     '내 이름       ' + (NOTIF.me || '(미설정)') + '\n' +
     '마지막 등록   ' + d.lastReg + '\n' +
-    (blockers.length ? '\n⚠ 원인\n' + blockers.join('\n') : '\n설정상 문제는 없습니다.\n서버(Cloud Functions) 배포 여부를 확인해주세요.')
+    (blockers.length
+      ? '\n⚠ 원인\n' + blockers.join('\n')
+      : '\n이 기기 설정은 정상입니다.\n\n' +
+        '그래도 안 온다면 확인할 것:\n' +
+        '· 관리자 앱의 "등록 현황"에 내 이름이 ✅ 인지\n' +
+        '· 오더가 정확히 "' + (NOTIF.me || '내 이름') + '" 에게 배정됐는지\n' +
+        (d.isIOS ? '' : '· 갤럭시: 설정 → 앱 → Chrome → 배터리 → 제한 없음\n'))
   );
 }
 
