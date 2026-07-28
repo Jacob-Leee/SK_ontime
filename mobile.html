@@ -747,6 +747,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-world" style="color:#16A34A"></i></span>DCJ Portal
     </a>
     <div class="mob-drawer-title">Settings</div>
+    <div class="mob-dl" onclick="testPushServer();mobDrawerClose()">
+      <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-server-cog" style="color:#16A34A"></i></span>
+      <span style="flex:1">푸시 서버 테스트</span>
+    </div>
     <div class="mob-dl" onclick="showPushDiagnostics();mobDrawerClose()">
       <span class="dl-i" style="background:#FEF2F2"><i class="ti ti-device-mobile-message" style="color:#DC2626"></i></span>
       <span style="flex:1">백그라운드 알림 진단</span>
@@ -1977,7 +1981,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-29-a';
+const APP_BUILD     = '2026-07-29-b';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8534,6 +8538,79 @@ function startCalendarWatch() {
   });
 }
 
+
+
+// ══════════════════════════════════════════════════════════
+// PUSH SERVER TEST
+// ----------------------------------------------------------
+// Separates "the phone cannot receive" from "the server never sent".
+//
+// The Cloud Function deletes each /notifications entry once it has processed
+// it. So: write one, wait, look again. Still there ⇒ nothing is consuming the
+// queue, i.e. the function is not deployed or is erroring. Gone ⇒ the server
+// side works and the problem is on the device.
+// ══════════════════════════════════════════════════════════
+
+async function testPushServer() {
+  const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) ||
+             (typeof AUTH !== 'undefined' && AUTH.db) || null;
+  if (!db) { alert('Firebase에 연결되어 있지 않습니다.'); return; }
+  if (!NOTIF.me) { alert('먼저 "내 이름"을 설정해주세요.'); return; }
+
+  let ref;
+  try {
+    ref = db.ref('/notifications').push({
+      orderNumber: 'TEST-' + Date.now().toString().slice(-5),
+      address: '푸시 서버 테스트',
+      area: 'TEST',
+      subbies: NOTIF.me,
+      subbiesAt: Date.now(),
+      type: 'new',
+      createdAt: Date.now(),
+    });
+    await ref;
+  } catch (e) { alert('큐에 쓰지 못했습니다: ' + e.message); return; }
+
+  alert('테스트 발송했습니다.\n\n확인 버튼을 누르고 12초 기다립니다…');
+  await new Promise(r => setTimeout(r, 12000));
+
+  let stillThere = null;
+  try {
+    const snap = await ref.once('value');
+    stillThere = snap.exists();
+  } catch (e) {
+    alert('결과를 읽지 못했습니다 (규칙 배포 필요).\n\n' + e.message +
+          '\n\nfirebase deploy --only database 를 실행한 뒤 다시 시도해주세요.');
+    return;
+  }
+
+  if (stillThere) {
+    try { await ref.remove(); } catch (e) {}
+    alert(
+      '❌ 서버가 응답하지 않습니다\n' +
+      '──────────────────────────\n' +
+      '요청이 큐에 남아 있습니다. 이를 처리할 Cloud Function 이\n' +
+      '배포되지 않았거나 오류로 멈춰 있습니다.\n\n' +
+      '터미널에서 확인하세요:\n' +
+      '  firebase functions:list\n\n' +
+      'sendOrderNotification 이 없으면:\n' +
+      '  firebase deploy --only functions\n\n' +
+      '있는데도 이 결과가 나오면:\n' +
+      '  firebase functions:log'
+    );
+  } else {
+    alert(
+      '✅ 서버는 정상입니다\n' +
+      '──────────────────────────\n' +
+      '요청이 처리되었습니다. 서버는 알림을 보냈습니다.\n\n' +
+      '그런데도 폰에 안 뜬다면 남은 원인은 두 가지입니다.\n\n' +
+      '· 이 기기의 FCM 토큰이 등록되지 않음\n' +
+      '  → 서랍 → 백그라운드 알림 켜기 를 다시 누르세요\n\n' +
+      '· 사파리가 아닌 브라우저로 홈 화면에 추가함\n' +
+      '  → 백그라운드 알림 진단 에서 브라우저를 확인하세요'
+    );
+  }
+}
 
 // ══════════════════════════════════════════════════════════
 // PUSH DIAGNOSTIC
