@@ -1957,7 +1957,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-28-l';
+const APP_BUILD     = '2026-07-28-m';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -6281,6 +6281,7 @@ function initApp() {
   try { authInit(); } catch (e) { console.warn('[AUTH] init:', e); }
   try {
     renderNotifBell();
+    startCalendarWatch();
     if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
     setTimeout(() => { try { fcmMaintain(); } catch (e) {} }, 2500);
   } catch (e) { console.warn('[NOTIF] init:', e); }
@@ -7657,16 +7658,25 @@ function renderNotifSheet() {
     list.innerHTML = '<div style="padding:34px 16px;text-align:center;color:#999;font-size:13px">새 알림이 없습니다</div>';
     return;
   }
-  list.innerHTML = NOTIF.inbox.map(n => `
-    <div onclick="closeNotifSheet();_openOrderFromNotification('${n.orderId}')"
+  list.innerHTML = NOTIF.inbox.map(n => {
+    const isEv = n.kind === 'event';
+    const click = isEv ? `closeNotifSheet();mobNav('calendar')`
+                       : `closeNotifSheet();_openOrderFromNotification('${n.orderId}')`;
+    const title = isEv
+      ? `<div style="font-size:13px;font-weight:${n.read?'500':'700'}">📅 ${esc(n.orderNumber)}</div>`
+      : `<div style="font-weight:${n.read?'500':'700'};font-size:13px;font-family:monospace">${esc(n.orderNumber)}</div>`;
+    const meta = isEv ? `${esc(n.area)} · ${_timeAgo(n.at)}`
+                      : `${esc(n.area)} · $${Number(n.amount||0).toFixed(2)} · ${_timeAgo(n.at)}`;
+    return `<div onclick="${click}"
       style="padding:13px 16px;border-bottom:1px solid #eee;display:flex;gap:10px;align-items:flex-start;background:${n.read ? 'transparent' : 'rgba(201,168,76,.08)'}">
-      <span style="width:7px;height:7px;border-radius:50%;background:${n.read ? 'transparent' : '#C9A84C'};margin-top:5px;flex-shrink:0"></span>
+      <span style="width:7px;height:7px;border-radius:50%;background:${n.read ? 'transparent' : (isEv?'#8B5CF6':'#C9A84C')};margin-top:5px;flex-shrink:0"></span>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:${n.read ? '500' : '700'};font-size:13px;font-family:monospace">${esc(n.orderNumber)}</div>
+        ${title}
         <div style="font-size:12px;color:#555;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n.address)}</div>
-        <div style="font-size:11px;color:#999;margin-top:3px">${esc(n.area)} · $${n.amount.toFixed(2)} · ${_timeAgo(n.at)}</div>
+        <div style="font-size:11px;color:#999;margin-top:3px">${meta}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -8040,6 +8050,89 @@ async function fcmInit(userGroup) {
 // ─── PAGE LOAD: lightweight — foreground handler only ─────────────────────────
 // Does NOT re-register SW or call getToken on every load.
 // Full fcmInit runs: (a) on explicit enable, or (b) once per day to refresh token.
+
+// ══════════════════════════════════════════════════════════
+// TODAY'S CALENDAR EVENTS
+// ------------------------------------------------------------
+// A client-only app cannot wake itself at 7am, so this fires when the app is
+// first opened (or first brought forward) on a day that has events — which in
+// practice is the morning. Announcing per event per DAY, not per session, is
+// what stops it re-firing every time the tab regains focus.
+//
+// Recurring events are expanded through the same calendar helper the month view
+// uses, so a weekly site visit is caught on each occurrence.
+// ══════════════════════════════════════════════════════════
+
+function _calNotifSeen() {
+  try { return JSON.parse(lsGet('hom_cal_notified') || '{}'); } catch (e) { return {}; }
+}
+function _calNotifSave(map) {
+  // Keep only the last few days — this map would otherwise grow forever.
+  const cutoff = calYMD(calAddDays(new Date(), -3));
+  const trimmed = {};
+  Object.entries(map).forEach(([k, v]) => { if (v >= cutoff) trimmed[k] = v; });
+  lsSet('hom_cal_notified', JSON.stringify(trimmed));
+}
+
+function checkTodayEvents() {
+  if (!NOTIF.enabled) return;
+  let events;
+  try {
+    const today = new Date();
+    const ymd = calYMD(today);
+    events = getExpandedEvents(today, today).filter(e => e.startDate === ymd);
+  } catch (e) { return; }
+  if (!events.length) return;
+
+  const ymd  = calYMD(new Date());
+  const seen = _calNotifSeen();
+  const fresh = events.filter(e => seen[e.id] !== ymd);
+  if (!fresh.length) return;
+
+  fresh.forEach(e => { seen[e.id] = ymd; });
+  _calNotifSave(seen);
+
+  const now = _nowSafe();
+  fresh.forEach(e => {
+    NOTIF.inbox.unshift({
+      id: 'c_' + e.id + '_' + now,
+      kind: 'event',
+      eventId: e._baseId || e.id,
+      orderNumber: e.title || '(제목 없음)',
+      address: e.startTime ? (e.startTime + (e.endTime ? ' – ' + e.endTime : '')) : '종일',
+      area: '일정',
+      amount: 0,
+      at: now,
+      read: false,
+    });
+  });
+  if (NOTIF.inbox.length > NOTIF.MAX_INBOX) NOTIF.inbox.length = NOTIF.MAX_INBOX;
+  _notifSave();
+
+  const first = fresh[0];
+  const when  = first.startTime || '종일';
+  if (fresh.length === 1) {
+    _fireOsNotification('오늘 일정 — ' + (first.title || ''), when, null);
+    _showInAppBanner(`\u{1F4C5} <b>오늘 일정</b><br><span style="opacity:.85;font-size:12px">${esc(first.title || '')} &middot; ${esc(when)}</span>`, null);
+  } else {
+    _fireOsNotification(`오늘 일정 ${fresh.length}건`,
+      fresh.map(e => (e.startTime ? e.startTime + ' ' : '') + (e.title || '')).join('\n'), null);
+    _showInAppBanner(`\u{1F4C5} <b>오늘 일정 ${fresh.length}건</b><br><span style="opacity:.85;font-size:12px">${esc(fresh.map(e => e.title).join(', '))}</span>`, null);
+  }
+  _playNotifSound();
+  renderNotifBell();
+}
+
+// Re-checked periodically so an app left open overnight still announces the new
+// day, and on return-to-foreground because that is when a phone is picked up.
+function startCalendarWatch() {
+  setTimeout(checkTodayEvents, 3000);
+  setInterval(checkTodayEvents, 10 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) setTimeout(checkTodayEvents, 800);
+  });
+}
+
 // ══════════════════════════════════════════════════════════
 // PUSH DISPATCH  (was missing entirely on mobile)
 // ----------------------------------------------------------
