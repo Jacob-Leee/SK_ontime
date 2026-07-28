@@ -6,29 +6,24 @@
         ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).child('role').val() === 'admin'"
       }
     },
-
     "config": {
       ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
       ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).child('role').val() === 'admin'"
     },
-
     "orders": {
       ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
       ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()"
     },
-
     "issues": {
       ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
       ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()"
     },
-
     "notifications": {
-      ".read": false,
+      ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
       ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()"
     },
-
     "fcmTokens": {
-      ".read": false,
+      ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).child('role').val() === 'admin'",
       "$group": {
         "$deviceId": {
           ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()"
