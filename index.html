@@ -13,6 +13,13 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1C1C1E">
 <script>
+// Same trap as _rtdbDB and _FR: declared far below the boot block that calls
+// _rtdbAutoMirror(), so `let` threw on first access. Worse, _rtdbAutoMirror is
+// ASYNC — the throw becomes a rejected promise, which the surrounding
+// synchronous try/catch cannot catch, so it surfaced as an unhandled rejection
+// and killed the rest of the boot sequence on that line.
+let _mirrorRunning = false;
+
 // Declared here, at the very top, because `let` is not hoisted the way a
 // function declaration is. These used to be declared ~250 lines BELOW the
 // startup block that calls _rtdbWatchIssueReports() / _rtdbWatchFieldReports()
@@ -1980,7 +1987,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-30-b';
+const APP_BUILD = '2026-07-30-c';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2759,8 +2766,8 @@ async function cloudPull(initial) {
     // Keep the three apps aligned without anyone pressing anything: push what
     // the subbie mirror is missing, and pick up any site-reported issue whose
     // order has only just arrived on this device.
-    _rtdbAutoMirror('pull');
-    _rtdbRescanIssueReports();
+    Promise.resolve().then(() => _rtdbAutoMirror('pull')).catch(e => console.error('[SYNC] mirror failed:', e));
+    Promise.resolve().then(() => _rtdbRescanIssueReports()).catch(e => console.error('[SYNC] rescan failed:', e));
   } catch (e) {
     // "Offline" told you nothing about WHY. Keeping the real error makes the
     // difference between a dead network, a wrong URL and a rejected Apps
@@ -3074,8 +3081,14 @@ const PAGE_TITLES = { all:'All Orders', orders:'Orders', vac:'VAC Orders', mpw:'
 function showPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
-  document.getElementById('nav-' + page).classList.add('active');
+  // Unguarded lookups here meant any call with a page this file does not have
+  // threw before currentPage was set, leaving the app on a blank screen with
+  // the previous page already de-activated.
+  const pageEl = document.getElementById('page-' + page);
+  const navEl  = document.getElementById('nav-' + page);
+  if (!pageEl) { console.warn('[NAV] unknown page:', page); return; }
+  pageEl.classList.add('active');
+  if (navEl) navEl.classList.add('active');
   currentPage = page;
   document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
 
@@ -3624,7 +3637,10 @@ function executeMoveConfirmed() {
 
   // Undo toast — 5초
   if (_undoTimer) clearTimeout(_undoTimer);
-  const toastEl = document.getElementById('toast');
+  // #toast has never existed in this file — the container is #toast-container.
+  // The guard below therefore always failed and the Undo prompt never appeared,
+  // which is the whole point of the move confirmation.
+  const toastEl = _undoToastEl();
   if (toastEl) {
     toastEl.innerHTML = `✓ ${STATUS_LABELS[newStatus]}으로 이동됨 &nbsp;
       <button onclick="undoMove('${id}','${prevStatus}')"
@@ -3641,9 +3657,21 @@ function executeMoveConfirmed() {
   _moveTarget = null;
 }
 
+// Creates the undo toast on first use and reuses it afterwards.
+function _undoToastEl() {
+  let el = document.getElementById('undo-toast');
+  if (el) return el;
+  const host = document.getElementById('toast-container') || document.body;
+  el = document.createElement('div');
+  el.id = 'undo-toast';
+  el.className = 'toast';
+  host.appendChild(el);
+  return el;
+}
+
 function undoMove(id, prevStatus) {
   if (_undoTimer) clearTimeout(_undoTimer);
-  const toastEl = document.getElementById('toast');
+  const toastEl = _undoToastEl();
   if (toastEl) { toastEl.innerHTML = ''; toastEl.className = 'toast'; }
   setOrderStatus(id, prevStatus);
   toast('↩ 되돌렸습니다', 'success');
@@ -5460,12 +5488,28 @@ function renderOrdersTable(orders, tbodyId, emptyId, countId, moveTo) {
   }).join('');
 }
 
+// Reads whatever filters the CURRENT page has on screen.
+//
+// This used to read 'search-orders', 'filter-area', 'filter-worktype',
+// 'filter-paid' and 'filter-month' — element IDs that stopped existing when the
+// single Orders page was split into VAC / MPW / All. Every one of those lookups
+// returned null, so `.value` threw and Export CSV silently did nothing.
+function _fv(id) {
+  const el = document.getElementById(id);
+  return el ? (el.value || '') : '';
+}
+
 function getFilteredOrders() {
-  const q = document.getElementById('search-orders').value.toLowerCase();
-  const area = document.getElementById('filter-area').value;
-  const wt = document.getElementById('filter-worktype').value;
-  const paid = document.getElementById('filter-paid').value;
-  const month = document.getElementById('filter-month').value;
+  // Page-specific control IDs, falling back to the All Orders set.
+  const P = { vac:'vac', mpw:'mpw', all:'all', completed:'completed', claims:'claims',
+              closed:'closed', issues:'issues', cancelled:'cancelled' };
+  const p = P[typeof currentPage !== 'undefined' ? currentPage : 'all'] || 'all';
+
+  const q     = (_fv('search-' + p) || _fv('search-all')).toLowerCase();
+  const area  = _fv('filter-' + p + '-area')  || _fv('filter-all-area');
+  const wt    = _fv('filter-' + p + '-worktype');
+  const paid  = _fv('filter-' + p + '-paid')  || _fv('filter-completed-paid');
+  const month = _fv('filter-' + p + '-month');
 
   return DB.orders.filter(o => {
     if (o.status && o.status !== 'active') return false;   // active only
@@ -9421,7 +9465,7 @@ try { startCalendarWatch(); } catch (e) {}
 // Subbie issue reports land here rather than being noticed by accident.
 try { _rtdbWatchIssueReports(); } catch (e) { console.error('[BOOT] issue watcher failed:', e); }
 try { _rtdbWatchFieldReports(); } catch (e) { console.error('[BOOT] field reports failed:', e); }
-try { _rtdbAutoMirror('startup'); } catch (e) { console.error('[BOOT] mirror failed:', e); }
+Promise.resolve().then(() => _rtdbAutoMirror('startup')).catch(e => console.error('[BOOT] mirror failed:', e));
 if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
 
 // Background push upkeep — attaches the foreground handler and refreshes a
@@ -9860,7 +9904,7 @@ function _mirrorEligible() {
   });
 }
 
-let _mirrorRunning = false;
+// (declared at the top of the script — see the note there)
 async function _rtdbAutoMirror(reason) {
   if (_mirrorRunning) return;
   if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
