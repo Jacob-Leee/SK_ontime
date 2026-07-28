@@ -1957,7 +1957,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-28-k';
+const APP_BUILD     = '2026-07-28-l';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -6778,9 +6778,9 @@ function mobBackToHome() {
 }
 
 function mobDrawerOpen() {
-  // Update admin status label
-  const lbl = document.getElementById('mob-admin-label');
-  if (lbl) lbl.textContent = window._ADMIN_MODE ? 'Admin Mode: ON  (change PIN)' : 'Admin PIN (locked)';
+  // The old "Admin Mode: ON" label was replaced by the lock rows — refresh
+  // those instead so the drawer always shows the real current state.
+  try { mobDrawerLockStatus(); renderAuthDrawerStatus(); } catch (e) {}
   document.getElementById('mob-drawer').style.display = 'block';
   document.getElementById('mob-overlay').style.display = 'block';
   // Always refresh notification toggle to reflect current user/subbie
@@ -6980,8 +6980,16 @@ function mobRoleAdmin() {
   document.getElementById('mob-role-select').style.display = 'none';
   const back = document.getElementById('mob-pin-back');
   if (back) back.style.display = 'flex';
+  const title = document.getElementById('mob-pin-title');
+  if (title) title.textContent = 'Admin access';
+  const sub = document.getElementById('mob-pin-sub');
+  if (sub) sub.textContent = 'Enter your PIN to continue';
+  // Face ID belongs here too, not just on the idle re-lock — it is the same
+  // question being asked, and typing a PIN every morning is what makes people
+  // pick 1234 and never change it.
   const bio = document.getElementById('mob-lock-bio');
-  if (bio) bio.style.display = 'none';
+  if (bio) bio.style.display = lsGet('mob_lock_cred') ? 'block' : 'none';
+  if (lsGet('mob_lock_cred')) setTimeout(() => mobTryBiometric(false), 350);
   const pe = document.getElementById('mob-pin-entry');
   pe.style.display = 'flex';
   _pinBuf = '';
@@ -7080,16 +7088,20 @@ let _pinBuf = '';
 window._ADMIN_MODE = false;
 
 function mobPinKey(digit) {
+  // 'ok' was being concatenated as text: three digits plus OK produced a
+  // 5-character buffer, which then failed every length check — the keypad went
+  // dead and backspace looked broken because the buffer was already invalid.
+  if (digit === 'ok') { if (_pinBuf.length >= 4) mobPinCheck(); return; }
   if (_pinBuf.length >= 4) return;
-  _pinBuf += digit;
+  _pinBuf += String(digit);
   _pinUpdateDots();
-  if (_pinBuf.length === 4) {
-    setTimeout(mobPinCheck, 120);
-  }
+  if (_pinBuf.length === 4) setTimeout(mobPinCheck, 120);
 }
 function mobPinDel() {
   _pinBuf = _pinBuf.slice(0, -1);
   _pinUpdateDots();
+  const err = document.getElementById('mob-pin-err');
+  if (err) err.textContent = '';
 }
 function _pinUpdateDots() {
   document.querySelectorAll('#mob-pin-dots [data-dot]').forEach((dot, i) => {
@@ -7166,8 +7178,13 @@ function mobPinCheck() {
   if (_pinBuf === correct) {
     _pinBuf = '';
     _pinUpdateDots();
-    if (_pinMode === 'unlock') mobUnlock();
-    else mobShowSkPicker();
+    if (_pinMode === 'unlock') { mobUnlock(); return; }
+    // Dropping this line is what hid the Dashboard / Completed / Claims tabs
+    // and the Switch User button: mobApplyAdminUI() reads it to decide between
+    // full admin, individual SK user, and the locked-down subbie view. Without
+    // it every signed-in person fell through to the subbie branch.
+    window._ADMIN_MODE = true;
+    mobShowSkPicker();
   } else {
     const err = document.getElementById('mob-pin-err');
     if (err) { err.textContent = 'Incorrect PIN'; setTimeout(() => { err.textContent = ''; }, 1500); }
@@ -8167,7 +8184,9 @@ async function mobTryBiometric(manual) {
       allowCredentials: [{ type:'public-key', id: Uint8Array.from(atob(id), c=>c.charCodeAt(0)), transports:['internal'] }],
       userVerification: 'required', timeout: 60000,
     }});
-    mobUnlock();
+    if (_pinMode === 'unlock') { mobUnlock(); return; }
+    window._ADMIN_MODE = true;
+    mobShowSkPicker();
   } catch (e) {
     if (manual) {
       const err = document.getElementById('mob-pin-err');
