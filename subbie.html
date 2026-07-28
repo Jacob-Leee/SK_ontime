@@ -17,6 +17,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
     :root{
@@ -123,8 +124,15 @@
     <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%231C1C1E'/%3E%3Ctext x='24' y='34' text-anchor='middle' font-size='26' font-weight='900' fill='white' font-family='Arial'%3ESK%3C/text%3E%3C/svg%3E" alt="SK">
   </div>
   <div class="login-title">SK Field App</div>
-  <div class="login-sub">Select your name to continue</div>
-  <div class="name-list" id="name-list"></div>
+  <div class="login-sub" id="sb-login-sub">Google 계정으로 로그인하세요</div>
+
+  <button id="sb-google-btn" onclick="sbGoogleSignIn()"
+    style="width:100%;max-width:320px;display:flex;align-items:center;justify-content:center;gap:11px;padding:15px 18px;border-radius:13px;border:1px solid #D1D1D6;background:#fff;color:#3c4043;font-size:15px;font-weight:600;margin:8px auto 0;font-family:inherit">
+    <svg width="19" height="19" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+    Google로 로그인
+  </button>
+
+  <div id="sb-login-err" style="display:none;max-width:320px;margin:16px auto 0;padding:12px 14px;border-radius:10px;background:rgba(255,59,48,.08);border:1px solid rgba(255,59,48,.25);color:#C0392B;font-size:12.5px;line-height:1.6;text-align:left;white-space:pre-line"></div>
 </div>
 
 <!-- ── MAIN APP ── -->
@@ -246,9 +254,92 @@ function _waitForFirebase(cb, attempts) {
   if (attempts > 0) { setTimeout(() => _waitForFirebase(cb, attempts - 1), 250); }
 }
 
+// ══════════════════════════════════════════
+// GOOGLE SIGN-IN
+// ----------------------------------------------------------
+// Login used to be: tap your name. No password, no verification — anyone with
+// the link could read anyone's orders. It also read the database
+// unauthenticated, which blocks locking the rules down at all.
+//
+// Identity now comes from the allow-list entry, so a subbie sees only the work
+// filed under their own name.
+// ══════════════════════════════════════════
+
+const _SB_ALL_GROUPS = ['admin','SK_Jacob','SK_Mo','SK_June','SK_Jay','Jake_Lee','Chris_Choi','Sean_Park'];
+let _sbAuth = null;
+
+function _sbEmailKey(e) { return (e||'').trim().toLowerCase().replace(/\./g, ','); }
+
+function _sbErr(msg) {
+  const el = document.getElementById('sb-login-err');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function _sbFirebase() {
+  if (typeof firebase === 'undefined' || !firebase.auth) return false;
+  if (!_app) _app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(_FB_CONFIG);
+  _db      = firebase.database(_app);
+  _storage = firebase.storage(_app);
+  _sbAuth  = firebase.auth(_app);
+  return true;
+}
+
+async function sbGoogleSignIn() {
+  _sbErr('');
+  if (!_sbFirebase()) { _sbErr('Firebase를 불러오지 못했습니다. 네트워크를 확인해주세요.'); return; }
+  try {
+    const p = new firebase.auth.GoogleAuthProvider();
+    p.setCustomParameters({ prompt: 'select_account' });
+    await _sbAuth.signInWithPopup(p);
+  } catch (e) {
+    const c = e.code;
+    _sbErr(c === 'auth/popup-blocked'      ? '팝업이 차단되었습니다. 브라우저 설정에서 허용해주세요.'
+         : c === 'auth/unauthorized-domain'? '이 주소가 Firebase에 등록되지 않았습니다.'
+         : c === 'auth/popup-closed-by-user' ? '로그인 창이 닫혔습니다. 다시 시도해주세요.'
+         : (e.message || '로그인에 실패했습니다.'));
+  }
+}
+
+async function sbSignOut() {
+  try { localStorage.removeItem('sb_user'); if (_sbAuth) await _sbAuth.signOut(); } catch (e) {}
+  location.reload();
+}
+
+function _sbWatchAuth() {
+  if (!_sbFirebase()) return;
+  _sbAuth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      document.getElementById('login-screen').style.display = '';
+      document.getElementById('app').classList.remove('visible');
+      return;
+    }
+    try {
+      const snap = await _db.ref('/allowedUsers/' + _sbEmailKey(user.email)).once('value');
+      if (!snap.exists()) {
+        await _sbAuth.signOut();
+        _sbErr(user.email + ' 계정은 등록되어 있지 않습니다.\n관리자에게 등록을 요청해주세요.');
+        return;
+      }
+      const entry = snap.val() || {};
+      const name  = entry.name || '';
+      if (!name) {
+        await _sbAuth.signOut();
+        _sbErr('계정에 이름이 지정되어 있지 않습니다.\n관리자에게 문의해주세요.');
+        return;
+      }
+      sbLogin(name, true);
+    } catch (e) {
+      _sbErr('권한 확인에 실패했습니다.\n' + (e.message || ''));
+    }
+  });
+}
+
 function sbInit() {
-  // Build login name list
+  _sbWatchAuth();
   const list = document.getElementById('name-list');
+  if (!list) return;
   SUBBIE_NAMES.forEach(name => {
     const initials = name.split(' ').map(w => w[0]).join('').toUpperCase();
     const color = SUBBIE_COLORS[name] || '#5856D6';
@@ -263,11 +354,8 @@ function sbInit() {
     list.appendChild(row);
   });
 
-  // Auto-login if previously logged in
-  const saved = localStorage.getItem('sb_user');
-  if (saved && SUBBIE_NAMES.includes(saved)) {
-    sbLogin(saved, true);
-  }
+  // No name-based auto-login any more: identity comes from the Google session,
+  // which onAuthStateChanged restores on its own.
 }
 
 function sbLogin(name, auto) {
