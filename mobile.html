@@ -3150,13 +3150,25 @@ function saveOrder(e) {
     historyPush(`Order edited: ${_prevOrder?.orderNumber || editingOrderId}`,
       _prevOrder ? [_hClone(_prevOrder)] : [],
       _prevClaim  ? [_hClone(_prevClaim)]  : []);
+    const _prevWho = (_prevOrder?.subbies || '').trim();
     const idx = DB.orders.findIndex(x => x.id === editingOrderId);
     DB.orders[idx] = order;
     toast('Order updated successfully', 'success');
+    try {
+      _rtdbSyncOrder(order);
+      // Ring only when the assignee actually changed. Firing on every edit
+      // would ping the subbie again for a comment tweak or a price fix.
+      const _nowWho = (order.subbies || '').trim();
+      if (_nowWho && _nowWho !== _prevWho) _rtdbNotify(order, 'assigned');
+    } catch (e) { console.warn('[RTDB]', e); }
   } else {
     DB.orders.push(order);
     historyPush(`New order: ${order.orderNumber}`, [{ id: order.id, _wasAbsent: true }], []);
     toast('Order saved successfully', 'success');
+    try {
+      _rtdbSyncOrder(order);
+      if ((order.subbies || '').trim()) _rtdbNotify(order, 'new');
+    } catch (e) { console.warn('[RTDB]', e); }
   }
 
   // If I assigned this to myself I already know — suppress my own incoming alert.
@@ -7926,6 +7938,56 @@ async function fcmInit(userGroup) {
 // ─── PAGE LOAD: lightweight — foreground handler only ─────────────────────────
 // Does NOT re-register SW or call getToken on every load.
 // Full fcmInit runs: (a) on explicit enable, or (b) once per day to refresh token.
+// ══════════════════════════════════════════════════════════
+// PUSH DISPATCH  (was missing entirely on mobile)
+// ----------------------------------------------------------
+// index.html writes to RTDB /notifications when an order changes hands, which
+// trips the Cloud Function that sends FCM. mobile.html had none of that — so
+// assigning work FROM a phone reached the other person only if their app
+// happened to be open and syncing. Off-hours, that meant no alert at all.
+//
+// Reuses the Firebase app the FCM code already sets up rather than initialising
+// a second one.
+// ══════════════════════════════════════════════════════════
+
+function _rtdbDb() {
+  if (_fcmDB) return _fcmDB;
+  if (!_fcmSetupFirebase()) return null;
+  return _fcmDB || null;
+}
+
+function _rtdbNotify(order, type) {
+  const db = _rtdbDb();
+  if (!db || !order || !order.subbies) return;   // no assignee ⇒ nobody to ring
+  db.ref('/notifications').push({
+    orderNumber: order.orderNumber || '',
+    address:     order.address     || '',
+    area:        order.area        || '',
+    subbies:     order.subbies     || '',
+    // Carried through so the receiving device builds the same de-dup key the
+    // local detector builds — see _announceKey.
+    subbiesAt:   order.subbiesAt || order.formSavedAt || order.updatedAt || 0,
+    type:        type || 'new',
+    createdAt:   Date.now(),
+  }).then(() => console.log('[RTDB] push queued:', order.orderNumber))
+    .catch(err => console.warn('[RTDB] push failed:', err.message));
+}
+
+function _rtdbSyncOrder(order) {
+  const db = _rtdbDb();
+  if (!db || !order || !order.id) return;
+  db.ref('/orders/' + order.id).set({
+    id:          order.id,
+    orderNumber: order.orderNumber || '',
+    address:     order.address     || '',
+    area:        order.area        || '',
+    subbies:     order.subbies     || '',
+    status:      order.status      || 'active',
+    workType:    order.workType    || '',
+    updatedAt:   order.updatedAt   || Date.now(),
+  }).catch(err => console.warn('[RTDB] order sync failed:', err.message));
+}
+
 // ══════════════════════════════════════════════════════════
 // ANDROID / PWA BACK BUTTON
 // ----------------------------------------------------------
