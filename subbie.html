@@ -281,7 +281,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-29-r';
+const APP_BUILD = '2026-07-29-s';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -295,7 +295,6 @@ let _user = null;          // logged-in name
 let _allOrders = [];       // orders from RTDB
 let _activeTab = 'orders'; // orders | completed | issues
 let _currentOrder = null;  // order open in modal
-let _photoFile = null;     // selected photo file
 let _ordersListener = null;
 
 // ══════════════════════════════════════════
@@ -640,12 +639,10 @@ function sbOpenOrder(id) {
   document.getElementById('dm-fields').innerHTML = sbDetailFields(o);
 
   // Reset upload UI
-  _photoFile = null;
-  document.getElementById('photo-preview').style.display = 'none';
-  document.getElementById('photo-preview').src = '';
+  sbClearPhotos();
   document.getElementById('issue-note').value = '';
   document.getElementById('submit-btn').disabled = false;
-  document.getElementById('submit-btn').textContent = 'Submit Issue';
+  document.getElementById('submit-btn').textContent = '이슈 제출';
 
   // Load past issues for this order
   sbLoadIssues(id);
@@ -656,73 +653,141 @@ function sbOpenOrder(id) {
 function closeModal() {
   document.getElementById('detail-modal').classList.remove('open');
   _currentOrder = null;
-  _photoFile = null;
+  sbClearPhotos();
 }
 
 // ══════════════════════════════════════════
 // ISSUE UPLOAD
 // ══════════════════════════════════════════
+const MAX_PHOTOS = 4;
+let _photos = [];   // [{file, url}]
+
 function sbPickPhoto() {
+  if (_photos.length >= MAX_PHOTOS) return sbShowToast('사진은 최대 ' + MAX_PHOTOS + '장까지입니다');
   document.getElementById('photo-input').click();
 }
 
-function sbPhotoChosen(input) {
-  const file = input.files[0];
-  if (!file) return;
-  _photoFile = file;
-  const preview = document.getElementById('photo-preview');
-  preview.src = URL.createObjectURL(file);
-  preview.style.display = 'block';
+async function sbPhotoChosen(input) {
+  const picked = Array.from(input.files || []);
+  input.value = '';
+  if (!picked.length) return;
+  const room = MAX_PHOTOS - _photos.length;
+  if (picked.length > room) sbShowToast(room ? room + '장만 추가됩니다' : '사진은 최대 ' + MAX_PHOTOS + '장까지입니다');
+  for (const f of picked.slice(0, room)) {
+    const shrunk = await sbShrink(f);
+    _photos.push({ file: shrunk, url: URL.createObjectURL(shrunk) });
+  }
+  sbRenderPhotos();
+}
+
+function sbRemovePhoto(i) {
+  const p = _photos[i];
+  if (p && p.url) URL.revokeObjectURL(p.url);
+  _photos.splice(i, 1);
+  sbRenderPhotos();
+}
+
+function sbRenderPhotos() {
+  const grid = document.getElementById('photo-grid');
+  if (grid) grid.innerHTML = _photos.map((p, i) =>
+    '<div class="ph-cell"><img src="' + p.url + '" alt="">' +
+    '<button class="ph-del" onclick="sbRemovePhoto(' + i + ')">&times;</button></div>').join('');
+  const c = document.getElementById('photo-count');
+  if (c) c.textContent = _photos.length ? '(' + _photos.length + '/' + MAX_PHOTOS + ')' : '';
+  const b = document.getElementById('add-photo-btn');
+  if (b) b.disabled = _photos.length >= MAX_PHOTOS;
+}
+
+function sbClearPhotos() {
+  _photos.forEach(p => { if (p.url) URL.revokeObjectURL(p.url); });
+  _photos = [];
+  sbRenderPhotos();
+}
+
+// A modern phone photo is 4-6 MB. Four of those over site mobile data is a long
+// wait and a failed upload as often as not. 1600px at q0.75 is still far more
+// than enough to see a cracked tile or the wrong fitting.
+function sbShrink(file, maxDim = 1600, quality = 0.75) {
+  return new Promise(resolve => {
+    if (!/^image\//.test(file.type)) return resolve(file);
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      if (scale === 1 && file.size < 900000) return resolve(file);
+      const c = document.createElement('canvas');
+      c.width  = Math.round(img.width  * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => resolve(b ? new File([b], (file.name || 'photo').replace(/\.\w+$/, '') + '.jpg',
+        { type: 'image/jpeg' }) : file), 'image/jpeg', quality);
+    };
+    // A HEIC or otherwise undecodable file goes up as-is rather than failing.
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
 }
 
 async function sbSubmitIssue() {
   if (!_currentOrder) return;
   const note = document.getElementById('issue-note').value.trim();
-  if (!_photoFile && !note) { sbShowToast('Add a photo or note first'); return; }
+  if (!_photos.length && !note) { sbShowToast('사진이나 설명을 먼저 넣어주세요'); return; }
 
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
-  btn.textContent = 'Uploading...';
 
   try {
     const ts = Date.now();
     const orderId = _currentOrder.id;
-    let photoUrl = '';
 
-    // Upload photo to Firebase Storage if selected
-    if (_photoFile && _storage) {
-      const ext = _photoFile.name.split('.').pop() || 'jpg';
-      const path = 'issues/' + orderId + '/' + ts + '.' + ext;
-      const ref = _storage.ref(path);
-      await ref.put(_photoFile);
-      photoUrl = await ref.getDownloadURL();
+    // Upload sequentially, not in parallel: site reception is usually poor and
+    // four simultaneous uploads on a weak signal fail more often than they
+    // finish. Progress on the button so it does not look frozen.
+    const urls = [];
+    for (let i = 0; i < _photos.length; i++) {
+      btn.textContent = '사진 업로드 중… ' + (i + 1) + '/' + _photos.length;
+      const f = _photos[i].file;
+      const ref = _storage.ref('issues/' + orderId + '/' + ts + '_' + i + '.jpg');
+      await ref.put(f);
+      urls.push(await ref.getDownloadURL());
     }
 
-    // Write issue record to RTDB
-    const issueRef = _db.ref('/issues/' + orderId + '/' + ts);
-    await issueRef.set({
+    btn.textContent = '제출 중…';
+    await _db.ref('/issues/' + orderId + '/' + ts).set({
       note:      note || '',
-      photoUrl:  photoUrl,
+      photoUrl:  urls[0] || '',        // kept for older readers
+      photoUrls: urls,
       createdAt: ts,
       createdBy: _user
     });
 
-    sbShowToast('Issue reported ✓');
-    btn.textContent = 'Submit Issue';
-    btn.disabled = false;
-    document.getElementById('issue-note').value = '';
-    _photoFile = null;
-    document.getElementById('photo-preview').style.display = 'none';
-    document.getElementById('photo-input').value = '';
+    // The part that was missing. Writing to /issues alone meant the office
+    // never learned about it — nothing watches that node and the order stayed
+    // 'active'. This queues a report the office apps pick up and turn into a
+    // real Issue on the order.
+    await _db.ref('/issueReports/' + orderId + '_' + ts).set({
+      orderId:     orderId,
+      orderNumber: _currentOrder.orderNumber || '',
+      address:     _currentOrder.address || '',
+      note:        note || '',
+      photoUrls:   urls,
+      photoCount:  urls.length,
+      by:          _user,
+      at:          ts
+    });
 
-    // Reload issues
+    sbShowToast('이슈가 사무실로 전달되었습니다 ✓');
+    document.getElementById('issue-note').value = '';
+    sbClearPhotos();
     sbLoadIssues(orderId);
 
   } catch (err) {
     console.error('[Issue] Upload error:', err);
-    sbShowToast('Upload failed — try again');
+    sbShowToast('업로드 실패 — 다시 시도해주세요');
+  } finally {
     btn.disabled = false;
-    btn.textContent = 'Submit Issue';
+    btn.textContent = '이슈 제출';
   }
 }
 
@@ -742,7 +807,8 @@ function sbLoadIssues(orderId) {
             ' · ' + esc(issue.createdBy || '') +
           '</div>' +
           (issue.note ? '<div style="color:var(--text1);margin-bottom:4px">' + esc(issue.note) + '</div>' : '') +
-          (issue.photoUrl ? '<img src="' + issue.photoUrl + '" alt="issue photo" onclick="window.open(this.src)" style="width:100%;border-radius:8px;cursor:zoom-in">' : '') +
+          ((issue.photoUrls && issue.photoUrls.length ? issue.photoUrls : (issue.photoUrl ? [issue.photoUrl] : []))
+            .map(u => '<img src="' + u + '" alt="issue photo" onclick="window.open(this.src)" style="width:100%;border-radius:8px;cursor:zoom-in;margin-top:6px">').join('')) +
         '</div>'
       ).join('');
   });

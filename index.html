@@ -1907,7 +1907,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-29-r';
+const APP_BUILD = '2026-07-29-s';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4895,6 +4895,27 @@ function flagIssue(id) {
   setOrderStatus(id, 'issue');
 }
 
+// Photos a subbie took on site. They are the difference between "there is a
+// problem" and knowing what the problem is, so they need to be one click from
+// the Issues row rather than buried.
+function viewIssuePhotos(id) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o || !(o.issuePhotos || []).length) return toast('사진이 없습니다', 'error');
+  const w = window.open('', '_blank');
+  if (!w) return toast('팝업이 차단되었습니다', 'error');
+  w.document.write(
+    '<title>' + (o.orderNumber || '') + ' — 현장 사진</title>' +
+    '<style>body{margin:0;background:#111;color:#eee;font-family:system-ui,sans-serif}' +
+    'h1{font-size:15px;padding:14px 16px;margin:0;border-bottom:1px solid #333;font-weight:600}' +
+    'p{padding:10px 16px;margin:0;font-size:13px;color:#bbb;white-space:pre-wrap;line-height:1.6}' +
+    'img{width:100%;display:block;margin:10px 0}</style>' +
+    '<h1>' + esc(o.orderNumber || '') + ' &nbsp;·&nbsp; ' + esc(o.address || '') + '</h1>' +
+    (o.issueNote ? '<p>' + esc(o.issueNote) + '</p>' : '') +
+    o.issuePhotos.map(u => '<img src="' + u + '">').join('')
+  );
+  w.document.close();
+}
+
 function editIssueNote(id) {
   const o = DB.orders.find(x => x.id === id);
   if (!o) return;
@@ -4991,7 +5012,10 @@ function renderIssues() {
       <td class="amount-cell" style="color:var(--gold-dark)">$${Number(o.amount||0).toFixed(2)}</td>
       <td style="font-size:12px">${esc(o.subbies)}${o.supervisor?`<br>${supervisorLink(o.supervisor,o.area)}`:''}</td>
       <td><select class="form-control" style="padding:4px 8px;font-size:12px;min-width:185px" onchange="setClaimStatus('${esc(o.orderNumber)}',this.value)">${claimStatusOptions(claimMap[o.orderNumber]?.status)}</select></td>
-      <td><div class="truncate" title="${esc(o.issueNote)}" style="max-width:180px;cursor:pointer;color:var(--yellow)" onclick="editIssueNote('${o.id}')">${esc(o.issueNote)||'<span style=\'color:var(--text3)\'>+ add note</span>'}</div></td>
+      <td>
+        <div class="truncate" title="${esc(o.issueNote)}" style="max-width:180px;cursor:pointer;color:var(--yellow)" onclick="editIssueNote('${o.id}')">${esc(o.issueNote)||'<span style=\'color:var(--text3)\'>+ add note</span>'}</div>
+        ${(o.issuePhotos||[]).length ? `<button class="btn btn-sm" style="margin-top:4px;background:rgba(37,99,235,0.1);color:var(--blue,#2563EB);border:1px solid rgba(37,99,235,0.25);font-size:11px" onclick="viewIssuePhotos('${o.id}')">📷 사진 ${o.issuePhotos.length}장</button>` : ''}
+      </td>
       <td>
         <div class="row-actions">
           <button class="icon-btn" title="Edit Order" onclick="openOrderModal('${o.id}')">✏️</button>
@@ -9293,6 +9317,8 @@ renderNotifBell();
 renderHeaderIdentity();
 setTimeout(() => { try { _syncHealthCheck(); } catch (e) {} }, 1500);
 try { startCalendarWatch(); } catch (e) {}
+// Subbie issue reports land here rather than being noticed by accident.
+try { _rtdbWatchIssueReports(); } catch (e) {}
 if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
 
 // Background push upkeep — attaches the foreground handler and refreshes a
@@ -9693,6 +9719,81 @@ function _rtdbRecord(order) {
     subbieKey:   _subbieKey(order.subbies),
     updatedAt:   order.updatedAt   || Date.now()
   };
+}
+
+// ============================================================
+// SUBBIE ISSUE REPORTS  →  OFFICE ISSUES TAB
+// ------------------------------------------------------------
+// A subbie reporting a problem used to write to /issues and stop there. Nothing
+// watched that node, so the order stayed 'active' and the office never found
+// out unless someone opened that exact order. This closes the loop: a report
+// flips the order to Issue status, carries the note and photos across, and
+// rings the bell.
+// ============================================================
+
+function _rtdbWatchIssueReports() {
+  if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
+  if (window._issueWatchOn) return;
+  window._issueWatchOn = true;
+
+  _rtdbDB.ref('/issueReports').on('child_added', snap => {
+    try { _applyIssueReport(snap.key, snap.val() || {}); }
+    catch (e) { console.warn('[ISSUE] apply failed:', e); }
+  });
+}
+
+// Processed IDs are remembered locally. child_added replays every existing
+// child on each page load, so without this the same report would re-flag an
+// order the office had already dealt with — including one they had since
+// resolved and moved back to active.
+function _issueSeen() {
+  try { return JSON.parse(lsGet('hom_issue_seen') || '[]'); } catch (e) { return []; }
+}
+function _issueMarkSeen(id) {
+  const seen = _issueSeen();
+  if (seen.includes(id)) return;
+  seen.push(id);
+  // Unbounded growth would eventually blow the localStorage quota.
+  lsSet('hom_issue_seen', JSON.stringify(seen.slice(-400)));
+}
+
+function _applyIssueReport(reportId, r) {
+  if (!reportId || !r || !r.orderId) return;
+  if (_issueSeen().includes(reportId)) return;
+  _issueMarkSeen(reportId);
+
+  const o = (DB.orders || []).find(x => x.id === r.orderId);
+  if (!o) return;   // not on this device yet; another device will handle it
+
+  const when = r.at ? new Date(r.at) : new Date();
+  const stamp = when.toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
+  const line = '[' + stamp + ' · ' + (r.by || '협력업체') + '] ' + (r.note || '(사진만 제출)') +
+               (r.photoCount ? ' (사진 ' + r.photoCount + '장)' : '');
+
+  // Append rather than overwrite — a second report on the same order is new
+  // information, not a correction of the first.
+  o.issueNote = o.issueNote ? (o.issueNote + '\n' + line) : line;
+  o.issuePhotos = [...(o.issuePhotos || []), ...(r.photoUrls || [])];
+  o.issueFrom = r.by || '';
+  if (!o.issueType) o.issueType = 'hold';   // reported from site = work stopped
+  o.issueAt = _ymdLocal ? _ymdLocal(when) : when.toISOString().slice(0, 10);
+  o.status = 'issue';
+  o.updatedAt = _nowSafe();
+
+  save();
+  try { _rtdbSyncOrder(o); } catch (e) {}
+  try { updateSidebar(); } catch (e) {}
+  try {
+    const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW,
+      completed:renderCompleted, claims:renderClaims, closed:renderClosed,
+      issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
+    (renders[currentPage] || function(){})();
+  } catch (e) {}
+
+  const title = '현장 이슈 접수';
+  const body  = (r.by || '협력업체') + ' · ' + (r.orderNumber || '') + ' ' + (r.address || '');
+  try { _announce(title, body, { orderId: o.id }); }
+  catch (e) { try { toast(title + ' — ' + body, 'error'); } catch (e2) {} }
 }
 
 function _rtdbSyncOrder(order) {
