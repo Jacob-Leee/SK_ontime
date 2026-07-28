@@ -1898,7 +1898,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-29-j';
+const APP_BUILD = '2026-07-29-k';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -5029,6 +5029,7 @@ function deleteOrder(id) {
     _delClaim  ? [_hClone(_delClaim)]  : []);
   DB.tombstones.orders[id] = Date.now();
   DB.orders = DB.orders.filter(x => x.id !== id);
+  try { _rtdbDeleteOrder(id); } catch (e) {}   // keep the subbie mirror in step
   save();
   const renders = { all:renderAll, orders:renderOrders, vac:renderVAC, mpw:renderMPW, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
   (renders[currentPage] || renderAll)();
@@ -9498,6 +9499,16 @@ function _rtdbNotify(order, type) {
 
 // Sync order key fields to RTDB so subbie.html can read them in real-time.
 // Called on every create AND update so subbies always see current data.
+// The mirror at /orders is what the subcontractor app reads. Nothing ever
+// removed from it, so deleted orders lived on there forever and subbies kept
+// seeing work that no longer exists.
+function _rtdbDeleteOrder(orderId) {
+  const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
+  if (!db || !orderId) return;
+  db.ref('/orders/' + orderId).remove()
+    .catch(err => console.warn('[RTDB] delete failed:', err.message));
+}
+
 function _rtdbSyncOrder(order) {
   if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
   if (!order || !order.id) return;

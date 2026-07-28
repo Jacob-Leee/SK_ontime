@@ -234,7 +234,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-29-j';
+const APP_BUILD = '2026-07-29-k';
 
 const SUBBIE_NAMES = ['Jake Lee', 'Sean Park', 'Chris Choi'];
 const SUBBIE_COLORS = { 'Jake Lee':'#FF6B35', 'Sean Park':'#007AFF', 'Chris Choi':'#34C759' };
@@ -413,7 +413,17 @@ function sbLoadOrders() {
   // Listen to all orders, filter client-side (RTDB can't filter by child on free plan without index)
   _ordersListener = _db.ref('/orders').on('value', snap => {
     const data = snap.val() || {};
-    _allOrders = Object.values(data).filter(o => o.subbies === _user);
+    // The mirror can hold records the main app has since deleted or archived.
+    // Showing everything meant months-old work sat at the top of the list.
+    const CUTOFF = Date.now() - 90 * 86400000;   // 90 days
+    _allOrders = Object.values(data).filter(o => {
+      if (o.subbies !== _user) return false;
+      const st = (o.status || 'active');
+      // Finished work is still reachable under the Completed tab, but anything
+      // that finished long ago is just noise on a phone.
+      if (st !== 'active' && (o.updatedAt || 0) < CUTOFF) return false;
+      return true;
+    });
     sbRender();
     // Update badge
     const active = _allOrders.filter(o => (o.status||'active') === 'active').length;

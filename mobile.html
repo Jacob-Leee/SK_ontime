@@ -1984,7 +1984,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-29-j';
+const APP_BUILD     = '2026-07-29-k';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -4813,6 +4813,7 @@ function deleteOrder(id) {
     _delClaim  ? [_hClone(_delClaim)]  : []);
   DB.tombstones.orders[id] = Date.now();
   DB.orders = DB.orders.filter(x => x.id !== id);
+  try { _rtdbDeleteOrder(id); } catch (e) {}
   save();
   const renders = { all:renderAll, orders:renderOrders, completed:renderCompleted, claims:renderClaims, closed:renderClosed, issues:renderIssues, cancelled:renderCancelled };
   (renders[currentPage] || renderAll)();
@@ -8933,6 +8934,16 @@ function _rtdbNotify(order, type) {
     createdAt:   Date.now(),
   }).then(() => console.log('[RTDB] push queued:', order.orderNumber))
     .catch(err => console.warn('[RTDB] push failed:', err.message));
+}
+
+// The mirror at /orders is what the subcontractor app reads. Nothing ever
+// removed from it, so deleted orders lived on there forever and subbies kept
+// seeing work that no longer exists.
+function _rtdbDeleteOrder(orderId) {
+  const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
+  if (!db || !orderId) return;
+  db.ref('/orders/' + orderId).remove()
+    .catch(err => console.warn('[RTDB] delete failed:', err.message));
 }
 
 function _rtdbSyncOrder(order) {
