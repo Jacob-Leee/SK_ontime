@@ -1578,15 +1578,14 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
     </div>
     <div class="modal-body" style="max-height:66vh;overflow-y:auto">
       <p style="font-size:12px;color:var(--text3);margin:0 0 12px;line-height:1.55">
-        협력업체가 현장에서 보낸 이슈·완료 보고입니다. 확인한 뒤 <b>Reviewed</b>를 누르면
-        모든 기기에서 사라집니다.
+        Issue and completion reports filed from site. Marking one <b>Reviewed</b> clears it on every device.
       </p>
       <div id="fr-list"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="frDiagnose()">Diagnose</button>
       <button class="btn btn-secondary" onclick="frMarkAllReviewed()">Mark all reviewed</button>
-      <button class="btn btn-primary" onclick="closeModal('fr-modal')">닫기</button>
+      <button class="btn btn-primary" onclick="closeModal('fr-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -1987,7 +1986,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-30-c';
+const APP_BUILD = '2026-07-30-d';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -10204,24 +10203,53 @@ function renderFieldReports() {
     return;
   }
 
+  // Match on id first, then order number. The mirror the subbie app reads is
+  // keyed by order id, but an order re-created or re-imported on this side gets
+  // a new id — so an id-only lookup reported "not on this device" for an order
+  // sitting right there in the table.
+  const findOrder = (r) => DB.orders.find(x => x.id === r.orderId)
+    || (r.orderNumber ? DB.orders.find(x => (x.orderNumber || '') === r.orderNumber) : null);
+
   const card = (r) => {
-    const o = DB.orders.find(x => x.id === r.orderId);
+    const o = findOrder(r);
     const isIssue = r.type === 'issue';
     const when = r.ts ? new Date(r.ts).toLocaleString('en-AU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+    const num  = r.orderNumber || o?.orderNumber || '';
+    const open = o ? `closeModal('fr-modal');openOrderModal('${o.id}')` : '';
+
+    // Context the coordinator needs before deciding what to do — without this
+    // the card said who and where but nothing about the job itself.
+    const facts = o ? [
+      o.area     ? ['Area', o.area] : null,
+      o.sorCode  ? ['SOR', o.sorCode] : null,
+      o.workType ? ['Type', String(o.workType).toUpperCase()] : null,
+      o.subbies  ? ['Assigned', o.subbies] : null,
+      o.supervisor ? ['Supervisor', o.supervisor] : null,
+      o.amount   ? ['Amount', '$' + Number(o.amount).toFixed(2)] : null,
+      ['Status', (o.status || 'active').toUpperCase()],
+    ].filter(Boolean) : [];
+
     return `<div style="border:1px solid var(--border);border-left:3px solid ${isIssue?'#D97706':'#16A34A'};border-radius:10px;padding:11px 13px;margin-bottom:8px;background:${r.reviewedAt?'transparent':'var(--cream2)'}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
         <span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;background:${isIssue?'rgba(217,119,6,.14)':'rgba(22,163,74,.14)'};color:${isIssue?'#B45309':'#15803D'}">${isIssue?'⚠ Issue':'✅ Work done'}</span>
-        <b style="font-size:13px">${esc(r.orderNumber || o?.orderNumber || '')}</b>
+        ${o
+          ? `<b style="font-size:13px;color:var(--gold-dark);cursor:pointer;text-decoration:underline;text-underline-offset:2px" title="Open this order" onclick="${open}">${esc(num)}</b>`
+          : `<b style="font-size:13px">${esc(num)}</b>`}
         <span style="font-size:12px;color:var(--text3);margin-left:auto">${esc(when)}</span>
       </div>
-      <div style="font-size:12.5px;color:var(--text2);margin-bottom:3px">${esc(r.address || o?.address || '')}</div>
+      <div style="font-size:12.5px;color:var(--text2);margin-bottom:4px">${esc(r.address || o?.address || '')}</div>
+      ${facts.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px 10px;margin:5px 0 3px">${
+        facts.map(([k,v])=>`<span style="font-size:11.5px;color:var(--text3)">${k} <b style="color:var(--text2);font-weight:600">${esc(String(v))}</b></span>`).join('')
+      }</div>` : ''}
       <div style="font-size:12px;color:var(--text3)">By: ${esc(r.by || '—')}</div>
       ${r.note ? `<div style="font-size:12.5px;margin-top:6px;padding:7px 9px;background:var(--cream);border-radius:7px;white-space:pre-wrap">${esc(r.note)}</div>` : ''}
       ${r.photos.length ? `<div style="display:flex;gap:5px;margin-top:7px">${r.photos.slice(0,4).map(u=>`<img src="${u}" onclick="window.open('${u}')" style="width:54px;height:54px;object-fit:cover;border-radius:6px;cursor:zoom-in">`).join('')}</div>` : ''}
-      <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">
-        ${o ? `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="closeModal('fr-modal');openOrderModal('${r.orderId}')">Open order</button>` : '<span style="font-size:11px;color:var(--text3)">Order not on this device</span>'}
+      <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;align-items:center">
+        ${o
+          ? `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="${open}">Open order</button>`
+          : `<span style="font-size:11px;color:var(--orange)">Order not found — it may have been deleted</span>`}
         ${r.reviewedAt
-          ? `<span style="font-size:11px;color:var(--green);align-self:center">✓ ${esc(r.reviewedBy||'')} 확인함</span>`
+          ? `<span style="font-size:11px;color:var(--green)">✓ Reviewed by ${esc(r.reviewedBy||'')}</span>`
           : `<button class="btn btn-sm" style="font-size:11px;background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25)" onclick="frMarkReviewed('${r.key}')">Reviewed</button>`}
       </div>
     </div>`;

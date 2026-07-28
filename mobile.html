@@ -16,6 +16,21 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>SK Ontime — Holmes Order Manager</title>
 <script>
+// All four entry panes are flex columns (`flex-direction:column; align-items:center`).
+// Some code paths brought one back with `display:'block'`, which drops the flex
+// context — the contents stop being centred and the whole screen looks skewed
+// to the left. That is the "goes crooked when I press back" symptom.
+// One helper, one display value, so the panes cannot drift apart again.
+const MOB_PANES = ['mob-role-select', 'mob-pin-entry', 'mob-sk-pick', 'mob-subbie-pick'];
+function mobShowPane(id) {
+  MOB_PANES.forEach(p => {
+    const el = document.getElementById(p);
+    if (el) el.style.display = (p === id) ? 'flex' : 'none';
+  });
+  const overlay = document.getElementById('mob-pin-overlay');
+  if (overlay) overlay.style.display = 'flex';
+}
+
 // Same trap as _rtdbDB and _FR: declared far below the boot block that calls
 // _rtdbAutoMirror(), so `let` threw on first access. Worse, _rtdbAutoMirror is
 // ASYNC — the throw becomes a rejected promise, which the surrounding
@@ -538,16 +553,16 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <svg width="19" height="19" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
       Google로 로그인
     </button>
-    <div style="font-size:11.5px;color:rgba(255,255,255,0.35);margin-top:14px;line-height:1.6">승인된 계정만 접근할 수 있습니다.</div>
+    <div style="font-size:11.5px;color:rgba(255,255,255,0.35);margin-top:14px;line-height:1.6">Approved accounts only.</div>
     <div id="auth-error" style="display:none;margin-top:16px;padding:12px 14px;border-radius:10px;background:rgba(220,38,38,0.14);border:1px solid rgba(220,38,38,0.35);color:#fca5a5;font-size:12px;line-height:1.6;text-align:left;white-space:pre-line"></div>
-    <button onclick="authDiagnose()" style="margin-top:14px;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11.5px;text-decoration:underline;cursor:pointer">로그인 진단</button>
-    <button id="auth-gate-close" onclick="_authHide()" style="display:none;margin-top:10px;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11.5px;text-decoration:underline;cursor:pointer">닫기 (테스트 모드)</button>
+    <button onclick="authDiagnose()" style="margin-top:14px;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11.5px;text-decoration:underline;cursor:pointer">Sign-in check</button>
+    <button id="auth-gate-close" onclick="_authHide()" style="display:none;margin-top:10px;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11.5px;text-decoration:underline;cursor:pointer">Close (test mode)</button>
     <div id="auth-diag-result" style="text-align:left"></div>
   </div>
 
   <div id="auth-busy" style="display:none;text-align:center;color:rgba(255,255,255,0.55);font-size:13px">
     <div style="width:26px;height:26px;border:2.5px solid rgba(255,255,255,0.16);border-top-color:#C9A84C;border-radius:50%;margin:0 auto 12px;animation:authSpin .8s linear infinite"></div>
-    <span id="auth-busy-text">확인 중…</span>
+    <span id="auth-busy-text">Checking…</span>
   </div>
 </div>
 
@@ -556,10 +571,10 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 <div id="mob-notif-sheet" style="display:none;position:fixed;inset:0;z-index:99997;background:rgba(0,0,0,.4);flex-direction:column;justify-content:flex-end" onclick="if(event.target===this)closeNotifSheet()">
   <div style="background:#fff;border-radius:18px 18px 0 0;max-height:78vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #eee;flex-shrink:0">
-      <span style="font-weight:800;font-size:15px">내 알림</span>
+      <span style="font-weight:800;font-size:15px">My alerts</span>
       <div style="display:flex;gap:14px">
-        <button onclick="markAllNotifRead()" style="background:none;border:none;color:#888;font-size:12px">모두 읽음</button>
-        <button onclick="clearNotifInbox()" style="background:none;border:none;color:#888;font-size:12px">지우기</button>
+        <button onclick="markAllNotifRead()" style="background:none;border:none;color:#888;font-size:12px">Mark all read</button>
+        <button onclick="clearNotifInbox()" style="background:none;border:none;color:#888;font-size:12px">Clear</button>
         <button onclick="closeNotifSheet()" style="background:none;border:none;color:#333;font-size:19px;line-height:1">&times;</button>
       </div>
     </div>
@@ -589,7 +604,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     <div id="mob-entry-upcoming" style="display:none;width:100%;max-width:320px;background:#fff;border:1px solid #E5E5E0;border-radius:14px;overflow:hidden;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:7px;padding:10px 14px;border-bottom:1px solid #F0F0EC">
         <i class="ti ti-calendar-event" style="font-size:15px;color:#C9A84C"></i>
-        <span style="font-size:12px;font-weight:700;color:#1C1C1E;flex:1">다가오는 일정</span>
+        <span style="font-size:12px;font-weight:700;color:#1C1C1E;flex:1">Upcoming events</span>
         <span id="mob-entry-upcoming-count" style="font-size:11px;color:#8A8A8E"></span>
       </div>
       <div id="mob-entry-upcoming-list"></div>
@@ -639,7 +654,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <button onclick="mobTryBiometric(true)" style="width:70px;height:70px;border-radius:50%;border:2px solid rgba(201,168,76,.55);background:rgba(201,168,76,.10);display:flex;align-items:center;justify-content:center;margin:0 auto 8px">
         <i class="ti ti-face-id" style="font-size:31px;color:#C9A84C"></i>
       </button>
-      <div style="font-size:11.5px;color:#8A8A8E">Face ID / 지문</div>
+      <div style="font-size:11.5px;color:#8A8A8E">Face ID / Fingerprint</div>
     </div>
 
     <div id="mob-pin-dots" style="display:flex;gap:12px;margin-bottom:24px">
@@ -674,7 +689,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <i class="ti ti-user-check" style="font-size:28px;color:#fff"></i>
     </div>
     <div style="font-size:20px;font-weight:700;color:#1C1C1E;margin-bottom:4px">Who are you?</div>
-    <div style="font-size:13px;color:#8A8A8E;margin-bottom:22px;text-align:center">알림을 받을 이름을 선택하세요</div>
+    <div style="font-size:13px;color:#8A8A8E;margin-bottom:22px;text-align:center">Who are you signing in as?</div>
     <div id="mob-sk-list" style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px"></div>
   </div>
 
@@ -687,7 +702,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <i class="ti ti-user" style="font-size:28px;color:#fff"></i>
     </div>
     <div style="font-size:20px;font-weight:700;color:#1C1C1E;margin-bottom:4px">Select your name</div>
-    <div style="font-size:13px;color:#8A8A8E;margin-bottom:22px">배정된 오더만 표시됩니다</div>
+    <div style="font-size:13px;color:#8A8A8E;margin-bottom:22px">You'll only see orders assigned to you</div>
     <div id="mob-subbie-list" style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px"></div>
   </div>
 
@@ -817,49 +832,49 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     </div>
     <div class="mob-dl" id="mob-dl-registry" style="display:none" onclick="showPushRegistry();mobDrawerClose()">
       <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-users-group" style="color:#16A34A"></i></span>
-      <span style="flex:1">푸시 등록 현황</span>
+      <span style="flex:1">Push registrations</span>
     </div>
     <div class="mob-dl" onclick="showPushDiagnostics();mobDrawerClose()">
       <span class="dl-i" style="background:#FEF2F2"><i class="ti ti-device-mobile-message" style="color:#DC2626"></i></span>
-      <span style="flex:1">백그라운드 알림 진단</span>
+      <span style="flex:1">Background alert check</span>
     </div>
     <div class="mob-dl" onclick="showNotifDiagnostics();mobDrawerClose()">
       <span class="dl-i" style="background:#FEF3C7"><i class="ti ti-bell-question" style="color:#C9A84C"></i></span>
-      <span style="flex:1">알림 진단</span>
+      <span style="flex:1">Notification check</span>
     </div>
     <div class="mob-dl" onclick="testNotification();mobDrawerClose()">
       <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-bell-ringing" style="color:#4285F4"></i></span>
-      <span style="flex:1">테스트 알림</span>
+      <span style="flex:1">Test notification</span>
     </div>
     <div class="mob-dl" onclick="openCloudModal();mobDrawerClose()">
       <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-cloud-cog" style="color:#007AFF"></i></span>
-      <span style="flex:1">동기화 주소 설정</span>
+      <span style="flex:1">Sync address</span>
     </div>
     <div class="mob-dl" onclick="showSyncDiagnostics();mobDrawerClose()">
       <span class="dl-i" style="background:#ECFDF5"><i class="ti ti-refresh-alert" style="color:#10B981"></i></span>
-      <span style="flex:1">동기화 진단</span>
+      <span style="flex:1">Sync check</span>
     </div>
     <div class="mob-dl" onclick="mobToggleLock()">
       <span class="dl-i" style="background:#1C1C1E"><i class="ti ti-lock" style="color:#ffffff"></i></span>
-      <span style="flex:1">기기 잠금 (10분)</span>
+      <span style="flex:1">Device lock (10 min)</span>
       <span id="mob-lock-status" style="font-size:11px;font-weight:700;margin-left:auto">OFF</span>
     </div>
     <div class="mob-dl" onclick="mobRegisterBiometric();mobDrawerClose()">
       <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-face-id" style="color:#4285F4"></i></span>
-      <span style="flex:1">Face ID 등록</span>
+      <span style="flex:1">Set up Face ID</span>
     </div>
     <div class="mob-dl" onclick="mobDrawerChangePIN();mobDrawerClose()">
       <span class="dl-i" style="background:#F5F3FF"><i class="ti ti-key" style="color:#8B5CF6"></i></span>
-      <span style="flex:1">PIN 변경</span>
+      <span style="flex:1">Change PIN</span>
     </div>
     <div class="mob-dl" onclick="authTestSignIn();mobDrawerClose()">
       <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-user-check" style="color:#4285F4"></i></span>
-      <span style="flex:1">Google 계정</span>
+      <span style="flex:1">Google account</span>
       <span id="mob-auth-status" style="font-size:11px;color:#8A8A8E;margin-left:auto"></span>
     </div>
     <div class="mob-dl" id="mob-notif-row" onclick="fcmDrawerToggle()">
       <span class="dl-i" style="background:#FFF7ED"><i class="ti ti-bell" style="color:#F59E0B"></i></span>
-      <span id="mob-notif-label" style="flex:1">알림 (Push)</span>
+      <span id="mob-notif-label" style="flex:1">Notifications</span>
       <span id="mob-notif-toggle" style="display:inline-flex;align-items:center;gap:6px;margin-left:auto">
         <span id="mob-notif-status" style="font-size:11px;font-weight:700;color:#8A8A8E">OFF</span>
         <span id="mob-notif-pill" style="width:40px;height:22px;border-radius:11px;background:#ccc;position:relative;display:inline-block;transition:background .2s"><span id="mob-notif-knob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.3)"></span></span>
@@ -2074,7 +2089,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-c';
+const APP_BUILD     = '2026-07-30-d';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -2592,7 +2607,7 @@ function cloudPollNow() {
 function startCloudSync() {
   if (!CLOUD.url) {
     console.warn('[CLOUD] sync enabled but no URL is set — nothing will sync');
-    renderCloudStatus('주소 없음');
+    renderCloudStatus('No address');
     return;
   }
   stopCloudSync();
@@ -2676,7 +2691,7 @@ async function cloudPush() {
     CLOUD.lastErrorAt = Date.now();
     CLOUD.failStreak++;
     console.warn('[CLOUD] push failed:', CLOUD.lastError);
-    renderCloudStatus(navigator.onLine ? '전송 실패' : '오프라인');
+    renderCloudStatus(navigator.onLine ? 'Send failed' : 'Offline');
   } finally {
     CLOUD.pushing = false;
   }
@@ -2707,7 +2722,7 @@ async function cloudPull(initial) {
       CLOUD.lastErrorAt = Date.now();
       // One 404 after a run of successes is contention, not a bad URL. Only
       // call it an address problem once it keeps happening.
-      renderCloudStatus(_cloudLooksBroken() ? '주소 오류' : '재시도 중…');
+      renderCloudStatus(_cloudLooksBroken() ? 'Bad address' : 'Retrying…');
       return;
     }
     // The response arrived, so the deployment exists and the URL is right.
@@ -2848,9 +2863,9 @@ async function cloudPull(initial) {
     CLOUD.failStreak++;
     CLOUD.badUrl = !!looksLikeBadUrl && _cloudLooksBroken();
     console.warn('[CLOUD] pull failed:', raw);
-    renderCloudStatus(!navigator.onLine ? '오프라인'
-      : !_cloudLooksBroken() ? '재시도 중…'
-      : looksLikeBadUrl ? '주소 오류' : '연결 실패');
+    renderCloudStatus(!navigator.onLine ? 'Offline'
+      : !_cloudLooksBroken() ? 'Retrying…'
+      : looksLikeBadUrl ? 'Bad address' : 'Connection failed');
   } finally {
     CLOUD.pulling = false;
     // Safety net: if a past merge ever threw between `applying = true` and
@@ -3520,7 +3535,7 @@ function saveClaimAndClose() {
   if (!orderNumber) return;
   const o = DB.orders.find(x => x.orderNumber === orderNumber);
   if (!o) { toast('연결된 오더를 찾을 수 없습니다: ' + orderNumber, 'error'); return; }
-  if (o.status === 'closed') { toast('이미 Closed 상태입니다', 'info'); return; }
+  if (o.status === 'closed') { toast('Already closed', 'info'); return; }
   setOrderStatus(o.id, 'closed');
   toast(`🔒 ${orderNumber} — Closed 처리됨`, 'success');
 }
@@ -7000,11 +7015,7 @@ function mobBackToHome() {
   // role screen. Dropping a subbie at the very first screen made them re-pick
   // "Subcontractor" every time just to switch person.
   if (window._SUBBIE_MODE && !_SUBBIE_PARAM) {
-    const overlay = document.getElementById('mob-pin-overlay');
-    if (overlay) overlay.style.display = 'flex';
-    ['mob-role-select','mob-pin-entry','mob-sk-pick'].forEach(id => {
-      const el = document.getElementById(id); if (el) el.style.display = 'none';
-    });
+    mobShowPane('mob-subbie-pick');
     window._SELECTED_SUBBIE = null;
     mobRoleSubbie();           // rebuilds and shows the subbie list
     return;
@@ -7012,12 +7023,7 @@ function mobBackToHome() {
 
   // If in SK admin mode, just go back to name picker (no PIN re-entry needed)
   if (window._ADMIN_MODE && !window._SUBBIE_MODE) {
-    const overlay = document.getElementById('mob-pin-overlay');
-    if (overlay) overlay.style.display = 'flex';
-    document.getElementById('mob-role-select').style.display = 'none';
-    document.getElementById('mob-pin-entry').style.display = 'none';
-    const sp = document.getElementById('mob-subbie-pick');
-    if (sp) sp.style.display = 'none';
+    mobShowPane('mob-sk-pick');
     mobShowSkPicker();
     return;
   }
@@ -7040,15 +7046,7 @@ function mobBackToHome() {
     if (el) el.style.display = '';
   });
   // Reset subbie picker to role select
-  const rs = document.getElementById('mob-role-select');
-  const sp = document.getElementById('mob-subbie-pick');
-  const pe = document.getElementById('mob-pin-entry');
-  if (rs) rs.style.display = 'block';
-  if (sp) sp.style.display = 'none';
-  if (pe) pe.style.display = 'none';
-  // Show overlay
-  const overlay = document.getElementById('mob-pin-overlay');
-  if (overlay) overlay.style.display = 'flex';
+  mobShowPane('mob-role-select');
 }
 
 // Last resort. If something still traps the UI, a long-press on the title
@@ -7062,7 +7060,7 @@ function mobBackToHome() {
     const host = document.getElementById('notif-banner-host'); if (host) host.innerHTML = '';
     const bar  = document.getElementById('sync-health-bar');   if (bar) bar.remove();
     _locked = false;
-    try { toast('화면 잠김을 해제했습니다', 'success'); } catch (e) {}
+    try { toast('Unlocked', 'success'); } catch (e) {}
   }, 1200); };
   const stop = () => { if (t) { clearTimeout(t); t = null; } };
   const bind = () => {
@@ -7102,9 +7100,9 @@ function mobDrawerChangePIN() {
   const currentPin = lsGet('mob_admin_pin') || '1234';
   const newPin = prompt('새 4자리 PIN을 입력하세요 (현재: ' + currentPin + '):');
   if (newPin === null) return; // cancelled
-  if (!/^\d{4}$/.test(newPin)) { alert('PIN은 4자리 숫자여야 합니다.'); return; }
+  if (!/^\d{4}$/.test(newPin)) { alert('The PIN must be 4 digits.'); return; }
   lsSet('mob_admin_pin', newPin);
-  toast('PIN이 변경되었습니다', 'success');
+  toast('PIN changed', 'success');
 }
 
 // ── Refresh / Sync ───────────────────────────────────────────────
@@ -7236,7 +7234,7 @@ function mobRenderEntryUpcoming() {
 
   wrap.style.display = 'block';
   const cnt = document.getElementById('mob-entry-upcoming-count');
-  if (cnt) cnt.textContent = events.length + '건';
+  if (cnt) cnt.textContent = events.length + '';
   const todayStr = calYMD(new Date());
 
   list.innerHTML = events.map(e => {
@@ -7246,7 +7244,7 @@ function mobRenderEntryUpcoming() {
     return `<div style="display:flex;gap:10px;padding:9px 14px;border-bottom:1px solid #F0F0EC;align-items:center">
       <div style="width:36px;text-align:center;flex-shrink:0">
         <div style="font-size:9px;font-weight:700;color:${isToday ? '#C9A84C' : '#8A8A8E'};text-transform:uppercase">
-          ${isToday ? '오늘' : d.toLocaleDateString('en-AU', { weekday: 'short' })}</div>
+          ${isToday ? 'Today' : d.toLocaleDateString('en-AU', { weekday: 'short' })}</div>
         <div style="font-size:15px;font-weight:800;line-height:1.15;color:${isToday ? '#C9A84C' : '#1C1C1E'}">${d.getDate()}</div>
       </div>
       <div style="flex:1;min-width:0;border-left:3px solid ${cat.color};padding-left:9px">
@@ -7273,7 +7271,7 @@ function mobPickRole(role) {
 }
 
 function mobRoleConfirm() {
-  if (!window._mobSelectedRole) { toast('Admin 또는 Subcontractor 를 선택해주세요', 'error'); return; }
+  if (!window._mobSelectedRole) { toast('Please choose Admin or Subcontractor', 'error'); return; }
   if (window._mobSelectedRole === 'sub') {
     mobRoleSubbie();
   } else {
@@ -7384,10 +7382,7 @@ function mobRoleSubbiePick(name) {
   }, 800);
 }
 function mobRoleBack() {
-  document.getElementById('mob-pin-entry').style.display = 'none';
-  const sp = document.getElementById('mob-subbie-pick');
-  if (sp) sp.style.display = 'none';
-  document.getElementById('mob-role-select').style.display = 'block';
+  mobShowPane('mob-role-select');
   _pinBuf = '';
   _pinUpdateDots();
   const err = document.getElementById('mob-pin-err');
@@ -7618,7 +7613,7 @@ function fcmDrawerUpdateStatus() {
 
   // Text status
   if (isDenied) {
-    statusEl.textContent = '차단됨'; statusEl.style.color = '#FF9500';
+    statusEl.textContent = 'Blocked'; statusEl.style.color = '#FF9500';
   } else if (isOn) {
     statusEl.textContent = 'ON'; statusEl.style.color = '#34C759';
   } else {
@@ -7923,7 +7918,7 @@ function _fireOsNotification(title, body, orderId) {
 
 function _openOrderFromNotification(orderId) {
   const o = DB.orders.find(x => x.id === orderId);
-  if (!o) { toast('해당 오더를 찾을 수 없습니다', 'error'); return; }
+  if (!o) { toast('Order not found', 'error'); return; }
   markNotifReadByOrder(orderId);
   try { mobNav('orders'); } catch (e) {}
   setTimeout(() => {
@@ -8007,10 +8002,10 @@ function renderNotifBell() {
 
 function _timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60)    return '방금';
-  if (s < 3600)  return Math.floor(s / 60) + '분 전';
-  if (s < 86400) return Math.floor(s / 3600) + '시간 전';
-  return Math.floor(s / 86400) + '일 전';
+  if (s < 60)    return 'just now';
+  if (s < 3600)  return Math.floor(s / 60) + ' min ago';
+  if (s < 86400) return Math.floor(s / 3600) + ' hr ago';
+  return Math.floor(s / 86400) + ' days ago';
 }
 
 function markNotifReadByOrder(orderId) {
@@ -8021,7 +8016,7 @@ function markNotifReadByOrder(orderId) {
 function markAllNotifRead() {
   NOTIF.inbox.forEach(n => { n.read = true; });
   _notifSave(); renderNotifBell(); renderNotifSheet();
-  toast('모두 읽음 처리', 'success');
+  toast('Mark all read', 'success');
 }
 function clearNotifInbox() {
   NOTIF.inbox = [];
@@ -8140,7 +8135,7 @@ async function authSignIn() {
   _authError('');
   if (typeof firebase === 'undefined')  { _authFeedback('Firebase SDK가 로드되지 않았습니다. 네트워크를 확인해주세요.'); return; }
   if (!firebase.auth)                   { _authFeedback('firebase-auth-compat.js 를 불러오지 못했습니다.\n수정된 mobile.html 이 배포되었는지 확인해주세요.'); return; }
-  if (!_authSetup())                    { _authFeedback('Firebase 초기화에 실패했습니다.'); return; }
+  if (!_authSetup())                    { _authFeedback('Firebase failed to initialise.'); return; }
 
   const btn = document.getElementById('auth-signin-btn');
   if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
@@ -8161,13 +8156,13 @@ function _authErrorMessage(e) {
   if (c === 'auth/popup-blocked')
     return 'Popup blocked.\n브라우저 설정에서 이 사이트의 팝업을 허용한 뒤 다시 시도해주세요.';
   if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request')
-    return '로그인 창이 닫혔습니다. 다시 시도해주세요.';
+    return 'The sign-in window closed. Please try again.';
   if (c === 'auth/unauthorized-domain')
     return `이 주소(${location.hostname})가 Firebase에 등록되지 않았습니다.\nAuthentication → Settings → 승인된 도메인에 추가해주세요.`;
   if (c === 'auth/operation-not-allowed')
     return 'Google 로그인이 활성화되지 않았습니다.\nAuthentication → Sign-in method 에서 켜주세요.';
-  if (c === 'auth/network-request-failed') return '네트워크 연결을 확인해주세요.';
-  return (e && e.message) || '알 수 없는 오류';
+  if (c === 'auth/network-request-failed') return 'Check your network connection.';
+  return (e && e.message) || 'Unknown error';
 }
 
 async function authSignOut() {
@@ -8189,7 +8184,7 @@ async function _authOnStateChanged(user) {
     if (AUTH_REQUIRED) _authShow('signin');
     return;
   }
-  if (AUTH_REQUIRED) _authShow('busy', '권한 확인 중…');
+  if (AUTH_REQUIRED) _authShow('busy', 'Checking access…');
   try {
     const key  = _emailKey(user.email);
     const snap = await AUTH.db.ref('/allowedUsers/' + key).once('value');
@@ -8216,7 +8211,7 @@ async function _authOnStateChanged(user) {
     if ((AUTH.entry.role || '') === 'subbie') {
       // Send them, do not tell them. The role is already known, so one shared
       // link can serve everyone — nobody has to know which app they belong in.
-      _authShow('busy', '협력업체 앱으로 이동합니다…');
+      _authShow('busy', 'Taking you to the subcontractor app…');
       location.replace('subbie.html');
       return;
     }
@@ -8236,7 +8231,7 @@ async function _authOnStateChanged(user) {
     // not stop because the auth server is unreachable.
     if (!navigator.onLine && lsGet('hom_auth_email')) {
       AUTH.user = user; AUTH.ready = true; _authHide();
-      toast('오프라인 — 저장된 권한으로 실행 중', 'info');
+      toast('Offline — using saved access', 'info');
     } else if (AUTH_REQUIRED) {
       _authShow('signin');
       _authError('권한 정보를 읽지 못했습니다.\n허용 명단 읽기가 규칙에 막혔습니다.\n\n' + (e.message || ''));
@@ -8292,7 +8287,7 @@ function authTestSignIn() {
 function renderAuthDrawerStatus() {
   const el = document.getElementById('mob-auth-status');
   if (!el) return;
-  el.textContent = AUTH.user ? (AUTH.entry?.name || AUTH.user.email) : '로그인 안 됨';
+  el.textContent = AUTH.user ? (AUTH.entry?.name || AUTH.user.email) : 'Not signed in';
   el.style.color = AUTH.user ? '#10B981' : '#8A8A8E';
 }
 
@@ -8304,7 +8299,7 @@ function authInit() {
     }
     return;
   }
-  if (AUTH_REQUIRED) _authShow('busy', '확인 중…');
+  if (AUTH_REQUIRED) _authShow('busy', 'Checking…');
 }
 
 async function authDiagnose() {
@@ -8315,32 +8310,32 @@ async function authDiagnose() {
        <span style="flex-shrink:0;color:rgba(255,255,255,0.45);min-width:96px">${k}</span>
        <span style="flex:1;word-break:break-all">${esc(String(v))}</span></div>`);
 
-  row('빌드', APP_BUILD, null);
-  row('HTTPS', window.isSecureContext ? '예' : '아니오', !!window.isSecureContext);
-  row('호스트', location.hostname, null);
-  row('Firebase SDK', typeof firebase !== 'undefined' ? '로드됨' : '없음', typeof firebase !== 'undefined');
-  row('Auth 모듈', (typeof firebase !== 'undefined' && firebase.auth) ? '로드됨' : '없음 — 재배포 필요',
+  row('Build', APP_BUILD, null);
+  row('HTTPS', window.isSecureContext ? 'Yes' : 'No', !!window.isSecureContext);
+  row('Host', location.hostname, null);
+  row('Firebase SDK', typeof firebase !== 'undefined' ? 'Loaded' : 'None', typeof firebase !== 'undefined');
+  row('Auth module', (typeof firebase !== 'undefined' && firebase.auth) ? 'Loaded' : '없음 — 재배포 필요',
       !!(typeof firebase !== 'undefined' && firebase.auth));
 
   const u = AUTH.auth && AUTH.auth.currentUser;
-  row('현재 세션', u ? u.email : '없음', !!u);
+  row('Session', u ? u.email : 'None', !!u);
   row('AUTH_REQUIRED', String(AUTH_REQUIRED), null);
 
   if (u) {
     try {
       const c = (await u.getIdTokenResult()).claims || {};
       row('email_verified', String(c.email_verified), c.email_verified === true);
-    } catch (e) { row('토큰 확인', 'Failed: ' + e.message, false); }
+    } catch (e) { row('Token check', 'Failed: ' + e.message, false); }
     const key = _emailKey(u.email);
-    row('조회할 키', key, null);
+    row('Lookup key', key, null);
     try {
       const all  = await AUTH.db.ref('/allowedUsers').once('value');
       const keys = Object.keys(all.val() || {});
-      row('명단 읽기', '성공 — ' + keys.length + '건', true);
-      row('내 키 일치', keys.includes(key) ? '일치 ✓' : '불일치', keys.includes(key));
-    } catch (e) { row('명단 읽기', '차단됨: ' + e.message, false); }
+      row('Allow-list read', 'OK — ' + keys.length + '', true);
+      row('Key match', keys.includes(key) ? 'match ✓' : 'mismatch', keys.includes(key));
+    } catch (e) { row('Allow-list read', 'Blocked: ' + e.message, false); }
   }
-  if (AUTH.lastError) row('마지막 오류', AUTH.lastError.stage + (AUTH.lastError.message ? ' — ' + AUTH.lastError.message : ''), false);
+  if (AUTH.lastError) row('Last error', AUTH.lastError.stage + (AUTH.lastError.message ? ' — ' + AUTH.lastError.message : ''), false);
 
   document.getElementById('auth-diag-result').innerHTML =
     `<div style="margin-top:10px;border:1px solid rgba(255,255,255,0.12);border-radius:9px;padding:8px 11px;background:rgba(255,255,255,0.04)">${L.join('')}</div>`;
@@ -8417,7 +8412,7 @@ async function fcmInit(userGroup) {
     if (perm !== 'granted') {
       console.log('[FCM] Permission denied');
       if (perm === 'denied') {
-        _fcmShowBanner('🔕 알림 차단됨', 'Chrome 설정 → 사이트 설정 → 알림에서 허용 후 재시도');
+        _fcmShowBanner('🔕 Notifications blocked', 'Allow in Chrome → Settings → Site settings → Notifications, then retry');
       }
       return;
     }
@@ -8539,7 +8534,7 @@ function _syncHealthCheck() {
 async function showPushRegistry() {
   const db = (typeof AUTH !== 'undefined' && AUTH.db) ||
              (typeof _rtdbDb === 'function' ? _rtdbDb() : null);
-  if (!db) { alert('Firebase에 연결되어 있지 않습니다.'); return; }
+  if (!db) { alert('Not connected to Firebase.'); return; }
 
   // Check the role BEFORE attempting the read. A plain user pressing this got a
   // raw permission error, which — seen while they were in the middle of
@@ -8582,7 +8577,7 @@ async function showPushRegistry() {
 
   const lines = assignees.map(n => {
     const devices = all[key(n)] ? Object.keys(all[key(n)]).length : 0;
-    return (devices ? '  ✅ ' : '  ❌ ') + n.padEnd(14) + (devices ? devices + '대' : '등록 없음');
+    return (devices ? '  ✅ ' : '  ❌ ') + n.padEnd(14) + (devices ? devices + '' : 'Not registered');
   });
 
   // Tokens filed under a name nobody is assigned work under — usually a stale
@@ -8592,7 +8587,7 @@ async function showPushRegistry() {
   alert(
     '푸시 등록 현황\n' +
     '──────────────────────────\n' +
-    (lines.length ? lines.join('\n') : '  (배정된 담당자가 없습니다)') +
+    (lines.length ? lines.join('\n') : '(nobody assigned)') +
     (orphans.length ? '\n\n사용되지 않는 등록\n  ' + orphans.join(', ') : '') +
     '\n\n❌ 인 사람은 자기 기기에서\n' +
     '   서랍 → 알림(Push) 을 켜야 합니다.\n' +
@@ -8613,7 +8608,7 @@ async function showPushRegistry() {
 // ══════════════════════════════════════════════════════════
 
 function _syncFingerprint(url) {
-  if (!url) return '(없음)';
+  if (!url) return '(none)';
   const tail = url.replace(/\/exec\/?$/, '').slice(-10);
   return '…' + tail;
 }
@@ -8621,18 +8616,18 @@ function _syncFingerprint(url) {
 function syncDiagnostics() {
   const orders = (DB.orders || []);
   const newest = orders.reduce((m, o) => Math.max(m, o.updatedAt || 0), 0);
-  const mine   = (typeof NOTIF !== 'undefined' && NOTIF.me) ? NOTIF.me : '(미설정)';
+  const mine   = (typeof NOTIF !== 'undefined' && NOTIF.me) ? NOTIF.me : '(not set)';
   return {
     build:      (typeof APP_BUILD !== 'undefined') ? APP_BUILD : '?',
     enabled:    !!(CLOUD && CLOUD.enabled),
     urlSet:     !!(CLOUD && CLOUD.url),
     fingerprint:_syncFingerprint(CLOUD && CLOUD.url),
-    lastSeen:   (CLOUD && CLOUD.lastSeenAt) || '(아직 없음)',
+    lastSeen:   (CLOUD && CLOUD.lastSeenAt) || '(none yet)',
     orders:     orders.length,
-    newest:     newest ? new Date(newest).toLocaleString('en-AU') : '(없음)',
-    signedIn:   (typeof AUTH !== 'undefined' && AUTH.user) ? AUTH.user.email : '(로그인 안 함)',
+    newest:     newest ? new Date(newest).toLocaleString('en-AU') : '(none)',
+    signedIn:   (typeof AUTH !== 'undefined' && AUTH.user) ? AUTH.user.email : '(not signed in)',
     identity:   mine,
-    serverFp:   CLOUD.serverUrl ? _syncFingerprint(CLOUD.serverUrl) : '(없음)',
+    serverFp:   CLOUD.serverUrl ? _syncFingerprint(CLOUD.serverUrl) : '(none)',
     serverSame: CLOUD.serverUrl ? (CLOUD.serverUrl === CLOUD.url) : null,
     lastError:  CLOUD.lastError || '',
     lastErrorAt:CLOUD.lastErrorAt ? new Date(CLOUD.lastErrorAt).toLocaleTimeString('en-AU') : '',
@@ -8643,17 +8638,17 @@ function syncDiagnostics() {
 function syncDiagnosticsText() {
   const d = syncDiagnostics();
   return [
-    '빌드          ' + d.build,
-    '동기화        ' + (d.enabled ? '켜짐' : '꺼짐'),
-    '주소 지문     ' + d.fingerprint,
-    '서버 저장본   ' + d.serverFp + (d.serverSame === false ? '  ⚠ 다름' : d.serverSame ? '  (동일)' : ''),
-    '마지막 수신   ' + d.lastSeen,
-    '보유 Orders     ' + d.orders + '건',
-    '최신 수정     ' + d.newest,
-    '로그인        ' + d.signedIn,
-    '내 이름       ' + d.identity,
-    '네트워크      ' + (d.online ? '온라인' : '오프라인'),
-  ].concat(d.lastError ? ['', '마지막 오류   ' + d.lastError + (d.lastErrorAt ? ' (' + d.lastErrorAt + ')' : '')] : []).join('\n');
+    'Build' + d.build,
+    'Sync' + (d.enabled ? 'On' : 'Off'),
+    'Address fingerprint' + d.fingerprint,
+    'Server copy' + d.serverFp + (d.serverSame === false ? '⚠ differs' : d.serverSame ? '(same)' : ''),
+    'Last received' + d.lastSeen,
+    'Orders held' + d.orders + '',
+    'Last modified' + d.newest,
+    'Signed in' + d.signedIn,
+    'My name' + d.identity,
+    'Network' + (d.online ? 'Online' : 'Offline'),
+  ].concat(d.lastError ? ['', 'Last error' + d.lastError + (d.lastErrorAt ? ' (' + d.lastErrorAt + ')' : '')] : []).join('\n');
 }
 
 function showSyncDiagnostics() {
@@ -8663,12 +8658,12 @@ function showSyncDiagnostics() {
   // three-minute-old blip looked identical to a dead connection.
   if (CLOUD.lastOkAt) {
     const ago = Math.round((Date.now() - CLOUD.lastOkAt) / 1000);
-    warn.push('· 마지막 정상 응답  ' + (ago < 60 ? ago + '초 전' : Math.round(ago/60) + '분 전'));
+    warn.push('· 마지막 정상 응답  ' + (ago < 60 ? ago + 's ago' : Math.round(ago/60) + ' min ago'));
   }
-  if (CLOUD.failStreak) warn.push('· 연속 실패  ' + CLOUD.failStreak + '회' +
-    (_cloudLooksBroken() ? '  ← 주소 확인 필요' : '  (일시적 — 자동 재시도 중)'));
-  if (!d.enabled)  warn.push('· 동기화가 꺼져 있습니다.');
-  if (!d.urlSet)   warn.push('· 동기화 주소가 설정되지 않았습니다.');
+  if (CLOUD.failStreak) warn.push('· 연속 실패  ' + CLOUD.failStreak + '×' +
+    (_cloudLooksBroken() ? '← check the address' : '(temporary — retrying)'));
+  if (!d.enabled)  warn.push('· Sync is switched off.');
+  if (!d.urlSet)   warn.push('· No sync address is set.');
   alert(
     '동기화 진단\n' +
     '──────────────────────────\n' +
@@ -8691,15 +8686,15 @@ function showSyncDiagnostics() {
 // If /config holds a bad URL it will keep being offered to every new device.
 // Clearing it is the only way to stop that without touching the console.
 async function clearServerSyncUrl() {
-  if (!AUTH.user) { alert('로그인이 필요합니다.'); return; }
+  if (!AUTH.user) { alert('Sign-in required.'); return; }
   if (!confirm('서버에 저장된 동기화 주소를 삭제할까요?\n\n' +
                '잘못된 주소가 저장돼 있으면 기기마다 계속 덮어쓰게 됩니다.\n' +
                '삭제해도 이 기기의 주소는 그대로입니다.')) return;
   try {
     await AUTH.db.ref('/config/cloudUrl').remove();
     CLOUD.serverUrl = '';
-    toast('서버 저장본을 삭제했습니다', 'success');
-  } catch (e) { alert('삭제 Failed: ' + e.message); }
+    toast('Server copy deleted', 'success');
+  } catch (e) { alert('Delete failed: ' + e.message); }
 }
 
 function pasteSyncUrlPrompt() {
@@ -8716,11 +8711,11 @@ function pasteSyncUrlPrompt() {
     alert('형식이 올바르지 않습니다.\n\nhttps://script.google.com/macros/s/... 형태여야 합니다.');
     return;
   }
-  if (url === cur) { alert('기존 주소와 동일합니다. 다른 기기의 주소를 확인해주세요.'); return; }
+  if (url === cur) { alert('Same as the current address. Check the other device.'); return; }
   cloudSetUrl(url);
   CLOUD.badUrl = false; CLOUD.lastError = '';
   if (!CLOUD.enabled) cloudEnable(true); else startCloudSync();
-  toast('주소를 저장했습니다 — 연결을 시도합니다', 'success');
+  toast('Address saved — connecting', 'success');
 }
 
 // Clipboard first, with a selectable prompt as the fallback: clipboard writes
@@ -8737,7 +8732,7 @@ function copySyncUrlPrompt() {
       copied = true;
     }
   } catch (e) {}
-  if (copied) toast('주소가 복사되었습니다', 'success');
+  if (copied) toast('Address copied', 'success');
   else prompt('아래 주소를 복사해서 다른 기기에 붙여넣으세요:', url);
 }
 
@@ -8747,12 +8742,12 @@ function copySyncUrlPrompt() {
 // like a bug: assigning work to YOURSELF is silent on purpose. This prints the
 // state that decides it, so the difference is visible rather than guessed at.
 function notifDiagnostics() {
-  const perm = (typeof Notification !== 'undefined') ? Notification.permission : '미지원';
+  const perm = (typeof Notification !== 'undefined') ? Notification.permission : 'Not supported';
   const mine = (DB.orders || []).filter(o => (o.subbies || '').trim() === NOTIF.me);
   const active = mine.filter(o => !o.status || o.status === 'active');
   return {
     enabled:  NOTIF.enabled,
-    me:       NOTIF.me || '(미설정)',
+    me:       NOTIF.me || '(not set)',
     perm,
     seeded:   NOTIF.seeded,
     inbox:    NOTIF.inbox.length,
@@ -8775,12 +8770,12 @@ function showNotifDiagnostics() {
   alert(
     '알림 진단\n' +
     '──────────────────────────\n' +
-    '알림          ' + (d.enabled ? '켜짐' : '꺼짐') + '\n' +
-    '내 이름       ' + d.me + '\n' +
-    '시스템 권한   ' + d.perm + '\n' +
-    '기준선 설정   ' + (d.seeded ? '완료' : '미완료') + '\n' +
-    '내 Orders       ' + d.mineCnt + '건 (진행중 ' + d.activeCnt + '건)\n' +
-    '알림 기록     ' + d.inbox + '건 (안읽음 ' + d.unread + ')\n' +
+    'Alerts' + (d.enabled ? 'On' : 'Off') + '\n' +
+    'My name' + d.me + '\n' +
+    'System permission' + d.perm + '\n' +
+    'Baseline' + (d.seeded ? 'Done' : 'Not done') + '\n' +
+    'My orders' + d.mineCnt + '건 (진행중 ' + d.activeCnt + '건)\n' +
+    'Alert history' + d.inbox + '건 (안읽음 ' + d.unread + ')\n' +
     (why.length ? '\n⚠\n' + why.join('\n') + '\n' : '') +
     '\n──────────────────────────\n' +
     '알림이 오는 조건\n' +
@@ -8795,17 +8790,17 @@ function showNotifDiagnostics() {
 // popup but a banner appears ⇒ permission; neither ⇒ the module is not running.
 function testNotification() {
   try {
-    _fireOsNotification('테스트 알림', '이 알림이 보이면 시스템 알림이 정상입니다.', null);
+    _fireOsNotification('Test notification', 'If you can see this, system notifications work.', null);
     _showInAppBanner('&#128276; <b>테스트 알림</b><br><span style="opacity:.8;font-size:12px">앱 내 배너 정상</span>', null);
     _playNotifSound();
     NOTIF.inbox.unshift({
       id: 't_' + Date.now(), kind: 'event', eventId: '',
-      orderNumber: '테스트 알림', address: '전달 경로 확인용',
-      area: '테스트', amount: 0, at: _nowSafe(), read: false,
+      orderNumber: 'Test notification', address: 'Delivery path check',
+      area: 'Test', amount: 0, at: _nowSafe(), read: false,
     });
     _notifSave();
     renderNotifBell();
-    const p = (typeof Notification !== 'undefined') ? Notification.permission : '미지원';
+    const p = (typeof Notification !== 'undefined') ? Notification.permission : 'Not supported';
     setTimeout(() => alert(
       '테스트 발송 완료\n\n' +
       '· 앱 내 배너가 보였나요?\n' +
@@ -8814,7 +8809,7 @@ function testNotification() {
       '셋 다 정상이면 전달 경로에는 문제가 없고,\n' +
       '배정 조건 쪽을 봐야 합니다.'), 600);
   } catch (e) {
-    alert('테스트 Failed: ' + (e.message || e));
+    alert('Test failed: ' + (e.message || e));
   }
 }
 
@@ -8865,9 +8860,9 @@ function checkTodayEvents() {
       id: 'c_' + e.id + '_' + now,
       kind: 'event',
       eventId: e._baseId || e.id,
-      orderNumber: e.title || '(제목 없음)',
-      address: e.startTime ? (e.startTime + (e.endTime ? ' – ' + e.endTime : '')) : '종일',
-      area: '일정',
+      orderNumber: e.title || '(no title)',
+      address: e.startTime ? (e.startTime + (e.endTime ? ' – ' + e.endTime : '')) : 'All day',
+      area: 'Events',
       amount: 0,
       at: now,
       read: false,
@@ -8877,10 +8872,10 @@ function checkTodayEvents() {
   _notifSave();
 
   const first = fresh[0];
-  const when  = first.startTime || '종일';
+  const when  = first.startTime || 'All day';
   if (fresh.length === 1) {
     _fireOsNotification('오늘 일정 — ' + (first.title || ''), when, null);
-    _showInAppBanner(`\u{1F4C5} <b>오늘 일정</b><br><span style="opacity:.85;font-size:12px">${esc(first.title || '')} &middot; ${esc(when)}</span>`, null);
+    _showInAppBanner(`\u{1F4C5} <b>Today events</b><br><span style="opacity:.85;font-size:12px">${esc(first.title || '')} &middot; ${esc(when)}</span>`, null);
   } else {
     _fireOsNotification(`오늘 일정 ${fresh.length}건`,
       fresh.map(e => (e.startTime ? e.startTime + ' ' : '') + (e.title || '')).join('\n'), null);
@@ -8916,14 +8911,14 @@ function startCalendarWatch() {
 async function testPushServer() {
   const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) ||
              (typeof AUTH !== 'undefined' && AUTH.db) || null;
-  if (!db) { alert('Firebase에 연결되어 있지 않습니다.'); return; }
-  if (!NOTIF.me) { alert('먼저 "내 이름"을 설정해주세요.'); return; }
+  if (!db) { alert('Not connected to Firebase.'); return; }
+  if (!NOTIF.me) { alert('Set "My name" first.'); return; }
 
   let ref;
   try {
     ref = db.ref('/notifications').push({
       orderNumber: 'TEST-' + Date.now().toString().slice(-5),
-      address: '푸시 서버 테스트',
+      address: 'Push server test',
       area: 'TEST',
       subbies: NOTIF.me,
       subbiesAt: Date.now(),
@@ -8999,43 +8994,43 @@ function pushDiagnostics() {
   const iosEdge    = isIOS && /EdgiOS/.test(ua);
   const iosOther   = iosChrome || iosFirefox || iosEdge;
   const browser    = iosChrome ? 'Chrome' : iosFirefox ? 'Firefox' : iosEdge ? 'Edge'
-                   : isIOS ? 'Safari' : (/Chrome/.test(ua) ? 'Chrome' : /Firefox/.test(ua) ? 'Firefox' : '기타');
+                   : isIOS ? 'Safari' : (/Chrome/.test(ua) ? 'Chrome' : /Firefox/.test(ua) ? 'Firefox' : 'Other');
   return {
     isIOS, standalone, iosOther, browser,
-    perm:   (typeof Notification !== 'undefined') ? Notification.permission : '미지원',
+    perm:   (typeof Notification !== 'undefined') ? Notification.permission : 'Not supported',
     swSupported: 'serviceWorker' in navigator,
     secure: window.isSecureContext,
-    group:  lsGet('fcm_prev_group') || lsGet('fcm_group') || '(없음)',
+    group:  lsGet('fcm_prev_group') || lsGet('fcm_group') || '(none)',
     lastReg: (() => {
       const g = lsGet('fcm_prev_group') || '';
       const t = Number(lsGet('fcm_last_reg_' + g) || 0);
-      return t ? new Date(t).toLocaleString('en-AU') : '(등록 기록 없음)';
+      return t ? new Date(t).toLocaleString('en-AU') : '(no registration)';
     })(),
-    device: lsGet('fcm_device_id') || '(없음)',
+    device: lsGet('fcm_device_id') || '(none)',
   };
 }
 
 async function showPushDiagnostics() {
   const d = pushDiagnostics();
-  let swState = '확인 불가';
+  let swState = 'Unknown';
   try {
     if (d.swSupported) {
       const regs = await navigator.serviceWorker.getRegistrations();
-      swState = regs.length ? (regs.length + '개 등록됨') : '등록 안 됨';
-    } else swState = '미지원';
-  } catch (e) { swState = '오류: ' + e.message; }
+      swState = regs.length ? (regs.length + ' registered') : 'Not registered';
+    } else swState = 'Not supported';
+  } catch (e) { swState = 'Error: ' + e.message; }
 
   const blockers = [];
   // The single most common silent failure: token filed under a name nobody
   // assigns work to.
   const me = (NOTIF.me || '').trim().replace(/\s+/g, '_');
-  if (d.group !== '(없음)' && me && d.group !== me) {
+  if (d.group !== '(none)' && me && d.group !== me) {
     blockers.push('★★ 토큰이 "' + d.group + '" 앞으로 등록돼 있는데\n' +
                   '   내 이름은 "' + NOTIF.me + '" 입니다.\n' +
                   '   오더는 내 이름으로 배정되므로 서버가 보낼 곳을 찾지 못합니다.\n' +
                   '   → 백그라운드 알림 켜기 를 다시 눌러 재등록하세요.');
   }
-  if (d.group === '(없음)' && me) {
+  if (d.group === '(none)' && me) {
     blockers.push('· 이 기기의 토큰이 등록되지 않았습니다 — 백그라운드 알림 켜기를 눌러주세요');
   }
   if (d.iosOther) {
@@ -9049,29 +9044,29 @@ async function showPushDiagnostics() {
                   '   공유 버튼 → "홈 화면에 추가" → 그 아이콘으로 실행하세요.');
   }
   if (d.perm !== 'granted') blockers.push('· 알림 권한이 허용되지 않았습니다 (' + d.perm + ')');
-  if (swState === '등록 안 됨') blockers.push('· 서비스 워커가 등록되지 않았습니다 — 백그라운드 알림 켜기를 눌러주세요');
-  if (d.group === '(없음)')    blockers.push('· FCM 토큰이 등록되지 않았습니다 — 백그라운드 알림 켜기를 눌러주세요');
+  if (swState === 'Not registered') blockers.push('· 서비스 워커가 등록되지 않았습니다 — 백그라운드 알림 켜기를 눌러주세요');
+  if (d.group === '(none)')    blockers.push('· FCM 토큰이 등록되지 않았습니다 — 백그라운드 알림 켜기를 눌러주세요');
   if (!d.secure)               blockers.push('· HTTPS가 아닙니다');
 
   alert(
     '백그라운드 알림 진단\n' +
     '──────────────────────────\n' +
-    '기기          ' + (d.isIOS ? 'iOS' : '기타') + '\n' +
-    '브라우저      ' + d.browser + (d.iosOther ? '  ⚠ 푸시 불가' : '') + '\n' +
-    '실행 방식     ' + (d.standalone ? '홈 화면 앱 ✓'
-                     : d.isIOS ? '브라우저 탭  ⚠ (iOS는 홈 화면 필요)'
-                     : '브라우저 탭 ✓ (안드로이드는 정상)') + '\n' +
-    '알림 권한     ' + d.perm + '\n' +
-    '서비스 워커   ' + swState + '\n' +
-    '토큰 등록   ' + d.group + ((NOTIF.me && d.group !== (NOTIF.me||'').trim().replace(/\s+/g,'_')) ? '  ⚠ 내 이름과 다름' : '') + '\n' +
-    '내 이름       ' + (NOTIF.me || '(미설정)') + '\n' +
-    '마지막 등록   ' + d.lastReg + '\n' +
+    'Device' + (d.isIOS ? 'iOS' : 'Other') + '\n' +
+    'Browser' + d.browser + (d.iosOther ? '⚠ push unavailable' : '') + '\n' +
+    'Launched as' + (d.standalone ? 'Home Screen app ✓'
+                     : d.isIOS ? 'Browser tab ⚠ (iOS needs Home Screen)'
+                     : 'Browser tab ✓ (fine on Android)') + '\n' +
+    'Permission' + d.perm + '\n' +
+    'Service worker' + swState + '\n' +
+    'Token' + d.group + ((NOTIF.me && d.group !== (NOTIF.me||'').trim().replace(/\s+/g,'_')) ? '⚠ differs from my name' : '') + '\n' +
+    'My name' + (NOTIF.me || '(not set)') + '\n' +
+    'Last registered' + d.lastReg + '\n' +
     (blockers.length
       ? '\n⚠ 원인\n' + blockers.join('\n')
       : '\n이 기기 설정은 정상입니다.\n\n' +
         '그래도 안 온다면 확인할 것:\n' +
         '· 관리자 앱의 "등록 현황"에 내 이름이 ✅ 인지\n' +
-        '· 오더가 정확히 "' + (NOTIF.me || '내 이름') + '" 에게 배정됐는지\n' +
+        '· 오더가 정확히 "' + (NOTIF.me || 'My name') + '" 에게 배정됐는지\n' +
         (d.isIOS ? '' : '· 갤럭시: 설정 → 앱 → Chrome → 배터리 → 제한 없음\n'))
   );
 }
@@ -9295,7 +9290,7 @@ function _issueMarkSeen(id) {
 // report an issue and precisely nothing happened on any office screen.
 function _fieldReportAlert(kind, r, o) {
   const isIssue = kind === 'issue';
-  const who   = r.by || r.createdBy || '협력업체';
+  const who   = r.by || r.createdBy || 'Subcontractor';
   const title = isIssue ? 'Site issue reported' : 'Work completed';
   const body  = who + ' · ' + (r.orderNumber || o.orderNumber || '') + '\n' + (r.address || o.address || '');
 
@@ -9496,7 +9491,8 @@ function renderFieldReports() {
   }
 
   const card = (r) => {
-    const o = DB.orders.find(x => x.id === r.orderId);
+    const o = DB.orders.find(x => x.id === r.orderId)
+      || (r.orderNumber ? DB.orders.find(x => (x.orderNumber || '') === r.orderNumber) : null);
     const isIssue = r.type === 'issue';
     const when = r.ts ? new Date(r.ts).toLocaleString('en-AU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
     return `<div style="border:1px solid var(--border);border-left:3px solid ${isIssue?'#D97706':'#16A34A'};border-radius:10px;padding:11px 13px;margin-bottom:8px;background:${r.reviewedAt?'transparent':'var(--cream2)'}">
@@ -9510,9 +9506,9 @@ function renderFieldReports() {
       ${r.note ? `<div style="font-size:12.5px;margin-top:6px;padding:7px 9px;background:var(--cream);border-radius:7px;white-space:pre-wrap">${esc(r.note)}</div>` : ''}
       ${r.photos.length ? `<div style="display:flex;gap:5px;margin-top:7px">${r.photos.slice(0,4).map(u=>`<img src="${u}" onclick="window.open('${u}')" style="width:54px;height:54px;object-fit:cover;border-radius:6px;cursor:zoom-in">`).join('')}</div>` : ''}
       <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">
-        ${o ? `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="closeModal('fr-modal');openOrderModal('${r.orderId}')">Open order</button>` : '<span style="font-size:11px;color:var(--text3)">Order not on this device</span>'}
+        ${o ? `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="closeModal('fr-modal');openOrderModal('${r.orderId}')">Open order</button>` : '<span style="font-size:11px;color:var(--text3)">Order not found — it may have been deleted</span>'}
         ${r.reviewedAt
-          ? `<span style="font-size:11px;color:var(--green);align-self:center">✓ ${esc(r.reviewedBy||'')} 확인함</span>`
+          ? `<span style="font-size:11px;color:var(--green);align-self:center">✓ ${esc(r.reviewedBy||'')} </span>`
           : `<button class="btn btn-sm" style="font-size:11px;background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25)" onclick="frMarkReviewed('${r.key}')">Reviewed</button>`}
       </div>
     </div>`;
@@ -9605,8 +9601,8 @@ function _applyIssueReport(reportId, r, orderIdHint) {
     _fieldReportAlert('done', r, o);
     return;
   }
-  const line = '[' + stamp + ' · ' + (r.by || '협력업체') + '] ' + (r.note || '(사진만 제출)') +
-               (r.photoCount ? ' (사진 ' + r.photoCount + '장)' : '');
+  const line = '[' + stamp + ' · ' + (r.by || 'Subcontractor') + '] ' + (r.note || '(photo only)') +
+               (r.photoCount ? '(photos ' + r.photoCount + ')' : '');
 
   // Append rather than overwrite — a second report on the same order is new
   // information, not a correction of the first.
@@ -9668,9 +9664,9 @@ function mobShowLock() {
   const back = document.getElementById('mob-pin-back');
   if (back) back.style.display = 'none';          // nothing to go back to
   const title = document.getElementById('mob-pin-title');
-  if (title) title.textContent = '잠금 해제';
+  if (title) title.textContent = 'Unlock';
   const sub = document.getElementById('mob-pin-sub');
-  if (sub) sub.textContent = (window._SK_USER || NOTIF.me || '') || 'PIN을 입력하세요';
+  if (sub) sub.textContent = (window._SK_USER || NOTIF.me || '') || 'Enter your PIN';
   const bio = document.getElementById('mob-lock-bio');
   if (bio) bio.style.display = lsGet('mob_lock_cred') ? 'block' : 'none';
   document.getElementById('mob-pin-entry').style.display = 'flex';
@@ -9699,11 +9695,11 @@ function mobResetIdle() {
 // usable biometric the button simply never appears and the PIN carries it.
 async function mobRegisterBiometric() {
   if (!window.PublicKeyCredential || !window.isSecureContext) {
-    toast('이 기기는 생체인식을 지원하지 않습니다', 'error'); return;
+    toast('This device does not support biometrics', 'error'); return;
   }
   try {
     const ok = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    if (!ok) { toast('기기에 Face ID / 지문이 설정되어 있지 않습니다', 'error'); return; }
+    if (!ok) { toast('No Face ID or fingerprint is set up on this device', 'error'); return; }
     const cred = await navigator.credentials.create({ publicKey: {
       challenge: crypto.getRandomValues(new Uint8Array(32)),
       rp: { id: location.hostname, name: 'SK Ontime' },
@@ -9714,10 +9710,10 @@ async function mobRegisterBiometric() {
     }});
     lsSet('mob_lock_cred', btoa(String.fromCharCode(...new Uint8Array(cred.rawId))));
     lsSet('mob_lock_host', location.hostname);
-    toast('✓ Face ID 등록 완료', 'success');
+    toast('✓ Face ID set up', 'success');
     mobDrawerLockStatus();
   } catch (e) {
-    toast('등록 Failed: ' + (e.name === 'NotAllowedError' ? '취소됨' : (e.message || e.name)), 'error');
+    toast('Setup failed: ' + (e.name === 'NotAllowedError' ? 'Cancelled' : (e.message || e.name)), 'error');
   }
 }
 
@@ -9739,7 +9735,7 @@ async function mobTryBiometric(manual) {
   } catch (e) {
     if (manual) {
       const err = document.getElementById('mob-pin-err');
-      if (err) { err.textContent = 'PIN을 입력해주세요'; setTimeout(()=>{ err.textContent=''; }, 2000); }
+      if (err) { err.textContent = 'Please enter your PIN'; setTimeout(()=>{ err.textContent=''; }, 2000); }
     }
   }
 }
@@ -9749,7 +9745,7 @@ function mobToggleLock() {
   lsSet('mob_lock_enabled', on ? 'true' : 'false');
   mobDrawerLockStatus();
   if (on) mobResetIdle(); else if (_lockTimer) clearTimeout(_lockTimer);
-  toast(on ? '기기 잠금 켜짐 (10분 미사용 시)' : '기기 잠금 꺼짐', 'success');
+  toast(on ? 'Device lock on (after 10 min idle)' : 'Device lock off', 'success');
 }
 
 function mobDrawerLockStatus() {
@@ -9903,7 +9899,7 @@ function fcmInitIfAdmin() {
       if (Notification.permission === 'granted') return;
       if (Notification.permission === 'denied') {
         localStorage.setItem('fcm_prev_perm', 'denied'); // track for transition detection
-        _fcmShowBanner('🔕 알림 차단됨', 'Chrome 설정 → 사이트 설정 → 알림에서 허용해주세요');
+        _fcmShowBanner('🔕 Notifications blocked', 'Allow it in Chrome → Settings → Site settings → Notifications');
         return;
       }
       // 'default' — show the enable bar
@@ -9995,7 +9991,7 @@ async function fcmDrawerToggle() {
     localStorage.setItem(notifKey, 'off');
     localStorage.removeItem('fcm_last_reg_' + group);
     fcmDrawerUpdateStatus();
-    toast('알림을 껐습니다 (Notifications OFF)', 'success');
+    toast('Notifications off', 'success');
   } else {
     // Turn ON — delete old token first to force fresh registration
     localStorage.setItem(notifKey, 'on');
@@ -10006,7 +10002,7 @@ async function fcmDrawerToggle() {
     const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
     await fcmInit(grp);
     fcmDrawerUpdateStatus();
-    toast('알림을 켰습니다 (Notifications ON)', 'success');
+    toast('Notifications on', 'success');
   }
 }
 // ─── Blocked notification guidance modal ─────────────────────
@@ -10020,25 +10016,25 @@ function _fcmShowBlockedModal() {
     <div style="background:#1C1C1E;border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;color:#fff">
       <div style="text-align:center;margin-bottom:16px">
         <div style="font-size:36px">&#128276;</div>
-        <div style="font-size:17px;font-weight:700;margin-top:8px">알림이 차단돼 있어요</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:6px">아래 순서대로 허용 후 돌아오면 자동으로 켜져요</div>
+        <div style="font-size:17px;font-weight:700;margin-top:8px">Notifications are blocked</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.6);margin-top:6px">Allow them below, then come back — it turns on by itself</div>
       </div>
       <!-- Method A -->
       <div style="background:#2C2C2E;border-radius:12px;padding:14px;margin-bottom:10px">
-        <div style="font-size:11px;font-weight:700;color:#FF9500;letter-spacing:0.5px;margin-bottom:8px">방법 A — 주소창</div>
+        <div style="font-size:11px;font-weight:700;color:#FF9500;letter-spacing:0.5px;margin-bottom:8px">Option A — address bar</div>
         <div style="font-size:13px;color:rgba(255,255,255,0.9);line-height:2">
           1. 화면 상단 주소창을 한번 탭<br>
-          2. 왼쪽에 <b style="color:#fff">&#128274; 자물쇠</b> 또는 <b style="color:#fff">&#9432; 아이콘</b> 보이면 탭<br>
-          3. <b style="color:#fff">사이트 설정 → 알림 → 허용</b>
+          2. 왼쪽에 <b style="color:#fff">&#128274; 자물쇠</b> 또는 <b style="color:#fff">&#9432; icon</b>if shown, tap<br>
+          3. <b style="color:#fff">Site settings → Notifications → Allow</b>
         </div>
       </div>
       <!-- Method B -->
       <div style="background:#2C2C2E;border-radius:12px;padding:14px;margin-bottom:16px">
-        <div style="font-size:11px;font-weight:700;color:#34C759;letter-spacing:0.5px;margin-bottom:8px">방법 B — Chrome 설정 (더 쉬움)</div>
+        <div style="font-size:11px;font-weight:700;color:#34C759;letter-spacing:0.5px;margin-bottom:8px">Option B — Chrome settings (easier)</div>
         <div style="font-size:13px;color:rgba(255,255,255,0.9);line-height:2">
-          1. Chrome 오른쪽 위 <b style="color:#fff">⋮ (점 세개)</b> 탭<br>
-          2. <b style="color:#fff">설정 → 사이트 설정 → 알림</b><br>
-          3. 차단 목록에서 <b style="color:#fff">jacob-leee.github.io</b> 탭 → <b style="color:#fff">허용</b><br>
+          1. Chrome 오른쪽 위 <b style="color:#fff">⋮ (three dots)</b>tap<br>
+          2. <b style="color:#fff">Settings → Site settings → Notifications</b><br>
+          3. 차단 목록에서 <b style="color:#fff">jacob-leee.github.io</b> 탭 → <b style="color:#fff">Allow</b><br>
           4. 앱으로 돌아오기 (자동 감지)
         </div>
       </div>
@@ -10066,7 +10062,7 @@ function _fcmShowBlockedModal() {
       const grp = window._SK_USER || window._SELECTED_SUBBIE || 'admin';
       fcmInit(grp).then(() => {
         fcmDrawerUpdateStatus();
-        toast('알림이 허용됐습니다! (Notifications ON)', 'success');
+        toast('Notifications allowed', 'success');
       });
     }
   };
