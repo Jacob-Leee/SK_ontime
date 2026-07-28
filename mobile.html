@@ -16,6 +16,20 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>SK Ontime — Holmes Order Manager</title>
 <script>
+// Entry mode, set in exactly one place.
+//
+// _ADMIN_MODE and _SUBBIE_MODE were set independently, and entering Admin never
+// cleared _SUBBIE_MODE. So after visiting Subcontractor once, going into Admin
+// left BOTH true — and mobBackToHome() tests the subbie branch first, which is
+// why Back from Admin landed on the subcontractor name list.
+// They are mutually exclusive states, so they get set together or not at all.
+function mobSetMode(mode) {          // 'admin' | 'subbie' | 'none'
+  window._ADMIN_MODE  = (mode === 'admin');
+  window._SUBBIE_MODE = (mode === 'subbie');
+  if (mode !== 'subbie') window._SELECTED_SUBBIE = null;
+  if (mode !== 'admin')  window._SK_USER = null;
+}
+
 // ============================================================
 // PHOTO STAMP
 // ------------------------------------------------------------
@@ -714,8 +728,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
           <i class="ti ti-shield-check" style="font-size:23px;color:#fff"></i>
         </div>
         <div style="flex:1;pointer-events:none">
-          <div style="font-size:16px;font-weight:700;color:#1C1C1E">Admin</div>
-          <div style="font-size:12px;color:#8A8A8E;margin-top:1px">Full access · PIN required</div>
+          <div style="font-size:16px;font-weight:700;color:#1C1C1E">SK Staff</div>
+          <div style="font-size:12px;color:#8A8A8E;margin-top:1px">Full access to orders</div>
         </div>
         <div id="mob-role-tick-admin" style="width:22px;height:22px;border-radius:50%;border:2px solid #D1D1D6;display:flex;align-items:center;justify-content:center;flex-shrink:0;pointer-events:none"></div>
       </div>
@@ -725,8 +739,8 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
           <i class="ti ti-user" style="font-size:23px;color:#fff"></i>
         </div>
         <div style="flex:1;pointer-events:none">
-          <div style="font-size:16px;font-weight:700;color:#1C1C1E">Subcontractor</div>
-          <div style="font-size:12px;color:#8A8A8E;margin-top:1px">Assigned work orders only</div>
+          <div style="font-size:16px;font-weight:700;color:#1C1C1E">View subcontractor</div>
+          <div style="font-size:12px;color:#8A8A8E;margin-top:1px">See one subcontractor\u2019s orders</div>
         </div>
         <div id="mob-role-tick-sub" style="width:22px;height:22px;border-radius:50%;border:2px solid #D1D1D6;display:flex;align-items:center;justify-content:center;flex-shrink:0;pointer-events:none"></div>
       </div>
@@ -1690,6 +1704,34 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
           </div>
         </div>
       </form>
+
+      <!-- Site report — same block the subcontractors get, in the same place.
+           Staff do site work too; they should not have to describe it from
+           memory back at the office. -->
+      <div id="sr-block" style="display:none;margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+        <button class="btn" id="sr-done" style="width:100%;background:#22C55E;color:#fff;border:none;font-size:15px;font-weight:700;padding:14px" onclick="srSubmit('done')">
+          ⊘ Report work done
+        </button>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Sends this to the office Completed list for review.</div>
+
+        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+          <div style="font-size:14px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:6px;margin-bottom:10px">
+            <span style="color:#D97706">📷</span> Report an Issue
+          </div>
+          <button class="btn btn-secondary" id="sr-add" style="width:100%" onclick="srPick()">
+            🖼 Add photo <span id="sr-count" style="opacity:.6"></span>
+          </button>
+          <div id="sr-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
+          <textarea id="sr-note" rows="3" placeholder="Describe the issue (optional)..."
+            style="width:100%;margin-top:8px;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;resize:none;background:var(--cream2)"></textarea>
+          <button class="btn btn-primary" style="width:100%;margin-top:10px;font-size:15px;font-weight:700;padding:13px" onclick="srSubmit('issue')">
+            Submit issue
+          </button>
+          <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">
+            Photos are stamped with the date, order number, address and PRN.
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('order-modal')">Cancel</button>
@@ -1850,32 +1892,6 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 </div>
 
 <!-- ISSUE MODAL -->
-<!-- SITE REPORT SHEET (SK staff, same flow the subbies get) -->
-<div class="modal-overlay" id="sr-modal" onclick="if(event.target===this)closeModal('sr-modal')">
-  <div class="modal">
-    <div class="modal-header">
-      <h2>Site report</h2>
-      <button class="modal-close" onclick="closeModal('sr-modal')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div id="sr-order" style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5"></div>
-      <button id="sr-add" class="btn btn-secondary" style="width:100%" onclick="srPick()">
-        📷 Add photo <span id="sr-count" style="opacity:.6"></span>
-      </button>
-      <div id="sr-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
-      <textarea id="sr-note" rows="3" placeholder="What did you find? (optional)"
-        style="width:100%;margin-top:10px;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;resize:none"></textarea>
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button class="btn btn-secondary" style="flex:1" onclick="srSubmit('done')">✅ Work done</button>
-        <button class="btn btn-primary" style="flex:1;background:#D97706;border-color:#D97706" onclick="srSubmit('issue')">⚠ Report issue</button>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">
-        Photos are stamped with the date, order number, address and PRN. Reports appear in Field Reports.
-      </div>
-    </div>
-  </div>
-</div>
-
 <input type="file" id="sr-input" accept="image/*" multiple style="display:none" onchange="srChosen(this)">
 
 <div class="modal-overlay" id="issue-modal">
@@ -2215,7 +2231,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-e';
+const APP_BUILD     = '2026-07-30-h';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -3297,6 +3313,7 @@ function openOrderModal(id = null) {
     const today = localDateStr();
     document.getElementById('f-orderDate').value = today;
   }
+  srBind(id);
   openModal('order-modal');
 }
 
@@ -3893,15 +3910,16 @@ const SR_MAX = 4;
 let _srPhotos = [];
 let _srOrder  = null;
 
-function srOpen(id) {
-  _srOrder = DB.orders.find(o => o.id === id);
-  if (!_srOrder) return toast('Order not found', 'error');
+// Attaches the site-report block to whichever order the modal is showing.
+// Hidden for a brand-new order — there is nothing on site to report yet, and
+// no id to file the report against.
+function srBind(id) {
+  _srOrder = id ? DB.orders.find(o => o.id === id) : null;
   srClear();
-  document.getElementById('sr-note').value = '';
-  document.getElementById('sr-order').innerHTML =
-    '<b>' + esc(_srOrder.orderNumber || '') + '</b><br>' + esc(_srOrder.address || '') +
-    (_srOrder.prn ? '<br><span style="color:var(--text3)">PRN ' + esc(_srOrder.prn) + '</span>' : '');
-  openModal('sr-modal');
+  const note = document.getElementById('sr-note');
+  if (note) note.value = '';
+  const block = document.getElementById('sr-block');
+  if (block) block.style.display = _srOrder ? '' : 'none';
 }
 
 function srPick() {
@@ -3977,7 +3995,7 @@ async function srSubmit(type) {
       address: _srOrder.address || '', createdAt: ts,
       createdBy: NOTIF.me || 'SK', by: NOTIF.me || 'SK', at: ts
     });
-    closeModal('sr-modal');
+    closeModal('order-modal');
     srClear();
     toast(photoFailed ? 'Report sent — photos failed to upload'
                       : (type === 'issue' ? 'Issue reported' : 'Marked as done'), photoFailed ? 'error' : 'success');
@@ -5361,7 +5379,6 @@ function renderOrders() {
           <button class="icon-btn" title="Edit" onclick="openOrderModal('${o.id}')">✏️</button>
           <button class="btn btn-sm" style="background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25);font-size:11px" onclick="setOrderStatus('${o.id}','completed')">Complete →</button>
           <button class="btn btn-sm" style="background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);font-size:11px" onclick="openIssueModal('${o.id}')">⚠️ Issue</button>
-          <button class="btn btn-sm" style="background:rgba(37,99,235,0.08);color:#2563EB;border:1px solid rgba(37,99,235,0.2);font-size:11px" onclick="srOpen('${o.id}')">📷 Site</button>
           <button class="btn btn-sm" style="background:rgba(107,87,68,0.08);color:var(--text2);border:1px solid rgba(107,87,68,0.2);font-size:11px" onclick="setOrderStatus('${o.id}','cancelled')">✕ Cancel</button>
           <button class="icon-btn" title="Delete" onclick="deleteOrder('${o.id}')">🗑️</button>
         </div>
@@ -7254,16 +7271,10 @@ function mobBackToHome() {
     return;
   }
 
-  // If in SK admin mode, just go back to name picker (no PIN re-entry needed)
-  if (window._ADMIN_MODE && !window._SUBBIE_MODE) {
-    mobShowPane('mob-sk-pick');
-    mobShowSkPicker();
-    return;
-  }
-  // Reset all subbie state
-  window._SUBBIE_MODE = false;
-  window._SELECTED_SUBBIE = null;
-  window._ADMIN_MODE = false;
+  // Admin: the button says "← Home", so it goes Home — the first screen, with
+  // Admin / Subcontractor on it. Switching to another SK name is one tap from
+  // there, and it no longer matters what mode was visited earlier in the session.
+  mobSetMode('none');
   // (no sessionStorage to clear)
   // Hide back button
   const backBtn = document.getElementById('mob-back-btn');
@@ -7504,7 +7515,7 @@ function mobPickRole(role) {
 }
 
 function mobRoleConfirm() {
-  if (!window._mobSelectedRole) { toast('Please choose Admin or Subcontractor', 'error'); return; }
+  if (!window._mobSelectedRole) { toast('Please choose an option', 'error'); return; }
   if (window._mobSelectedRole === 'sub') {
     mobRoleSubbie();
   } else {
@@ -7514,24 +7525,20 @@ function mobRoleConfirm() {
 
 window._mobSelectedRole = 'admin';
 function mobRoleAdmin() {
-  _pinMode = 'entry';
-  document.getElementById('mob-role-select').style.display = 'none';
-  const back = document.getElementById('mob-pin-back');
-  if (back) back.style.display = 'flex';
-  const title = document.getElementById('mob-pin-title');
-  if (title) title.textContent = 'Admin access';
-  const sub = document.getElementById('mob-pin-sub');
-  if (sub) sub.textContent = 'Enter your PIN to continue';
-  // Face ID belongs here too, not just on the idle re-lock — it is the same
-  // question being asked, and typing a PIN every morning is what makes people
-  // pick 1234 and never change it.
-  const bio = document.getElementById('mob-lock-bio');
-  if (bio) bio.style.display = lsGet('mob_lock_cred') ? 'block' : 'none';
-  if (lsGet('mob_lock_cred')) requestAnimationFrame(() => mobTryBiometric(false));
-  const pe = document.getElementById('mob-pin-entry');
-  pe.style.display = 'flex';
-  _pinBuf = '';
-  _pinUpdateDots();
+  // No PIN on the way in any more.
+  //
+  // Google sign-in plus the allow-list has already decided whether this person
+  // gets in, and the PIN gated nothing beyond that: admin and ordinary staff
+  // read the same database, and mobApplyAdminUI() only changes which TABS are
+  // visible. A shared four-digit code in front of a view is not a boundary —
+  // it just costs everyone a few seconds every morning and makes the app feel
+  // protected when the real protection is the Google account.
+  //
+  // The idle re-lock is a different question (a phone left unlocked on site),
+  // so that one stays — see mobShowLock().
+  mobSetMode('admin');
+  mobShowPane('mob-sk-pick');
+  mobShowSkPicker();
 }
 function mobRoleSubbie() {
   const subbies = (DB.subbies || []).filter(function(n){ return !n.startsWith('SK_'); }).sort();
@@ -7586,8 +7593,7 @@ function mobRoleSubbie() {
 }
 
 function mobRoleSubbiePick(name) {
-  window._ADMIN_MODE = false;
-  window._SUBBIE_MODE = true;
+  mobSetMode('subbie');
   window._SELECTED_SUBBIE = name;
   document.getElementById('mob-pin-overlay').style.display = 'none';
   // Hide header extras for subbie
@@ -7624,7 +7630,7 @@ function mobRoleBack() {
 
 // ── Admin PIN ─────────────────────────────────────────────────────
 let _pinBuf = '';
-window._ADMIN_MODE = false;
+mobSetMode('none');
 
 function mobPinKey(digit) {
   // 'ok' was being concatenated as text: three digits plus OK produced a
@@ -7710,20 +7716,17 @@ function mobApplyAdminUI() {
   }
 }
 
-let _pinMode = 'entry';   // 'entry' = first sign-in flow, 'unlock' = idle re-lock
+let _pinMode = 'unlock';  // only the idle re-lock uses the keypad now
 
 function mobPinCheck() {
   const correct = lsGet('mob_admin_pin') || '1234';
   if (_pinBuf === correct) {
     _pinBuf = '';
     _pinUpdateDots();
-    if (_pinMode === 'unlock') { mobUnlock(); return; }
-    // Dropping this line is what hid the Dashboard / Completed / Claims tabs
-    // and the Switch User button: mobApplyAdminUI() reads it to decide between
-    // full admin, individual SK user, and the locked-down subbie view. Without
-    // it every signed-in person fell through to the subbie branch.
-    window._ADMIN_MODE = true;
-    mobShowSkPicker();
+    // The keypad is only reachable from the idle re-lock now that the entry PIN
+    // is gone, so a correct code always means "resume", never "sign in".
+    mobUnlock();
+    return;
   } else {
     const err = document.getElementById('mob-pin-err');
     if (err) { err.textContent = 'Incorrect PIN'; setTimeout(() => { err.textContent = ''; }, 1500); }
@@ -7732,7 +7735,7 @@ function mobPinCheck() {
   }
 }
 function mobPinSkip() {
-  window._ADMIN_MODE = false;
+  mobSetMode('none');
   document.getElementById('mob-pin-overlay').style.display = 'none';
   mobApplyAdminUI();
   mobRefresh();
@@ -7817,11 +7820,8 @@ function mobSkPick(name) {
 }
 
 function mobSkPickBack() {
-  // Back to role selection — hide SK picker, reset admin mode, show role select
-  document.getElementById('mob-sk-pick').style.display = 'none';
-  window._ADMIN_MODE = false;
-  window._SK_USER = null;
-  document.getElementById('mob-role-select').style.display = 'flex';
+  mobSetMode('none');
+  mobShowPane('mob-role-select');
 }
 
 function mobSkSkip() {
@@ -7881,7 +7881,7 @@ const _SUBBIE_PARAM = new URLSearchParams(location.search).get('subbie') || '';
 
 function mobSubbieMode() {
   if (!_SUBBIE_PARAM) return;
-  window._SUBBIE_MODE = true;
+  mobSetMode('subbie');
   window._SELECTED_SUBBIE = _SUBBIE_PARAM;
   // Hide header extras — subbie only needs logo + refresh
   ['mob-fab','mob-sync-btn','mob-hdr-row2'].forEach(id => {
@@ -9891,9 +9891,7 @@ function mobShowLock() {
   _pinBuf = '';
   _pinUpdateDots();
   // Straight to the keypad — the role was already chosen when the app opened.
-  ['mob-role-select','mob-sk-pick','mob-subbie-pick'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.style.display = 'none';
-  });
+  mobShowPane('mob-pin-entry');
   const back = document.getElementById('mob-pin-back');
   if (back) back.style.display = 'none';          // nothing to go back to
   const title = document.getElementById('mob-pin-title');
@@ -9902,7 +9900,6 @@ function mobShowLock() {
   if (sub) sub.textContent = (window._SK_USER || NOTIF.me || '') || 'Enter your PIN';
   const bio = document.getElementById('mob-lock-bio');
   if (bio) bio.style.display = lsGet('mob_lock_cred') ? 'block' : 'none';
-  document.getElementById('mob-pin-entry').style.display = 'flex';
   ov.style.display = 'flex';
   // Fire on the next frame rather than a fixed delay: the OS sheet then appears
   // as the lock screen paints, instead of a beat afterwards.
@@ -9962,9 +9959,7 @@ async function mobTryBiometric(manual) {
       allowCredentials: [{ type:'public-key', id: Uint8Array.from(atob(id), c=>c.charCodeAt(0)), transports:['internal'] }],
       userVerification: 'required', timeout: 60000,
     }});
-    if (_pinMode === 'unlock') { mobUnlock(); return; }
-    window._ADMIN_MODE = true;
-    mobShowSkPicker();
+    mobUnlock();
   } catch (e) {
     if (manual) {
       const err = document.getElementById('mob-pin-err');
