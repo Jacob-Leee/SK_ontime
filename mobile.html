@@ -747,6 +747,18 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span class="dl-i" style="background:#F0FDF4"><i class="ti ti-world" style="color:#16A34A"></i></span>DCJ Portal
     </a>
     <div class="mob-drawer-title">Settings</div>
+    <div class="mob-dl" onclick="showNotifDiagnostics();mobDrawerClose()">
+      <span class="dl-i" style="background:#FEF3C7"><i class="ti ti-bell-question" style="color:#C9A84C"></i></span>
+      <span style="flex:1">알림 진단</span>
+    </div>
+    <div class="mob-dl" onclick="testNotification();mobDrawerClose()">
+      <span class="dl-i" style="background:#EFF6FF"><i class="ti ti-bell-ringing" style="color:#4285F4"></i></span>
+      <span style="flex:1">테스트 알림</span>
+    </div>
+    <div class="mob-dl" onclick="showSyncDiagnostics();mobDrawerClose()">
+      <span class="dl-i" style="background:#ECFDF5"><i class="ti ti-refresh-alert" style="color:#10B981"></i></span>
+      <span style="flex:1">동기화 진단</span>
+    </div>
     <div class="mob-dl" onclick="mobToggleLock()">
       <span class="dl-i" style="background:#1C1C1E"><i class="ti ti-lock" style="color:#ffffff"></i></span>
       <span style="flex:1">기기 잠금 (10분)</span>
@@ -1957,7 +1969,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-28-m';
+const APP_BUILD     = '2026-07-28-n';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8050,6 +8062,147 @@ async function fcmInit(userGroup) {
 // ─── PAGE LOAD: lightweight — foreground handler only ─────────────────────────
 // Does NOT re-register SW or call getToken on every load.
 // Full fcmInit runs: (a) on explicit enable, or (b) once per day to refresh token.
+
+
+// ══════════════════════════════════════════════════════════
+// SYNC DIAGNOSTIC
+// ------------------------------------------------------------
+// "Why is the desktop change not on my phone" has several possible answers —
+// the two devices are on different sheets, one has sync switched off, or one is
+// simply running an older build. Guessing between them from the outside is
+// slow, so each app can print its own facts and the two can be compared.
+//
+// The URL is shown as a short fingerprint, not in full: enough to tell whether
+// two devices match, not enough to hand out the sheet.
+// ══════════════════════════════════════════════════════════
+
+function _syncFingerprint(url) {
+  if (!url) return '(없음)';
+  const tail = url.replace(/\/exec\/?$/, '').slice(-10);
+  return '…' + tail;
+}
+
+function syncDiagnostics() {
+  const orders = (DB.orders || []);
+  const newest = orders.reduce((m, o) => Math.max(m, o.updatedAt || 0), 0);
+  const mine   = (typeof NOTIF !== 'undefined' && NOTIF.me) ? NOTIF.me : '(미설정)';
+  return {
+    build:      (typeof APP_BUILD !== 'undefined') ? APP_BUILD : '?',
+    enabled:    !!(CLOUD && CLOUD.enabled),
+    urlSet:     !!(CLOUD && CLOUD.url),
+    fingerprint:_syncFingerprint(CLOUD && CLOUD.url),
+    lastSeen:   (CLOUD && CLOUD.lastSeenAt) || '(아직 없음)',
+    orders:     orders.length,
+    newest:     newest ? new Date(newest).toLocaleString('en-AU') : '(없음)',
+    signedIn:   (typeof AUTH !== 'undefined' && AUTH.user) ? AUTH.user.email : '(로그인 안 함)',
+    identity:   mine,
+  };
+}
+
+function syncDiagnosticsText() {
+  const d = syncDiagnostics();
+  return [
+    '빌드          ' + d.build,
+    '동기화        ' + (d.enabled ? '켜짐' : '꺼짐'),
+    '주소 지문     ' + d.fingerprint,
+    '마지막 수신   ' + d.lastSeen,
+    '보유 오더     ' + d.orders + '건',
+    '최신 수정     ' + d.newest,
+    '로그인        ' + d.signedIn,
+    '내 이름       ' + d.identity,
+  ].join('\n');
+}
+
+function showSyncDiagnostics() {
+  const d = syncDiagnostics();
+  const warn = [];
+  if (!d.enabled)  warn.push('· 동기화가 꺼져 있습니다.');
+  if (!d.urlSet)   warn.push('· 동기화 주소가 설정되지 않았습니다.');
+  alert(
+    '동기화 진단\n' +
+    '──────────────────────────\n' +
+    syncDiagnosticsText() +
+    (warn.length ? '\n\n⚠\n' + warn.join('\n') : '') +
+    '\n\n다른 기기에서도 같은 화면을 열어\n"주소 지문"과 "빌드"를 비교해보세요.\n' +
+    '지문이 다르면 서로 다른 시트를 보고 있는 것입니다.'
+  );
+}
+
+
+// ── Notification side of the same question ──
+// "I added an order and nothing happened" has a legitimate answer that looks
+// like a bug: assigning work to YOURSELF is silent on purpose. This prints the
+// state that decides it, so the difference is visible rather than guessed at.
+function notifDiagnostics() {
+  const perm = (typeof Notification !== 'undefined') ? Notification.permission : '미지원';
+  const mine = (DB.orders || []).filter(o => (o.subbies || '').trim() === NOTIF.me);
+  const active = mine.filter(o => !o.status || o.status === 'active');
+  return {
+    enabled:  NOTIF.enabled,
+    me:       NOTIF.me || '(미설정)',
+    perm,
+    seeded:   NOTIF.seeded,
+    inbox:    NOTIF.inbox.length,
+    unread:   NOTIF.inbox.filter(n => !n.read).length,
+    mineCnt:  mine.length,
+    activeCnt:active.length,
+    selfSup:  NOTIF.selfAssigned.size,
+  };
+}
+
+function showNotifDiagnostics() {
+  const d = notifDiagnostics();
+  const why = [];
+  if (!d.enabled)            why.push('· 알림이 꺼져 있습니다 (설정에서 켜세요)');
+  if (!NOTIF.me)             why.push('· "내 이름"이 설정되지 않았습니다');
+  if (d.perm === 'denied')   why.push('· 시스템 알림이 차단되어 있습니다 (앱 내 배너는 작동)');
+  if (d.perm === 'default')  why.push('· 시스템 알림 권한을 아직 허용하지 않았습니다');
+  if (d.selfSup > 0)         why.push('· 이번 세션에 본인이 직접 배정한 오더 ' + d.selfSup + '건은 알림이 나가지 않습니다');
+
+  alert(
+    '알림 진단\n' +
+    '──────────────────────────\n' +
+    '알림          ' + (d.enabled ? '켜짐' : '꺼짐') + '\n' +
+    '내 이름       ' + d.me + '\n' +
+    '시스템 권한   ' + d.perm + '\n' +
+    '기준선 설정   ' + (d.seeded ? '완료' : '미완료') + '\n' +
+    '내 오더       ' + d.mineCnt + '건 (진행중 ' + d.activeCnt + '건)\n' +
+    '알림 기록     ' + d.inbox + '건 (안읽음 ' + d.unread + ')\n' +
+    (why.length ? '\n⚠\n' + why.join('\n') + '\n' : '') +
+    '\n──────────────────────────\n' +
+    '알림이 오는 조건\n' +
+    '· 오더의 담당자가 "내 이름"과 정확히 같아야 합니다\n' +
+    '· 본인이 직접 배정한 오더는 알리지 않습니다\n' +
+    '· 완료/종료/취소 상태는 알리지 않습니다'
+  );
+}
+
+// Fires one alert through every layer so a broken link can be located: no OS
+// popup but a banner appears ⇒ permission; neither ⇒ the module is not running.
+function testNotification() {
+  try {
+    _fireOsNotification('테스트 알림', '이 알림이 보이면 시스템 알림이 정상입니다.', null);
+    _showInAppBanner('&#128276; <b>테스트 알림</b><br><span style="opacity:.8;font-size:12px">앱 내 배너 정상</span>', null);
+    _playNotifSound();
+    NOTIF.inbox.unshift({
+      id: 't_' + Date.now(), kind: 'event', eventId: '',
+      orderNumber: '테스트 알림', address: '전달 경로 확인용',
+      area: '테스트', amount: 0, at: _nowSafe(), read: false,
+    });
+    _notifSave();
+    renderNotifBell();
+    const p = (typeof Notification !== 'undefined') ? Notification.permission : '미지원';
+    setTimeout(() => alert(
+      '테스트 발송 완료\n\n' +
+      '· 앱 내 배너가 보였나요?\n' +
+      '· 시스템 알림(권한: ' + p + ')이 떴나요?\n' +
+      '· 알림 기록에 "테스트 알림"이 있나요?\n\n' +
+      '셋 다 정상이면 전달 경로에는 문제가 없고,\n' +
+      '배정 조건 쪽을 봐야 합니다.'), 600);
+  } catch (e) {
+    alert('테스트 실패: ' + (e.message || e));
+  }
+}
 
 // ══════════════════════════════════════════════════════════
 // TODAY'S CALENDAR EVENTS
