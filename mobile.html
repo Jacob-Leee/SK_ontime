@@ -1981,7 +1981,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-29-e';
+const APP_BUILD     = '2026-07-29-f';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -6881,6 +6881,33 @@ function mobBackToHome() {
   if (overlay) overlay.style.display = 'flex';
 }
 
+// Last resort. If something still traps the UI, a long-press on the title
+// tears down every overlay. Cheap to have, and the alternative is force-quitting.
+(function armPanicRelease() {
+  let t = null;
+  const start = () => { t = setTimeout(() => {
+    ['mob-overlay','mob-notif-sheet','mob-search-overlay','mob-drawer','auth-gate','mob-pin-overlay']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    document.querySelectorAll('.modal-overlay').forEach(m => { m.style.display = 'none'; m.classList.remove('active'); });
+    const host = document.getElementById('notif-banner-host'); if (host) host.innerHTML = '';
+    const bar  = document.getElementById('sync-health-bar');   if (bar) bar.remove();
+    _locked = false;
+    try { toast('화면 잠김을 해제했습니다', 'success'); } catch (e) {}
+  }, 1200); };
+  const stop = () => { if (t) { clearTimeout(t); t = null; } };
+  const bind = () => {
+    const el = document.getElementById('mob-hdr-title') ||
+               document.querySelector('#mob-hdr') || document.body;
+    if (!el) return;
+    el.addEventListener('touchstart', start, { passive: true });
+    ['touchend','touchcancel','touchmove'].forEach(e => el.addEventListener(e, stop, { passive: true }));
+    el.addEventListener('mousedown', start);
+    ['mouseup','mouseleave'].forEach(e => el.addEventListener(e, stop));
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+})();
+
 function mobDrawerOpen() {
   // The old "Admin Mode: ON" label was replaced by the lock rows — refresh
   // those instead so the drawer always shows the real current state.
@@ -7478,6 +7505,16 @@ function mobInit() {
   mobDrawerLockStatus();
   mobResetIdle();
   mobNav('orders');
+
+  // Safety net: clear any overlay left showing from a previous session. If one
+  // ever gets stuck the app looks completely dead — every tap lands on an
+  // invisible sheet — and there is no way out from inside.
+  ['mob-overlay', 'mob-notif-sheet', 'mob-search-overlay'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const dw = document.getElementById('mob-drawer');
+  if (dw) dw.style.display = 'none';
 }
 
 // ══════════════════════════════════════════════════════════
@@ -8278,9 +8315,12 @@ function _syncHealthCheck() {
   if (!bar) {
     bar = document.createElement('div');
     bar.id = 'sync-health-bar';
-    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99990;' +
-      'background:#DC2626;color:#fff;padding:11px 16px;padding-bottom:calc(11px + env(safe-area-inset-bottom));' +
-      'font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px;cursor:pointer;' +
+    // Sit ABOVE the tab bar, not on top of it. At bottom:0 this covered
+    // Board/Active/Done/Issues/Orders entirely — the app was still running but
+    // every navigation control was under a red strip.
+    bar.style.cssText = 'position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));' +
+      'z-index:99990;background:#DC2626;color:#fff;padding:10px 16px;' +
+      'font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:9px;cursor:pointer;' +
       'box-shadow:0 -4px 16px rgba(0,0,0,.2)';
     bar.onclick = () => { try { openCloudModal(); } catch (e) {} };
     document.body.appendChild(bar);
@@ -8976,18 +9016,31 @@ function _topOverlay() {
     return () => { search.style.display = 'none'; };
   }
 
+  // The drawer is toggled with style.display, not a class — checking for an
+  // "open" class meant back never closed it.
   const drawer = document.getElementById('mob-drawer');
-  if (drawer && drawer.classList.contains('open')) return () => mobDrawerClose();
+  if (drawer && drawer.style.display === 'block') return () => mobDrawerClose();
 
   return null;
 }
 
 let _backGuardArmed = false;
 
+// iOS standalone has no back button, and repeated pushState inside a PWA can
+// wedge navigation there (Safari also rate-limits it). The guard exists for the
+// Android hardware button, so it only arms where that button exists.
+const _BACK_GUARD_OK = (() => {
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  return !isIOS;
+})();
+
 function _armBackGuard() {
+  if (!_BACK_GUARD_OK) return;
   if (_backGuardArmed) return;
   _backGuardArmed = true;
-  history.pushState({ skGuard: true }, '');
+  try { history.pushState({ skGuard: true }, ''); } catch (e) { _backGuardArmed = false; }
 }
 
 window.addEventListener('popstate', () => {
@@ -9011,6 +9064,7 @@ window.addEventListener('popstate', () => {
 // Only the handful of elements that can actually BE an overlay are watched now,
 // with no subtree, so the cost is fixed no matter how many orders are on screen.
 (function watchOverlays() {
+  if (!_BACK_GUARD_OK) return;   // nothing to guard against on iOS
   let queued = false;
   const check = () => {
     if (queued) return;
