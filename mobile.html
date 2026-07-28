@@ -2009,7 +2009,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-29-w';
+const APP_BUILD     = '2026-07-29-x';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -6467,6 +6467,7 @@ function initApp() {
     renderNotifBell();
     startCalendarWatch();
     try { _rtdbWatchIssueReports(); } catch (e) {}
+    try { _rtdbWatchFieldReports(); } catch (e) {}
     try { _rtdbAutoMirror('startup'); } catch (e) {}
     setTimeout(() => { try { _syncHealthCheck(); } catch (e) {} }, 1500);
     if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
@@ -9218,6 +9219,178 @@ function _issueMarkSeen(id) {
   lsSet('hom_issue_seen', JSON.stringify(seen.slice(-400)));
 }
 
+// _announce() is a de-duplication gate that returns a boolean — it does not
+// notify anyone. Calling it as if it were a notifier meant a subbie could
+// report an issue and precisely nothing happened on any office screen.
+function _fieldReportAlert(kind, r, o) {
+  const isIssue = kind === 'issue';
+  const who   = r.by || r.createdBy || '협력업체';
+  const title = isIssue ? '현장 이슈 접수' : '작업 완료 보고';
+  const body  = who + ' · ' + (r.orderNumber || o.orderNumber || '') + '\n' + (r.address || o.address || '');
+
+  try {
+    NOTIF.inbox.unshift({
+      id: 'fr_' + o.id + '_' + (r.at || Date.now()),
+      orderId: o.id,
+      orderNumber: (r.orderNumber || o.orderNumber || '—'),
+      address: (r.address || o.address || '—'),
+      area: o.area || '',
+      amount: Number(o.amount || 0),
+      kind: kind,                 // shown differently in the bell
+      by: who,
+      at: _nowSafe(), read: false,
+    });
+    if (NOTIF.inbox.length > NOTIF.MAX_INBOX) NOTIF.inbox.length = NOTIF.MAX_INBOX;
+    _notifSave();
+    renderNotifBell();
+  } catch (e) {}
+
+  try { _fireOsNotification(title, body, o.id); } catch (e) {}
+  try {
+    _showInAppBanner(
+      (isIssue ? '&#9888;&#65039;' : '&#9989;') + ' <b>' + esc(r.orderNumber || o.orderNumber || '') + '</b> ' +
+      esc(title) + '<br><span style="opacity:.8;font-size:12px">' + esc(who + ' · ' + (r.address || o.address || '')) + '</span>',
+      o.id);
+  } catch (e) {}
+  try { _playNotifSound(); } catch (e) {}
+  try { renderFieldReportBadge(); } catch (e) {}
+}
+
+// ============================================================
+// FIELD REPORTS INBOX
+// ------------------------------------------------------------
+// A push notification is missable by design — it fires once, on whichever
+// device happened to be awake. "A subbie said this is done, has anyone checked
+// it?" is not a question a transient banner can answer.
+//
+// This is the durable version: every report a subbie files stays in a list
+// until someone explicitly marks it reviewed, and that acknowledgement is
+// stored on the report itself so it is the same answer on every device.
+// ============================================================
+
+let _FR = { list: [], loaded: false };
+
+function _rtdbWatchFieldReports() {
+  if (!_rtdbDB) { _rtdbInit(); if (!_rtdbDB) return; }
+  if (window._frWatchOn) return;
+  window._frWatchOn = true;
+
+  _rtdbDB.ref('/issues').on('value', snap => {
+    const byOrder = snap.val() || {};
+    const out = [];
+    Object.keys(byOrder).forEach(orderId => {
+      const entries = byOrder[orderId] || {};
+      Object.keys(entries).forEach(ts => {
+        const r = entries[ts] || {};
+        if (r.type !== 'issue' && r.type !== 'done') return;   // legacy record
+        out.push({
+          key: orderId + '/' + ts,
+          orderId, ts: Number(ts) || 0,
+          type: r.type,
+          note: r.note || '',
+          photos: r.photoUrls || (r.photoUrl ? [r.photoUrl] : []),
+          by: r.by || r.createdBy || '',
+          orderNumber: r.orderNumber || '',
+          address: r.address || '',
+          reviewedAt: r.reviewedAt || 0,
+          reviewedBy: r.reviewedBy || '',
+        });
+      });
+    });
+    out.sort((a, b) => b.ts - a.ts);
+    _FR.list = out;
+    _FR.loaded = true;
+    renderFieldReportBadge();
+    if (document.getElementById('fr-modal')?.classList.contains('open')) renderFieldReports();
+  });
+}
+
+function frUnreviewed() { return _FR.list.filter(r => !r.reviewedAt); }
+
+function renderFieldReportBadge() {
+  const n = frUnreviewed().length;
+  document.querySelectorAll('.fr-badge').forEach(el => {
+    el.textContent = n || '';
+    el.style.display = n ? '' : 'none';
+  });
+}
+
+function openFieldReports() {
+  renderFieldReports();
+  openModal('fr-modal');
+}
+
+function renderFieldReports() {
+  const el = document.getElementById('fr-list');
+  if (!el) return;
+  const pending = frUnreviewed();
+  const done    = _FR.list.filter(r => r.reviewedAt).slice(0, 30);
+
+  if (!_FR.loaded) { el.innerHTML = '<p style="color:var(--text3);font-size:13px">불러오는 중…</p>'; return; }
+  if (!_FR.list.length) {
+    el.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">협력업체가 보낸 보고가 없습니다.</p>';
+    return;
+  }
+
+  const card = (r) => {
+    const o = DB.orders.find(x => x.id === r.orderId);
+    const isIssue = r.type === 'issue';
+    const when = r.ts ? new Date(r.ts).toLocaleString('en-AU', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+    return `<div style="border:1px solid var(--border);border-left:3px solid ${isIssue?'#D97706':'#16A34A'};border-radius:10px;padding:11px 13px;margin-bottom:8px;background:${r.reviewedAt?'transparent':'var(--cream2)'}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
+        <span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;background:${isIssue?'rgba(217,119,6,.14)':'rgba(22,163,74,.14)'};color:${isIssue?'#B45309':'#15803D'}">${isIssue?'⚠ 이슈':'✅ 완료 보고'}</span>
+        <b style="font-size:13px">${esc(r.orderNumber || o?.orderNumber || '')}</b>
+        <span style="font-size:12px;color:var(--text3);margin-left:auto">${esc(when)}</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--text2);margin-bottom:3px">${esc(r.address || o?.address || '')}</div>
+      <div style="font-size:12px;color:var(--text3)">보고자: ${esc(r.by || '—')}</div>
+      ${r.note ? `<div style="font-size:12.5px;margin-top:6px;padding:7px 9px;background:var(--cream);border-radius:7px;white-space:pre-wrap">${esc(r.note)}</div>` : ''}
+      ${r.photos.length ? `<div style="display:flex;gap:5px;margin-top:7px">${r.photos.slice(0,4).map(u=>`<img src="${u}" onclick="window.open('${u}')" style="width:54px;height:54px;object-fit:cover;border-radius:6px;cursor:zoom-in">`).join('')}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">
+        ${o ? `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="closeModal('fr-modal');openOrderModal('${r.orderId}')">오더 열기</button>` : '<span style="font-size:11px;color:var(--text3)">이 기기에 오더 없음</span>'}
+        ${r.reviewedAt
+          ? `<span style="font-size:11px;color:var(--green);align-self:center">✓ ${esc(r.reviewedBy||'')} 확인함</span>`
+          : `<button class="btn btn-sm" style="font-size:11px;background:rgba(22,163,74,0.1);color:var(--green);border:1px solid rgba(22,163,74,0.25)" onclick="frMarkReviewed('${r.key}')">확인 완료</button>`}
+      </div>
+    </div>`;
+  };
+
+  el.innerHTML =
+    (pending.length
+      ? `<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;margin:0 0 7px">확인 필요 ${pending.length}건</div>` + pending.map(card).join('')
+      : '<p style="color:var(--green);font-size:13px;padding:6px 0 12px">✓ 확인하지 않은 보고가 없습니다.</p>') +
+    (done.length ? `<div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px;margin:14px 0 7px">확인 완료</div>` + done.map(card).join('') : '');
+}
+
+// Stored on the report, not locally: whether the office has looked at this is a
+// fact about the report, and the next person to open any device needs the same
+// answer rather than a fresh copy of the same alert.
+async function frMarkReviewed(key) {
+  if (!_rtdbDB) return;
+  try {
+    await _rtdbDB.ref('/issues/' + key).update({
+      reviewedAt: Date.now(),
+      reviewedBy: (typeof NOTIF !== 'undefined' && NOTIF.me) || 'SK'
+    });
+  } catch (e) {
+    try { toast('확인 처리 실패: ' + (e.message || e), 'error'); } catch (e2) {}
+  }
+}
+
+async function frMarkAllReviewed() {
+  const pending = frUnreviewed();
+  if (!pending.length) return;
+  if (!confirm('확인 필요 ' + pending.length + '건을 모두 확인 완료로 표시할까요?')) return;
+  const who = (typeof NOTIF !== 'undefined' && NOTIF.me) || 'SK';
+  const batch = {};
+  pending.forEach(r => {
+    batch['/issues/' + r.key + '/reviewedAt'] = Date.now();
+    batch['/issues/' + r.key + '/reviewedBy'] = who;
+  });
+  try { await _rtdbDB.ref().update(batch); }
+  catch (e) { try { toast('처리 실패: ' + (e.message || e), 'error'); } catch (e2) {} }
+}
+
 function _applyIssueReport(reportId, r, orderIdHint) {
   if (!reportId || !r) return;
   const orderId = r.orderId || orderIdHint;
@@ -9260,7 +9433,7 @@ function _applyIssueReport(reportId, r, orderIdHint) {
         issues:renderIssues, cancelled:renderCancelled, dashboard:renderDashboard };
       (rr[currentPage] || function(){})();
     } catch (e) {}
-    try { _announce('작업 완료 보고', (r.by || '협력업체') + ' · ' + (r.orderNumber || '') + ' ' + (r.address || ''), { orderId: o.id }); } catch (e) {}
+    _fieldReportAlert('done', r, o);
     return;
   }
   const line = '[' + stamp + ' · ' + (r.by || '협력업체') + '] ' + (r.note || '(사진만 제출)') +
@@ -9286,10 +9459,7 @@ function _applyIssueReport(reportId, r, orderIdHint) {
     (renders[currentPage] || function(){})();
   } catch (e) {}
 
-  const title = '현장 이슈 접수';
-  const body  = (r.by || '협력업체') + ' · ' + (r.orderNumber || '') + ' ' + (r.address || '');
-  try { _announce(title, body, { orderId: o.id }); }
-  catch (e) { try { toast(title + ' — ' + body, 'error'); } catch (e2) {} }
+  _fieldReportAlert('issue', r, o);
 }
 
 function _rtdbSyncOrder(order) {
