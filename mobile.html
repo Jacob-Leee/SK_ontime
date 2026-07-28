@@ -16,6 +16,27 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>SK Ontime — Holmes Order Manager</title>
 <script>
+// Mobile has no _rtdbDB / _rtdbInit of its own — it reaches the database
+// through _rtdbDb(), which hands back the FCM app's handle. The field-report
+// and mirror code was copied across from the desktop build, which DOES have
+// those two, so on this file they were simply undefined: every call threw and
+// the surrounding try/catch hid it. This shim bridges the two naming schemes.
+//
+// The FCM handles move up here for the same reason _rtdbDB did on the desktop:
+// the boot block runs ~1,100 lines above where they used to be declared, and
+// `let` in the temporal dead zone throws rather than reading as undefined.
+let _fcmApp, _fcmMessaging, _fcmDB;
+let _rtdbApp = null, _rtdbDB = null;
+
+function _rtdbInit() {
+  try {
+    const d = (typeof _rtdbDb === 'function') ? _rtdbDb() : null;
+    if (d) { _rtdbDB = d; _rtdbApp = _fcmApp || null; }
+  } catch (e) {
+    console.error('[RTDB] init failed:', e);
+  }
+}
+
 // Declared at the very top on purpose. `let` is not hoisted like a function
 // declaration is: anything that touches _FR before this line throws a
 // ReferenceError. frTag() runs from orderNumCell() during the first table
@@ -764,6 +785,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span class="dl-i" style="background:#FEF3C7"><i class="ti ti-bell" style="color:#C9A84C"></i></span>내 알림
       <span id="mob-notif-badge" style="display:none;margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#DC2626;color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;line-height:1">0</span>
     </div>
+    <div class="mob-dl" onclick="mobDrawerClose();openFieldReports()">
+      <span class="dl-i" style="background:#FEF2F2"><i class="ti ti-device-mobile-message" style="color:#DC2626"></i></span>
+      <span style="flex:1">Field Reports</span>
+      <span class="fr-badge" style="background:#DC2626;color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:20px;display:none"></span>
+    </div>
     <div class="mob-dl" onclick="mobNav('issues');mobDrawerClose()">
       <span class="dl-i" style="background:#FFF1F2"><i class="ti ti-alert-triangle" style="color:#EF4444"></i></span>Issues
     </div>
@@ -1420,6 +1446,28 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 </div>
 
 <!-- ORDER MODAL -->
+<!-- FIELD REPORTS MODAL -->
+<div class="modal-overlay" id="fr-modal" onclick="if(event.target===this)closeModal('fr-modal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 style="display:flex;align-items:center;gap:8px">Field Reports
+        <span class="fr-badge" style="background:#DC2626;color:#fff;font-size:11px;font-weight:800;padding:2px 7px;border-radius:20px;display:none"></span>
+      </h2>
+      <button class="modal-close" onclick="closeModal('fr-modal')">&times;</button>
+    </div>
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+      <p style="font-size:12px;color:var(--text3);margin:0 0 12px;line-height:1.55">
+        Issue and completion reports filed from site. Marking one <b>Reviewed</b> clears it on every device.
+      </p>
+      <div id="fr-list"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-secondary" style="flex:1" onclick="frDiagnose()">Diagnose</button>
+        <button class="btn btn-secondary" style="flex:1" onclick="frMarkAllReviewed()">Mark all reviewed</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="order-modal">
   <div class="modal">
     <div class="modal-header">
@@ -2019,7 +2067,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-a';
+const APP_BUILD     = '2026-07-30-b';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -6476,9 +6524,9 @@ function initApp() {
   try {
     renderNotifBell();
     startCalendarWatch();
-    try { _rtdbWatchIssueReports(); } catch (e) {}
-    try { _rtdbWatchFieldReports(); } catch (e) {}
-    try { _rtdbAutoMirror('startup'); } catch (e) {}
+    try { _rtdbWatchIssueReports(); } catch (e) { console.error('[BOOT] issue watcher failed:', e); }
+    try { _rtdbWatchFieldReports(); } catch (e) { console.error('[BOOT] field reports failed:', e); }
+    try { _rtdbAutoMirror('startup'); } catch (e) { console.error('[BOOT] mirror failed:', e); }
     setTimeout(() => { try { _syncHealthCheck(); } catch (e) {} }, 1500);
     if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
     setTimeout(() => { try { fcmMaintain(); } catch (e) {} }, 2500);
@@ -7647,7 +7695,7 @@ const _FCM_CONFIG = {
 };
 const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHjjGrYRs1v2V3HSSp-H1e3fcADA6Y";
 
-let _fcmApp, _fcmMessaging, _fcmDB;
+// (declared at the top of the script — see the note there)
 let _fcmInitInProgress = false;
 
 // ══════════════════════════════════════════════════════════
@@ -9391,6 +9439,20 @@ async function frDiagnose() {
   L.push('Build: ' + (typeof APP_BUILD !== 'undefined' ? APP_BUILD : '?'));
 
   alert('Field Reports diagnostic\n──────────────────────────\n' + L.join('\n'));
+}
+
+// Same marker the desktop table shows, for staff working off a phone.
+function frPendingFor(orderId) {
+  return (_FR.list || []).filter(r => r.orderId === orderId && !r.reviewedAt);
+}
+function frTag(o) {
+  const p = frPendingFor(o.id);
+  if (!p.length) return '';
+  const isIssue = p.some(r => r.type === 'issue');
+  return '<span onclick="event.stopPropagation();openFieldReports()" style="display:inline-block;background:' +
+    (isIssue ? '#DC2626' : '#16A34A') + ';color:#fff;font-size:9.5px;font-weight:800;padding:1px 6px;' +
+    'border-radius:20px;margin-left:5px">' + (isIssue ? '⚠ Site issue' : '✅ Work done') +
+    (p.length > 1 ? ' ' + p.length : '') + '</span>';
 }
 
 function frUnreviewed() { return _FR.list.filter(r => !r.reviewedAt); }

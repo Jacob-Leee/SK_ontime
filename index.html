@@ -13,6 +13,15 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1C1C1E">
 <script>
+// Declared here, at the very top, because `let` is not hoisted the way a
+// function declaration is. These used to be declared ~250 lines BELOW the
+// startup block that calls _rtdbWatchIssueReports() / _rtdbWatchFieldReports()
+// / _rtdbAutoMirror(). Each of those begins with `if (!_rtdbDB)`, which threw
+// a ReferenceError, which the surrounding try/catch swallowed — so subbie
+// reports were never read, the mirror was never reconciled, and every screen
+// looked simply empty with nothing logged anywhere.
+let _rtdbApp, _rtdbDB;
+
 // Declared at the very top on purpose. `let` is not hoisted like a function
 // declaration is: anything that touches _FR before this line throws a
 // ReferenceError. frTag() runs from orderNumCell() during the first table
@@ -1971,7 +1980,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-30-a';
+const APP_BUILD = '2026-07-30-b';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -9410,9 +9419,9 @@ renderHeaderIdentity();
 setTimeout(() => { try { _syncHealthCheck(); } catch (e) {} }, 1500);
 try { startCalendarWatch(); } catch (e) {}
 // Subbie issue reports land here rather than being noticed by accident.
-try { _rtdbWatchIssueReports(); } catch (e) {}
-try { _rtdbWatchFieldReports(); } catch (e) {}
-try { _rtdbAutoMirror('startup'); } catch (e) {}
+try { _rtdbWatchIssueReports(); } catch (e) { console.error('[BOOT] issue watcher failed:', e); }
+try { _rtdbWatchFieldReports(); } catch (e) { console.error('[BOOT] field reports failed:', e); }
+try { _rtdbAutoMirror('startup'); } catch (e) { console.error('[BOOT] mirror failed:', e); }
 if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
 
 // Background push upkeep — attaches the foreground handler and refreshes a
@@ -9666,7 +9675,7 @@ function updateMobNav() {}
 // _RTDB_CONFIG is declared near the top of this script — it has to exist before
 // authInit() runs, which happens several hundred lines above this point.
 
-let _rtdbApp, _rtdbDB;
+// (declared at the top of the script — see the note there)
 
 function _rtdbInit() {
   try {
