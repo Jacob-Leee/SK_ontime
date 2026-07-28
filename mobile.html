@@ -1984,7 +1984,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-29-n';
+const APP_BUILD     = '2026-07-29-r';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -2390,6 +2390,12 @@ var CLOUD = {
   lastError: '',
   lastErrorAt: 0,
   badUrl: false,
+  // Apps Script returns the occasional 404/500 when requests overlap — a push
+  // and a poll landing together is enough. Treating the FIRST failure as "your
+  // URL is wrong" put a full-width red banner over a perfectly healthy app.
+  // Track a streak instead, and remember when we last genuinely succeeded.
+  failStreak: 0,
+  lastOkAt: 0,
   serverUrl: '',
   pushTimer: null,
   applying: false,
@@ -2483,7 +2489,10 @@ function _pollBump(changed) {
 }
 function _rearmPoll() {
   if (CLOUD.pullTimer) clearInterval(CLOUD.pullTimer);
-  CLOUD.pullTimer = setInterval(() => cloudPull(false), CLOUD.pollMs || _POLL_MIN);
+  // Do not poll on top of an in-flight push. Apps Script serialises execution
+  // per user, and overlapping requests are what produces the stray 404s in the
+  // first place. The push already pulls when it finishes, so nothing is missed.
+  CLOUD.pullTimer = setInterval(() => { if (!CLOUD.pushing) cloudPull(false); }, CLOUD.pollMs || _POLL_MIN);
 }
 function cloudPollNow() {
   CLOUD.pollMs = _POLL_MIN;
@@ -2575,6 +2584,7 @@ async function cloudPush() {
   } catch (e) {
     CLOUD.lastError = (e && (e.message || e.name)) || String(e);
     CLOUD.lastErrorAt = Date.now();
+    CLOUD.failStreak++;
     console.warn('[CLOUD] push failed:', CLOUD.lastError);
     renderCloudStatus(navigator.onLine ? '전송 실패' : '오프라인');
   } finally {
@@ -2600,13 +2610,26 @@ async function cloudPull(initial) {
     // does not exist. Letting it fall through to res.json() turned a precise
     // answer ("wrong URL") into a vague JSON parse error.
     if (!res.ok) {
+      CLOUD.failStreak++;
       CLOUD.lastError = res.status === 404
         ? 'HTTP 404 — 이 주소의 Apps Script 배포가 존재하지 않습니다 (주소가 틀렸거나 재배포되어 주소가 바뀜)'
         : 'HTTP ' + res.status;
       CLOUD.lastErrorAt = Date.now();
-      renderCloudStatus(res.status === 404 ? '주소 오류' : 'HTTP ' + res.status);
+      // One 404 after a run of successes is contention, not a bad URL. Only
+      // call it an address problem once it keeps happening.
+      renderCloudStatus(_cloudLooksBroken() ? '주소 오류' : '재시도 중…');
       return;
     }
+    // The response arrived, so the deployment exists and the URL is right.
+    // This used to be cleared much further down, AFTER the "nothing changed"
+    // early-return — which is the branch ~99% of polls take. So one transient
+    // 404 stuck lastError permanently and the red banner never went away even
+    // though every later poll succeeded.
+    CLOUD.failStreak = 0;
+    CLOUD.lastOkAt   = Date.now();
+    CLOUD.badUrl     = false;
+    CLOUD.lastError  = '';
+
     let out;
     try { out = await res.json(); } catch(jsonErr) { console.log('[PULL DEBUG] res.json() PARSE ERROR:', jsonErr.message); throw jsonErr; }
     console.log('[PULL DEBUG] pull response ok=', out?.ok, 'hasData=', !!out?.data, 'updatedAt=', out?.updatedAt);
@@ -2726,9 +2749,12 @@ async function cloudPull(initial) {
       ? '주소에 접속할 수 없습니다 — Apps Script 배포가 없거나 주소가 틀립니다 (' + raw + ')'
       : raw;
     CLOUD.lastErrorAt = Date.now();
-    CLOUD.badUrl = !!looksLikeBadUrl;
+    CLOUD.failStreak++;
+    CLOUD.badUrl = !!looksLikeBadUrl && _cloudLooksBroken();
     console.warn('[CLOUD] pull failed:', raw);
-    renderCloudStatus(!navigator.onLine ? '오프라인' : looksLikeBadUrl ? '주소 오류' : '연결 실패');
+    renderCloudStatus(!navigator.onLine ? '오프라인'
+      : !_cloudLooksBroken() ? '재시도 중…'
+      : looksLikeBadUrl ? '주소 오류' : '연결 실패');
   } finally {
     CLOUD.pulling = false;
     // Safety net: if a past merge ever threw between `applying = true` and
@@ -8359,12 +8385,21 @@ async function fcmInit(userGroup) {
 // This makes the broken state impossible to walk past.
 // ══════════════════════════════════════════════════════════
 
+// "Is sync actually broken?" — as opposed to "did one request just fail?".
+// Both have to be true: several failures in a row, AND nothing has succeeded
+// for a while. A single blip while polling every few seconds is normal.
+function _cloudLooksBroken() {
+  const streak = CLOUD.failStreak || 0;
+  const since  = CLOUD.lastOkAt ? Date.now() - CLOUD.lastOkAt : Infinity;
+  return streak >= 3 && since > 90000;
+}
+
 function _syncHealthCheck() {
   const bad = CLOUD.enabled && !CLOUD.url;
   const off = !CLOUD.enabled;
   // A URL that 404s is just as dead as no URL at all, and far more confusing
   // because everything looks configured.
-  const wrong = CLOUD.enabled && CLOUD.url && (CLOUD.badUrl || /404/.test(CLOUD.lastError || ''));
+  const wrong = CLOUD.enabled && CLOUD.url && _cloudLooksBroken();
   let bar = document.getElementById('sync-health-bar');
 
   if (!bad && !off && !wrong) { if (bar) bar.remove(); return; }
@@ -8519,6 +8554,14 @@ function syncDiagnosticsText() {
 function showSyncDiagnostics() {
   const d = syncDiagnostics();
   const warn = [];
+  // The old readout showed the last ERROR but never the last SUCCESS, so a
+  // three-minute-old blip looked identical to a dead connection.
+  if (CLOUD.lastOkAt) {
+    const ago = Math.round((Date.now() - CLOUD.lastOkAt) / 1000);
+    warn.push('· 마지막 정상 응답  ' + (ago < 60 ? ago + '초 전' : Math.round(ago/60) + '분 전'));
+  }
+  if (CLOUD.failStreak) warn.push('· 연속 실패  ' + CLOUD.failStreak + '회' +
+    (_cloudLooksBroken() ? '  ← 주소 확인 필요' : '  (일시적 — 자동 재시도 중)'));
   if (!d.enabled)  warn.push('· 동기화가 꺼져 있습니다.');
   if (!d.urlSet)   warn.push('· 동기화 주소가 설정되지 않았습니다.');
   alert(
@@ -8534,7 +8577,9 @@ function showSyncDiagnostics() {
   //  · the URL is dead → replace it right here, rather than sending the user
   //    off to find the Cloud Sync dialog while they are already looking at the
   //    error that explains why they need it.
-  if (CLOUD.badUrl || /Failed to fetch|404/i.test(d.lastError)) pasteSyncUrlPrompt();
+  // Only offer to replace the URL when sync is genuinely down. Prompting off a
+  // single stale error meant a healthy device kept asking to be reconfigured.
+  if (_cloudLooksBroken()) pasteSyncUrlPrompt();
   else if (d.urlSet) copySyncUrlPrompt();
 }
 
@@ -8971,13 +9016,15 @@ function _rtdbDeleteOrder(orderId) {
     .catch(err => console.warn('[RTDB] delete failed:', err.message));
 }
 
-function _rtdbSyncOrder(order) {
-  const db = _rtdbDb();
-  if (!db || !order || !order.id) return;
-  // Must stay identical to the desktop mirror in index.html. If mobile writes
-  // fewer fields, saving the same order from a phone silently strips detail
-  // and comments out of the subbie's view.
-  db.ref('/orders/' + order.id).set({
+// One spelling of a subbie's name, used on both sides of the match.
+function _subbieKey(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Single definition of what a subbie can see. Both the live mirror and the
+// rebuild call this, so a field added here cannot be missing from one path.
+function _rtdbRecord(order) {
+  return {
     id:          order.id,
     orderNumber: order.orderNumber || '',
     address:     order.address     || '',
@@ -8992,8 +9039,18 @@ function _rtdbSyncOrder(order) {
     detail:      order.detail      || '',
     comments:    order.comments    || '',
     completedAt: order.completedAt || '',
+    // Normalised assignee, stored so the subbie app can query on it. Matching on
+    // the raw name meant 'KH LEE' and 'KH Lee' were different people and the
+    // subbie just saw an empty list with no explanation.
+    subbieKey:   _subbieKey(order.subbies),
     updatedAt:   order.updatedAt   || Date.now(),
-  }).catch(err => console.warn('[RTDB] order sync failed:', err.message));
+  };
+}
+
+function _rtdbSyncOrder(order) {
+  const db = _rtdbDb();
+  if (!db || !order || !order.id) return;
+  db.ref('/orders/' + order.id).set(_rtdbRecord(order)).catch(err => console.warn('[RTDB] order sync failed:', err.message));
 }
 
 // ══════════════════════════════════════════════════════════

@@ -12,7 +12,8 @@
     },
     "orders": {
       ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
-      ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()"
+      ".write": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
+      ".indexOn": "subbieKey"
     },
     "issues": {
       ".read": "auth != null && auth.token.email_verified == true && root.child('allowedUsers').child(auth.token.email.replace('.', ',')).exists()",
