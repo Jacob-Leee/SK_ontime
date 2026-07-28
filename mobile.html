@@ -1705,33 +1705,6 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
         </div>
       </form>
 
-      <!-- Site report — same block the subcontractors get, in the same place.
-           Staff do site work too; they should not have to describe it from
-           memory back at the office. -->
-      <div id="sr-block" style="display:none;margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
-        <button class="btn" id="sr-done" style="width:100%;background:#22C55E;color:#fff;border:none;font-size:15px;font-weight:700;padding:14px" onclick="srSubmit('done')">
-          ⊘ Report work done
-        </button>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Sends this to the office Completed list for review.</div>
-
-        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-          <div style="font-size:14px;font-weight:700;color:var(--text2);display:flex;align-items:center;gap:6px;margin-bottom:10px">
-            <span style="color:#D97706">📷</span> Report an Issue
-          </div>
-          <button class="btn btn-secondary" id="sr-add" style="width:100%" onclick="srPick()">
-            🖼 Add photo <span id="sr-count" style="opacity:.6"></span>
-          </button>
-          <div id="sr-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
-          <textarea id="sr-note" rows="3" placeholder="Describe the issue (optional)..."
-            style="width:100%;margin-top:8px;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;font-size:14px;font-family:inherit;resize:none;background:var(--cream2)"></textarea>
-          <button class="btn btn-primary" style="width:100%;margin-top:10px;font-size:15px;font-weight:700;padding:13px" onclick="srSubmit('issue')">
-            Submit issue
-          </button>
-          <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">
-            Photos are stamped with the date, order number, address and PRN.
-          </div>
-        </div>
-      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('order-modal')">Cancel</button>
@@ -1892,6 +1865,32 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 </div>
 
 <!-- ISSUE MODAL -->
+<!-- ISSUE REPORT SHEET — opened from the order card -->
+<div class="modal-overlay" id="sr-modal" onclick="if(event.target===this)closeModal('sr-modal')">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>&#9888; Report an issue</h2>
+      <button class="modal-close" onclick="closeModal('sr-modal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="sr-order" style="font-size:13px;color:var(--text2);line-height:1.55;background:var(--bg2);border-radius:10px;padding:10px 12px;margin-bottom:14px"></div>
+      <button id="sr-add" style="width:100%;padding:13px;background:var(--bg2);border:1.5px dashed var(--border);border-radius:11px;font-size:14px;font-weight:600;color:var(--text2);cursor:pointer;font-family:inherit" onclick="srPick()">
+        &#128247; Add photo <span id="sr-count" style="opacity:.6"></span>
+      </button>
+      <div id="sr-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px"></div>
+      <textarea id="sr-note" rows="4" placeholder="What is the problem?"
+        style="width:100%;margin-top:10px;padding:12px 13px;border:1.5px solid var(--border);border-radius:11px;font-size:14px;font-family:inherit;resize:none;background:var(--bg2);color:var(--text)"></textarea>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">
+        Photos are stamped with the date, order number, address and PRN.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('sr-modal')">Cancel</button>
+      <button class="btn btn-primary" id="sr-send" style="background:#D97706;border-color:#D97706" onclick="srSubmit('issue')">Submit</button>
+    </div>
+  </div>
+</div>
+
 <input type="file" id="sr-input" accept="image/*" multiple style="display:none" onchange="srChosen(this)">
 
 <div class="modal-overlay" id="issue-modal">
@@ -2231,7 +2230,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-h';
+const APP_BUILD     = '2026-07-30-i';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -3313,7 +3312,6 @@ function openOrderModal(id = null) {
     const today = localDateStr();
     document.getElementById('f-orderDate').value = today;
   }
-  srBind(id);
   openModal('order-modal');
 }
 
@@ -3913,13 +3911,16 @@ let _srOrder  = null;
 // Attaches the site-report block to whichever order the modal is showing.
 // Hidden for a brand-new order — there is nothing on site to report yet, and
 // no id to file the report against.
-function srBind(id) {
-  _srOrder = id ? DB.orders.find(o => o.id === id) : null;
+function srOpen(id) {
+  _srOrder = DB.orders.find(o => o.id === id);
+  if (!_srOrder) return toast('Order not found', 'error');
   srClear();
   const note = document.getElementById('sr-note');
   if (note) note.value = '';
-  const block = document.getElementById('sr-block');
-  if (block) block.style.display = _srOrder ? '' : 'none';
+  document.getElementById('sr-order').innerHTML =
+    '<b>' + esc(_srOrder.orderNumber || '') + '</b><br>' + esc(_srOrder.address || '') +
+    (_srOrder.prn ? '<br><span style="color:var(--text3)">PRN ' + esc(_srOrder.prn) + '</span>' : '');
+  openModal('sr-modal');
 }
 
 function srPick() {
@@ -3966,6 +3967,8 @@ function srRender() {
 
 async function srSubmit(type) {
   if (!_srOrder) return;
+  const sendBtn = document.getElementById('sr-send');
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
   const note = (document.getElementById('sr-note').value || '').trim();
   if (type === 'issue' && !note && !_srPhotos.length)
     return toast('Add a photo or a note first', 'error');
@@ -3995,12 +3998,30 @@ async function srSubmit(type) {
       address: _srOrder.address || '', createdAt: ts,
       createdBy: NOTIF.me || 'SK', by: NOTIF.me || 'SK', at: ts
     });
-    closeModal('order-modal');
+    // Flip the order locally as well as filing the report. Waiting for the
+    // office app to pick it up meant the card still said "Active" right after
+    // you pressed Submit, which reads as "it did not work".
+    if (type === 'issue') {
+      _srOrder.status = 'issue';
+      _srOrder.issueFrom = NOTIF.me || 'SK';
+      _srOrder.issueAt = localDateStr();
+      _srOrder.issueNote = (_srOrder.issueNote ? _srOrder.issueNote + '\n' : '') +
+        '[' + (NOTIF.me || 'SK') + '] ' + (note || '(photo only)');
+      if (!_srOrder.issueType) _srOrder.issueType = 'hold';
+      _srOrder.updatedAt = _nowSafe();
+      save();
+      try { _rtdbSyncOrder(_srOrder); } catch (e) {}
+    }
+    closeModal('sr-modal');
     srClear();
+    mobRefresh();
+    updateSidebar();
     toast(photoFailed ? 'Report sent — photos failed to upload'
                       : (type === 'issue' ? 'Issue reported' : 'Marked as done'), photoFailed ? 'error' : 'success');
   } catch (e) {
     toast('Send failed: ' + (e.message || e), 'error');
+  } finally {
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Submit'; }
   }
 }
 
@@ -7155,10 +7176,74 @@ function mobRefresh() {
           return '';
         })()}</span>
       </div>
+      ${mobCardActions(o)}
     </div>`;
   }).join('');
 
   mobSummaryShow(list);
+}
+
+// Two taps that used to take six: open the order, hit Edit, change a dropdown,
+// save, close, go back. Reporting from site is the common case, so it belongs
+// on the card itself.
+//
+// Complete fires straight away. Issue opens a sheet, because "there is a
+// problem" without a photo or a sentence is not something the office can act on.
+function mobCardActions(o) {
+  const st = o.status || 'active';
+
+  // Already reported — show the outcome instead of the buttons.
+  if (st === 'issue') {
+    return `<div style="margin-top:9px;display:flex;align-items:center;gap:6px;background:rgba(217,119,6,.10);
+      color:#B45309;border-radius:9px;padding:7px 10px;font-size:12px;font-weight:700">
+      &#9888; Issue reported${o.issueFrom ? ' &middot; ' + esc(o.issueFrom) : ''}</div>`;
+  }
+  if (['completed','claim','invoiced','paid','closed'].includes(st)) {
+    return `<div style="margin-top:9px;display:flex;align-items:center;gap:6px;background:rgba(22,163,74,.10);
+      color:#15803D;border-radius:9px;padding:7px 10px;font-size:12px;font-weight:700">
+      &#10003; ${st === 'completed' ? 'Completed' : 'Completed &middot; ' + st}</div>`;
+  }
+  if (st === 'cancelled') return '';
+
+  return `<div style="margin-top:9px;display:flex;gap:7px" onclick="event.stopPropagation()">
+    <button onclick="mobQuickComplete('${o.id}')"
+      style="flex:1;padding:10px;border:none;border-radius:9px;background:#22C55E;color:#fff;
+      font-size:13px;font-weight:700;font-family:inherit;cursor:pointer">&#10003; Complete</button>
+    <button onclick="srOpen('${o.id}')"
+      style="flex:1;padding:10px;border:none;border-radius:9px;background:#D97706;color:#fff;
+      font-size:13px;font-weight:700;font-family:inherit;cursor:pointer">&#9888; Issue</button>
+  </div>`;
+}
+
+// One tap, no dialog. The card changes to "Completed" immediately, and the
+// report goes to the office the same way a subcontractor's does.
+async function mobQuickComplete(id) {
+  const o = DB.orders.find(x => x.id === id);
+  if (!o) return toast('Order not found', 'error');
+
+  const prev = o.status;
+  o.status = 'completed';
+  o.completedAt = localDateStr();
+  o.updatedAt = _nowSafe();
+  save();
+  try { _rtdbSyncOrder(o); } catch (e) {}
+  mobRefresh();
+  updateSidebar();
+  toast('Marked complete', 'success');
+
+  // File it as a field report too, so the office sees who closed it off and
+  // when — the status alone does not say that.
+  try {
+    const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
+    if (db) {
+      const ts = Date.now();
+      await db.ref('/issues/' + o.id + '/' + ts).set({
+        type: 'done', note: '', photoUrl: '', photoUrls: [], photoCount: 0,
+        orderId: o.id, orderNumber: o.orderNumber || '', address: o.address || '',
+        createdAt: ts, createdBy: NOTIF.me || 'SK', by: NOTIF.me || 'SK', at: ts
+      });
+    }
+  } catch (e) { console.warn('[SR] complete report failed:', e); }
 }
 
 function mobCopyOrder(id) {
