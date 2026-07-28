@@ -1981,7 +1981,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // temporal dead zone until its own line runs, and the gate must be resolved
 // before anything paints.
 const AUTH_REQUIRED = false;
-const APP_BUILD     = '2026-07-29-b';
+const APP_BUILD     = '2026-07-29-d';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8149,7 +8149,27 @@ function _fcmSetupOnMessage() {
 
 // ─── FULL INIT: register SW + get token + write to RTDB ──────────────────────
 // Called ONLY when user explicitly enables, or once-per-day refresh
+// Which name a push is filed under is not a UI preference — the Cloud Function
+// looks up /fcmTokens/{assignee}, so the token MUST live under the person's own
+// name. Picking "Admin (all orders)" on the phone used to file it under
+// 'admin', and every order assigned to SK_Jacob then found an empty bucket:
+// the function ran, found no tokens, and returned. Eight invocations, zero
+// notifications, nothing obviously broken anywhere.
+function _fcmResolveGroup(userGroup) {
+  const picked = (userGroup || '').trim();
+  // 'admin' is a VIEW, not an identity. Fall back to who this device belongs to.
+  if (!picked || picked === 'admin') {
+    const me = (typeof NOTIF !== 'undefined' && NOTIF.me) ? NOTIF.me.trim() : '';
+    if (me) return me;
+    const saved = lsGet('hom_auth_name') || lsGet('hom_notif_identity') || '';
+    if (saved) return saved.trim();
+    return 'admin';   // genuinely unknown — at least stay consistent
+  }
+  return picked;
+}
+
 async function fcmInit(userGroup) {
+  userGroup = _fcmResolveGroup(userGroup);
   if (_fcmInitInProgress) { console.log('[FCM] Already running'); return; }
   _fcmInitInProgress = true;
   try {
@@ -8664,6 +8684,18 @@ async function showPushDiagnostics() {
   } catch (e) { swState = '오류: ' + e.message; }
 
   const blockers = [];
+  // The single most common silent failure: token filed under a name nobody
+  // assigns work to.
+  const me = (NOTIF.me || '').trim().replace(/\s+/g, '_');
+  if (d.group !== '(없음)' && me && d.group !== me) {
+    blockers.push('★★ 토큰이 "' + d.group + '" 앞으로 등록돼 있는데\n' +
+                  '   내 이름은 "' + NOTIF.me + '" 입니다.\n' +
+                  '   오더는 내 이름으로 배정되므로 서버가 보낼 곳을 찾지 못합니다.\n' +
+                  '   → 백그라운드 알림 켜기 를 다시 눌러 재등록하세요.');
+  }
+  if (d.group === '(없음)' && me) {
+    blockers.push('· 이 기기의 토큰이 등록되지 않았습니다 — 백그라운드 알림 켜기를 눌러주세요');
+  }
   if (d.iosOther) {
     blockers.push('★★ ' + d.browser + '(으)로 열려 있습니다.\n' +
                   '   아이폰에서 웹 푸시는 사파리로 홈 화면에 추가한 경우에만 동작합니다.\n' +
@@ -8687,7 +8719,8 @@ async function showPushDiagnostics() {
     '실행 방식     ' + (d.standalone ? '홈 화면 앱 ✓' : '브라우저 탭  ⚠') + '\n' +
     '알림 권한     ' + d.perm + '\n' +
     '서비스 워커   ' + swState + '\n' +
-    '토큰 등록명   ' + d.group + '\n' +
+    '토큰 등록명   ' + d.group + ((NOTIF.me && d.group !== (NOTIF.me||'').trim().replace(/\s+/g,'_')) ? '  ⚠ 내 이름과 다름' : '') + '\n' +
+    '내 이름       ' + (NOTIF.me || '(미설정)') + '\n' +
     '마지막 등록   ' + d.lastReg + '\n' +
     (blockers.length ? '\n⚠ 원인\n' + blockers.join('\n') : '\n설정상 문제는 없습니다.\n서버(Cloud Functions) 배포 여부를 확인해주세요.')
   );

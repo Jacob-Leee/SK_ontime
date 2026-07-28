@@ -1715,7 +1715,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           <button onclick="testPushServer()" class="btn btn-secondary" style="flex:1">🖥 서버 테스트</button>
         </div>
         <div class="form-group form-full">
-          <button onclick="runNotifSimulation()" class="btn btn-secondary" style="width:100%">🧪 알림 동작 검증 (시뮬레이션 13종)</button>
+          <button onclick="runNotifSimulation()" class="btn btn-secondary" style="width:100%">🧪 알림 동작 검증 (시뮬레이션)</button>
           <div id="notif-sim-result"></div>
         </div>
       </div>
@@ -1898,7 +1898,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-29-b';
+const APP_BUILD = '2026-07-29-c';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -7074,12 +7074,23 @@ function runNotifSimulation() {
     detectNewAssignments([mk('t3','SK_Mo',3100)]);              // back
     pass('나→타인→나 재배정 → 다시 알림 발생', fired.length === 2, '발생 ' + fired.length + '회');
 
-    // 6. Self-assignment stays silent (R5)
+    // 6. Self-assignment DOES notify now — it fires at save time, and the
+    //    sync that follows must not repeat it.
     NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); fired = [];
-    DB.orders = [mk('t4','SK_Jacob',4000)];
-    NOTIF.selfAssigned = new Set(['t4']);
+    const _own = mk('t4','SK_Jacob',4000);
+    DB.orders = [_own];
+    notifyOwnAssignment(_own);
+    pass('내가 저장한 오더 → 저장 즉시 알림', fired.length === 1, fired.length + '건');
+    fired = [];
     detectNewAssignments([]);
-    pass('내가 직접 배정한 오더 → 알림 없음', fired.length === 0);
+    pass('이후 동기화에서 중복 알림 없음', fired.length === 0, fired.length + '건');
+
+    // 6b. Saving work for SOMEONE ELSE must not ring my own device.
+    NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); fired = [];
+    const _theirs = mk('t4b','SK_Mo',4100);
+    DB.orders = [_theirs];
+    notifyOwnAssignment(_theirs);
+    pass('타인에게 배정 저장 → 내 알림 없음', fired.length === 0, fired.length + '건');
 
     // 7. Completed / closed / cancelled never alert
     NOTIF.seen = {}; NOTIF.inbox = []; _announced.clear(); NOTIF.selfAssigned = new Set(); fired = [];
