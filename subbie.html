@@ -141,8 +141,8 @@
   <div id="hdr">
     <div id="hdr-name">My Orders</div>
     <span id="hdr-badge" style="display:none">0</span>
-    <button class="hdr-btn" onclick="sbLogout()" title="Switch user">
-      <i class="ti ti-logout" style="font-size:18px"></i>
+    <button class="hdr-btn" onclick="sbOpenSettings()" title="설정">
+      <i class="ti ti-menu-2" style="font-size:19px"></i>
     </button>
   </div>
 
@@ -157,8 +157,8 @@
     <button class="tab" id="tab-completed" onclick="sbTab('completed')">
       <i class="ti ti-circle-check"></i>Done
     </button>
-    <button class="tab" id="tab-issues" onclick="sbTab('issues')">
-      <i class="ti ti-camera"></i>Issues
+    <button class="tab" id="tab-claim" onclick="sbTab('claim')">
+      <i class="ti ti-receipt"></i>Claim
     </button>
   </div>
 </div>
@@ -234,7 +234,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-29-k';
+const APP_BUILD = '2026-07-29-m';
 
 const SUBBIE_NAMES = ['Jake Lee', 'Sean Park', 'Chris Choi'];
 const SUBBIE_COLORS = { 'Jake Lee':'#FF6B35', 'Sean Park':'#007AFF', 'Chris Choi':'#34C759' };
@@ -333,6 +333,16 @@ function _sbWatchAuth() {
         _sbErr('계정에 이름이 지정되어 있지 않습니다.\n관리자에게 문의해주세요.');
         return;
       }
+
+      // Staff who land here get moved to the app that fits their role, rather
+      // than a restricted view of their own work. One link works for everyone.
+      if ((entry.role || '') !== 'subbie') {
+        const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+        document.getElementById('sb-login-sub').textContent = '직원 앱으로 이동합니다…';
+        location.replace(isPhone ? 'mobile.html' : 'index.html');
+        return;
+      }
+
       sbLogin(name, true);
     } catch (e) {
       _sbErr('권한 확인에 실패했습니다.\n' + (e.message || ''));
@@ -413,17 +423,11 @@ function sbLoadOrders() {
   // Listen to all orders, filter client-side (RTDB can't filter by child on free plan without index)
   _ordersListener = _db.ref('/orders').on('value', snap => {
     const data = snap.val() || {};
-    // The mirror can hold records the main app has since deleted or archived.
-    // Showing everything meant months-old work sat at the top of the list.
-    const CUTOFF = Date.now() - 90 * 86400000;   // 90 days
-    _allOrders = Object.values(data).filter(o => {
-      if (o.subbies !== _user) return false;
-      const st = (o.status || 'active');
-      // Finished work is still reachable under the Completed tab, but anything
-      // that finished long ago is just noise on a phone.
-      if (st !== 'active' && (o.updatedAt || 0) < CUTOFF) return false;
-      return true;
-    });
+    // No age cutoff. An earlier version hid anything finished more than 90 days
+    // ago, which also hid the record a subbie needs when checking what they did
+    // and whether it was paid. The real problem was deleted orders lingering in
+    // this mirror, and that is fixed at the source now.
+    _allOrders = Object.values(data).filter(o => o.subbies === _user);
     sbRender();
     // Update badge
     const active = _allOrders.filter(o => (o.status||'active') === 'active').length;
@@ -443,20 +447,30 @@ function sbTab(tab) {
 function sbRender() {
   const list = document.getElementById('order-list');
   let orders;
+  const byNewest = (a, b) => (b.completedAt || b.updatedAt || 0) - (a.completedAt || a.updatedAt || 0);
+
   if (_activeTab === 'orders') {
-    orders = _allOrders.filter(o => !['completed','invoiced','paid','cancelled'].includes(o.status||'active'));
+    // Anything still to do. 'issue' stays here — the job is not finished.
+    orders = _allOrders
+      .filter(o => !['completed','invoiced','paid','cancelled','closed','claim'].includes(o.status || 'active'))
+      .sort(byNewest);
   } else if (_activeTab === 'completed') {
-    orders = _allOrders.filter(o => ['completed','invoiced','paid'].includes(o.status||''));
+    // Work handed in, not yet through the office's claim process.
+    orders = _allOrders.filter(o => (o.status || '') === 'completed').sort(byNewest);
   } else {
-    // Issues tab — show all orders (to report issues against)
-    orders = [..._allOrders].sort((a,b) => (b.updatedAt||0)-(a.updatedAt||0));
+    // Claimed or settled — this is the tab a subbie checks about money.
+    orders = _allOrders
+      .filter(o => ['claim', 'invoiced', 'paid', 'closed'].includes(o.status || ''))
+      .sort(byNewest);
   }
 
   if (!orders.length) {
     list.innerHTML =
       '<div class="empty">' +
-        '<i class="ti ti-' + (_activeTab === 'issues' ? 'camera-off' : 'clipboard-off') + '"></i>' +
-        '<p>' + (_activeTab === 'orders' ? 'No active orders' : _activeTab === 'completed' ? 'No completed orders' : 'No orders yet') + '</p>' +
+        '<i class="ti ti-clipboard-off"></i>' +
+        '<p>' + (_activeTab === 'orders' ? '진행 중인 오더가 없습니다'
+               : _activeTab === 'completed' ? '완료한 오더가 없습니다'
+               : '청구된 오더가 없습니다') + '</p>' +
         '<small style="margin-top:6px;display:block">Orders assigned to you will appear here</small>' +
       '</div>';
     return;

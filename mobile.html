@@ -1984,7 +1984,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-29-k';
+const APP_BUILD     = '2026-07-29-m';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8051,17 +8051,10 @@ async function _authOnStateChanged(user) {
     // This app exposes every order, every amount and the whole client list, so
     // the allow-list role — not a button the user picks — decides who lands here.
     if ((AUTH.entry.role || '') === 'subbie') {
-      _authShow('signin');
-      _authError(`${user.email} 는 협력업체 계정입니다.\n협력업체 전용 앱을 사용해주세요.`);
-      const box = document.getElementById('auth-signin-box');
-      if (box && !document.getElementById('auth-subbie-link')) {
-        const a = document.createElement('a');
-        a.id = 'auth-subbie-link';
-        a.href = 'subbie.html';
-        a.textContent = '협력업체 앱으로 이동 →';
-        a.style.cssText = 'display:block;margin-top:14px;color:#C9A84C;font-size:13.5px;font-weight:600;text-decoration:underline';
-        box.appendChild(a);
-      }
+      // Send them, do not tell them. The role is already known, so one shared
+      // link can serve everyone — nobody has to know which app they belong in.
+      _authShow('busy', '협력업체 앱으로 이동합니다…');
+      location.replace('subbie.html');
       return;
     }
 

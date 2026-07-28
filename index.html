@@ -1898,7 +1898,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-29-k';
+const APP_BUILD = '2026-07-29-m';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -7943,12 +7943,11 @@ async function _authOnStateChanged(user) {
 
       // Same rule as mobile: subcontractors do not belong in the admin app.
       if ((AUTH.entry.role || '') === 'subbie') {
-        if (AUTH_REQUIRED) {
-          _authShow('signin');
-          _authError(`${user.email} 는 협력업체 계정입니다.\n관리자 앱에는 접근할 수 없습니다.`);
-        } else {
-          _authFeedback('협력업체 계정은 관리자 앱을 사용할 수 없습니다.');
-        }
+        // Send them, do not tell them. The role is already known, so making the
+        // user find the right link — or pick their own type at a menu — is a
+        // step that can only be got wrong.
+        _authShow('busy', '협력업체 앱으로 이동합니다…');
+        location.replace('subbie.html');
         return;
       }
 
