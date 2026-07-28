@@ -168,7 +168,7 @@
     <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%231C1C1E'/%3E%3Ctext x='24' y='34' text-anchor='middle' font-size='26' font-weight='900' fill='white' font-family='Arial'%3ESK%3C/text%3E%3C/svg%3E" alt="SK">
   </div>
   <div class="login-title">SK Field App</div>
-  <div class="login-sub" id="sb-login-sub">Google 계정으로 로그인하세요</div>
+  <div class="login-sub" id="sb-login-sub">Sign in with your Google account</div>
 
   <button id="sb-google-btn" onclick="sbGoogleSignIn()"
     style="width:100%;max-width:320px;display:flex;align-items:center;justify-content:center;gap:11px;padding:15px 18px;border-radius:13px;border:1px solid #D1D1D6;background:#fff;color:#3c4043;font-size:15px;font-weight:600;margin:8px auto 0;font-family:inherit">
@@ -185,7 +185,7 @@
   <div id="hdr">
     <div id="hdr-name">My Orders</div>
     <span id="hdr-badge" style="display:none">0</span>
-    <button class="hdr-btn" onclick="sbOpenSettings()" title="설정">
+    <button class="hdr-btn" onclick="sbOpenSettings()" title="Settings">
       <i class="ti ti-menu-2" style="font-size:19px"></i>
     </button>
   </div>
@@ -232,10 +232,10 @@
            the office sees it land in Completed instead of Issues. -->
       <div id="dm-done-wrap" style="margin-top:14px;display:none">
         <button class="submit-btn" id="done-btn" style="background:var(--green)" onclick="sbReportDone()">
-          <i class="ti ti-circle-check"></i> 작업 완료 보고
+          <i class="ti ti-circle-check"></i> Report work done
         </button>
         <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
-          사무실 Completed 목록으로 넘어가 담당자가 확인합니다.
+          Sends this to the office Completed list for review.
         </div>
       </div>
 
@@ -246,13 +246,13 @@
           Report an Issue
         </div>
         <button class="upload-btn" id="add-photo-btn" onclick="sbPickPhoto()">
-          <i class="ti ti-photo-plus"></i> 사진 추가 <span id="photo-count" style="opacity:.6"></span>
+          <i class="ti ti-photo-plus"></i> Add photo <span id="photo-count" style="opacity:.6"></span>
         </button>
         <div id="photo-grid"></div>
-        <textarea id="issue-note" class="issue-note" rows="3" placeholder="문제를 설명해주세요 (선택)..."></textarea>
-        <button class="submit-btn" id="submit-btn" onclick="sbSubmitIssue()">이슈 제출</button>
+        <textarea id="issue-note" class="issue-note" rows="3" placeholder="Describe the issue (optional)..."></textarea>
+        <button class="submit-btn" id="submit-btn" onclick="sbSubmitIssue()">Submit issue</button>
         <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5">
-          제출하면 사무실 Issues 목록으로 넘어가 담당자가 확인합니다.
+          Submitting sends this to the office Issues list for review.
         </div>
       </div>
 
@@ -280,7 +280,7 @@
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-hdr">
-      <div style="font-size:17px;font-weight:800">설정</div>
+      <div style="font-size:17px;font-weight:800">Settings</div>
       <button class="modal-close" onclick="sbCloseSettings()">&times;</button>
     </div>
     <div class="modal-body" id="set-body"></div>
@@ -297,7 +297,7 @@
 // it updates the service worker rather than unregistering it, which would kill
 // push notifications.
 async function hardReload() {
-  if (!confirm('앱을 강제로 새로고침할까요?\n\n최신 버전을 다시 받아옵니다.\n저장된 데이터는 지워지지 않습니다.')) return;
+  if (!confirm('Reload the app from scratch?\n\nFetches the latest build.\nYour saved data is not affected.')) return;
   try {
     if ('caches' in window) {
       const keys = await caches.keys();
@@ -328,7 +328,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-29-x';
+const APP_BUILD = '2026-07-29-z';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -386,17 +386,17 @@ function _sbFirebase() {
 
 async function sbGoogleSignIn() {
   _sbErr('');
-  if (!_sbFirebase()) { _sbErr('Firebase를 불러오지 못했습니다. 네트워크를 확인해주세요.'); return; }
+  if (!_sbFirebase()) { _sbErr('Could not load Firebase. Check your connection.'); return; }
   try {
     const p = new firebase.auth.GoogleAuthProvider();
     p.setCustomParameters({ prompt: 'select_account' });
     await _sbAuth.signInWithPopup(p);
   } catch (e) {
     const c = e.code;
-    _sbErr(c === 'auth/popup-blocked'      ? '팝업이 차단되었습니다. 브라우저 설정에서 허용해주세요.'
-         : c === 'auth/unauthorized-domain'? '이 주소가 Firebase에 등록되지 않았습니다.'
-         : c === 'auth/popup-closed-by-user' ? '로그인 창이 닫혔습니다. 다시 시도해주세요.'
-         : (e.message || '로그인에 실패했습니다.'));
+    _sbErr(c === 'auth/popup-blocked'      ? 'Popups are blocked. Allow them in your browser settings.'
+         : c === 'auth/unauthorized-domain'? 'This address is not registered with Firebase.'
+         : c === 'auth/popup-closed-by-user' ? 'The sign-in window closed. Please try again.'
+         : (e.message || 'Sign-in failed.'));
   }
 }
 
@@ -417,14 +417,14 @@ function _sbWatchAuth() {
       const snap = await _db.ref('/allowedUsers/' + _sbEmailKey(user.email)).once('value');
       if (!snap.exists()) {
         await _sbAuth.signOut();
-        _sbErr(user.email + ' 계정은 등록되어 있지 않습니다.\n관리자에게 등록을 요청해주세요.');
+        _sbErr(user.email + ' is not registered.\nAsk the office to add your account.');
         return;
       }
       const entry = snap.val() || {};
       const name  = entry.name || '';
       if (!name) {
         await _sbAuth.signOut();
-        _sbErr('계정에 이름이 지정되어 있지 않습니다.\n관리자에게 문의해주세요.');
+        _sbErr('No name is set on this account.\nPlease contact the office.');
         return;
       }
 
@@ -432,14 +432,14 @@ function _sbWatchAuth() {
       // than a restricted view of their own work. One link works for everyone.
       if ((entry.role || '') !== 'subbie') {
         const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
-        document.getElementById('sb-login-sub').textContent = '직원 앱으로 이동합니다…';
+        document.getElementById('sb-login-sub').textContent = 'Taking you to the staff app…';
         location.replace(isPhone ? 'mobile.html' : 'index.html');
         return;
       }
 
       sbLogin(name, true);
     } catch (e) {
-      _sbErr('권한 확인에 실패했습니다.\n' + (e.message || ''));
+      _sbErr('Could not verify access.\n' + (e.message || ''));
     }
   });
 }
@@ -483,7 +483,7 @@ function sbLogin(name, auto) {
 }
 
 function sbLogout() {
-  if (!confirm('로그아웃할까요?')) return;
+  if (!confirm('Sign out?')) return;
   // This used to only hide the app and show the login screen again. The Google
   // session survived, so onAuthStateChanged immediately signed the same person
   // back in — the screen flashed and nothing changed. Identity now comes from
@@ -610,19 +610,19 @@ function sbRender() {
     // ring the office, or that there is simply nothing on today.
     let why;
     if (_mirrorSize === 0) {
-      why = '<p>오더를 불러오지 못했습니다</p>' +
+      why = '<p>Could not load orders</p>' +
             '<small style="margin-top:6px;display:block;line-height:1.6">' +
-            '사무실에서 데이터를 아직 내려보내지 않았습니다.<br>관리자에게 문의해주세요.</small>';
+            'The office has not sent any data yet.<br>Please contact the office.</small>';
     } else if (!_allOrders.length) {
-      why = '<p>' + esc(_user || '') + ' 님에게 배정된 오더가 없습니다</p>' +
+      why = '<p>' + esc(_user || '') + ' has no orders assigned</p>' +
             '<small style="margin-top:6px;display:block;line-height:1.6">' +
-            '사무실에 등록된 이름과 다를 수 있습니다.<br>설정 → 알림 진단에서 확인하세요.</small>';
+            'The name on file may be spelled differently.<br>Check Settings → Notification check.</small>';
     } else {
-      const LABEL = { orders:'진행 중인', issue:'이슈로 등록된', completed:'완료한',
-                      claim:'청구 중인', closed:'종료된' };
-      why = '<p>' + (LABEL[_activeTab] || '해당') + ' 오더가 없습니다</p>' +
-            '<small style="margin-top:6px;display:block">내 오더 ' + _allOrders.length +
-            '건 — 다른 탭을 확인해보세요</small>';
+      const LABEL = { orders:'open', issue:'issue', completed:'completed',
+                      claim:'claim', closed:'closed' };
+      why = '<p>' + (LABEL[_activeTab] || '') + ' orders</p>' +
+            '<small style="margin-top:6px;display:block">My orders: ' + _allOrders.length +
+            ' — check the other tabs</small>';
     }
     list.innerHTML = '<div class="empty"><i class="ti ti-clipboard-off"></i>' + why + '</div>';
     return;
@@ -631,7 +631,7 @@ function sbRender() {
   list.innerHTML = orders.map(o => {
     const st = o.status || 'active';
     const stClass = 's-' + st;
-    const stLabel = st === 'issue' ? '이슈 접수됨' : st.charAt(0).toUpperCase() + st.slice(1);
+    const stLabel = st === 'issue' ? 'Issue reported' : st.charAt(0).toUpperCase() + st.slice(1);
     return '<div class="order-card" onclick="sbOpenOrder(\'' + o.id + '\')">' +
       '<div class="order-num">' + esc(o.orderNumber || '') + '</div>' +
       '<div class="order-addr">' + esc(o.address || 'No address') + '</div>' +
@@ -688,7 +688,7 @@ function sbDetailFields(o) {
       '<div class="dm-block-b">' + esc(o.comments) + '</div></div>';
   }
 
-  if (!html) html = '<div style="font-size:13px;color:var(--text3);padding:8px 0">표시할 정보가 없습니다</div>';
+  if (!html) html = '<div style="font-size:13px;color:var(--text3);padding:8px 0">No details available</div>';
   return html;
 }
 
@@ -703,7 +703,7 @@ function sbOpenOrder(id) {
 
   const stColors = {active:'#007AFF',completed:'#34C759',invoiced:'#FF9500',paid:'#AF52DE',
                     cancelled:'#FF3B30',issue:'#FF9500',claim:'#AF52DE',closed:'#8A8A8E'};
-  const stText   = {issue:'이슈 접수됨 — 사무실 확인 중', claim:'청구 중', closed:'정산 완료'};
+  const stText   = {issue:'Issue reported — office reviewing', claim:'Claim in progress', closed:'Settled'};
   document.getElementById('dm-status').innerHTML =
     '<span style="display:inline-flex;align-items:center;gap:6px;background:' + (stColors[st]||'#007AFF') + '18;color:' + (stColors[st]||'#007AFF') + ';font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px">' +
     '<div style="width:6px;height:6px;border-radius:50%;background:' + (stColors[st]||'#007AFF') + '"></div>' +
@@ -722,7 +722,7 @@ function sbOpenOrder(id) {
   if (dw) dw.style.display = ['completed','claim','invoiced','paid','closed','cancelled'].includes(st) ? 'none' : '';
   document.getElementById('issue-note').value = '';
   document.getElementById('submit-btn').disabled = false;
-  document.getElementById('submit-btn').textContent = '이슈 제출';
+  document.getElementById('submit-btn').textContent = 'Submit issue';
 
   // Load past issues for this order
   sbLoadIssues(id);
@@ -743,7 +743,7 @@ const MAX_PHOTOS = 4;
 let _photos = [];   // [{file, url}]
 
 function sbPickPhoto() {
-  if (_photos.length >= MAX_PHOTOS) return sbShowToast('사진은 최대 ' + MAX_PHOTOS + '장까지입니다');
+  if (_photos.length >= MAX_PHOTOS) return sbShowToast('Up to ' + MAX_PHOTOS + ' photos');
   document.getElementById('photo-input').click();
 }
 
@@ -752,7 +752,7 @@ async function sbPhotoChosen(input) {
   input.value = '';
   if (!picked.length) return;
   const room = MAX_PHOTOS - _photos.length;
-  if (picked.length > room) sbShowToast(room ? room + '장만 추가됩니다' : '사진은 최대 ' + MAX_PHOTOS + '장까지입니다');
+  if (picked.length > room) sbShowToast(room ? room + ' added' : 'Up to ' + MAX_PHOTOS + ' photos');
   for (const f of picked.slice(0, room)) {
     const shrunk = await sbShrink(f);
     _photos.push({ file: shrunk, url: URL.createObjectURL(shrunk) });
@@ -812,19 +812,19 @@ function sbShrink(file, maxDim = 1600, quality = 0.75) {
 async function sbReportDone() {
   if (!_currentOrder) return;
   if (!confirm((_currentOrder.orderNumber || '') + '\n' + (_currentOrder.address || '') +
-               '\n\n이 작업을 완료로 보고할까요?')) return;
+               '\n\nReport this job as finished?')) return;
   const btn = document.getElementById('done-btn');
   btn.disabled = true;
-  btn.textContent = '전송 중…';
+  btn.textContent = 'Sending…';
   try {
     await _sbWriteReport('done', '', []);
-    sbShowToast('완료 보고가 전달되었습니다 ✓');
+    sbShowToast('Completion report sent ✓');
     closeModal();
   } catch (e) {
     _sbReportError(e);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-circle-check"></i> 작업 완료 보고';
+    btn.innerHTML = '<i class="ti ti-circle-check"></i> Report work done';
   }
 }
 
@@ -858,22 +858,22 @@ function _sbReportError(e) {
   const msg  = (e && (e.message || '')) + '';
   console.error('[REPORT]', code, msg);
   if (/permission|PERMISSION_DENIED/i.test(code + msg)) {
-    alert('전송이 데이터베이스 규칙에 막혔습니다.\n\n' +
-          '관리자에게 "Firebase 규칙 게시"를 요청해주세요.\n\n' + (code || msg));
+    alert('Blocked by the database rules.\n\n' +
+          'Ask the office to publish the Firebase rules.\n\n' + (code || msg));
   } else if (/unauthorized|storage\//i.test(code)) {
-    alert('사진 업로드 권한이 없습니다.\n\n' +
-          '관리자에게 "Storage 규칙 게시"를 요청해주세요.\n\n' + (code || msg));
+    alert('No permission to upload photos.\n\n' +
+          'Ask the office to publish the Storage rules.\n\n' + (code || msg));
   } else if (!navigator.onLine) {
-    alert('오프라인 상태입니다. 연결을 확인한 뒤 다시 시도해주세요.');
+    alert('You are offline. Check your connection and try again.');
   } else {
-    alert('전송 실패\n\n' + (msg || code || '알 수 없는 오류'));
+    alert('Send failed\n\n' + (msg || code || 'Unknown error'));
   }
 }
 
 async function sbSubmitIssue() {
   if (!_currentOrder) return;
   const note = document.getElementById('issue-note').value.trim();
-  if (!_photos.length && !note) { sbShowToast('사진이나 설명을 먼저 넣어주세요'); return; }
+  if (!_photos.length && !note) { sbShowToast('Add a photo or a note first'); return; }
 
   const btn = document.getElementById('submit-btn');
   btn.disabled = true;
@@ -885,7 +885,7 @@ async function sbSubmitIssue() {
   // Losing "there is asbestos behind this wall" because Storage rules were not
   // published is far worse than losing the picture of it.
   for (let i = 0; i < _photos.length; i++) {
-    btn.textContent = '사진 업로드 중… ' + (i + 1) + '/' + _photos.length;
+    btn.textContent = 'Uploading photo ' + (i + 1) + '/' + _photos.length;
     try {
       const ref = _storage.ref('issues/' + _currentOrder.id + '/' + Date.now() + '_' + i + '.jpg');
       await ref.put(_photos[i].file);
@@ -898,14 +898,14 @@ async function sbSubmitIssue() {
   }
 
   try {
-    btn.textContent = '제출 중…';
+    btn.textContent = 'Submitting…';
     await _sbWriteReport('issue', note, urls);
 
     if (photoFailed) {
-      alert('이슈는 전달되었지만 사진 업로드에 실패했습니다.\n\n' +
-            '관리자에게 "Storage 규칙"을 확인해달라고 전해주세요.');
+      alert('The issue was sent, but the photos failed to upload.\n\n' +
+            'Ask the office to check the Storage rules.');
     } else {
-      sbShowToast('이슈가 사무실로 전달되었습니다 ✓');
+      sbShowToast('Issue sent to the office ✓');
     }
     document.getElementById('issue-note').value = '';
     sbClearPhotos();
@@ -915,7 +915,7 @@ async function sbSubmitIssue() {
     _sbReportError(e);
   } finally {
     btn.disabled = false;
-    btn.textContent = '이슈 제출';
+    btn.textContent = 'Submit issue';
   }
 }
 
@@ -963,11 +963,11 @@ function sbCloseSettings() {
 
 function _sbPushState() {
   if (typeof Notification === 'undefined' || !('serviceWorker' in navigator))
-    return { key: 'unsupported', label: '지원 안 함',  color: 'var(--text3)' };
+    return { key: 'unsupported', label: 'Not supported',  color: 'var(--text3)' };
   if (Notification.permission === 'granted')
     return { key: 'on',          label: 'ON',        color: 'var(--green)' };
   if (Notification.permission === 'denied')
-    return { key: 'blocked',     label: '차단됨',     color: 'var(--red)' };
+    return { key: 'blocked',     label: 'Blocked',     color: 'var(--red)' };
   return   { key: 'off',         label: 'OFF',       color: 'var(--text3)' };
 }
 
@@ -978,10 +978,10 @@ function _sbIosPushBlocker() {
   const ua = navigator.userAgent || '';
   const isIOS = /iPhone|iPad|iPod/.test(ua);
   if (!isIOS) return null;
-  if (/CriOS|FxiOS|EdgiOS/.test(ua)) return '크롬·파이어폭스로 만든 바로가기는 알림을 받을 수 없습니다. 사파리로 다시 홈 화면에 추가해주세요.';
+  if (/CriOS|FxiOS|EdgiOS/.test(ua)) return 'Shortcuts created in Chrome or Firefox cannot receive alerts. Re-add it to your Home Screen using Safari.';
   const standalone = window.navigator.standalone === true ||
                      window.matchMedia('(display-mode: standalone)').matches;
-  if (!standalone) return '아이폰은 홈 화면에 추가해야 앱이 닫혀 있을 때도 알림이 옵니다. 사파리 공유 → 홈 화면에 추가.';
+  if (!standalone) return 'On iPhone, add this to your Home Screen so alerts arrive when the app is closed. Safari → Share → Add to Home Screen.';
   return null;
 }
 
@@ -1002,59 +1002,59 @@ function sbRenderSettings() {
     '</div>';
 
   document.getElementById('set-body').innerHTML =
-    // ── 알림 ──
+    // ── Notifications ──
     '<div class="set-group">' +
-      '<div class="set-label">알림</div>' +
+      '<div class="set-label">Notifications</div>' +
       '<div class="set-card">' +
         row('bell', 'rgba(255,149,0,.14)', 'var(--orange)',
-            '알림 (Push)',
-            push.key === 'blocked' ? '브라우저 설정에서 다시 허용해야 합니다'
-          : push.key === 'on'      ? '새 오더가 배정되면 알림이 옵니다'
-          : '켜면 새 오더를 바로 받습니다',
+            'Notifications',
+            push.key === 'blocked' ? 'Re-enable this in your browser settings'
+          : push.key === 'on'      ? 'You will be alerted when a job is assigned'
+          : 'Turn on to get new jobs straight away',
             '<span class="set-val" style="color:' + push.color + '">' + push.label + '</span>',
             push.key === 'off' ? 'sbSettingsEnablePush()' : null) +
         row('bell-ringing', 'rgba(0,122,255,.14)', 'var(--blue)',
-            '테스트 알림', '지금 이 기기에 알림을 하나 보냅니다',
+            'Test notification', 'Sends one notification to this device now',
             '', 'sbTestNotification()') +
         row('stethoscope', 'rgba(88,86,214,.14)', 'var(--purple)',
-            '알림 진단', '왜 알림이 안 오는지 확인합니다',
+            'Notification check', 'Find out why alerts are not arriving',
             '', 'sbNotifDiagnostics()') +
       '</div>' +
       (warn ? '<div style="font-size:12px;color:var(--orange);padding:8px 6px 0;line-height:1.5">' +
                 '<i class="ti ti-alert-triangle"></i> ' + esc(warn) + '</div>' : '') +
     '</div>' +
 
-    // ── 연결 ──
+    // ── Connection ──
     '<div class="set-group">' +
-      '<div class="set-label">연결</div>' +
+      '<div class="set-label">Connection</div>' +
       '<div class="set-card">' +
         row('cloud-check', 'rgba(52,199,89,.14)', 'var(--green)',
-            '오더 동기화', online ? '실시간으로 연결되어 있습니다' : '연결을 확인하는 중입니다',
+            'Order sync', online ? 'Connected in real time' : 'Checking the connection',
             '<span class="set-val" style="color:' + (online ? 'var(--green)' : 'var(--text3)') + '">' +
-              (online ? '실시간' : '대기') + '</span>', null) +
+              (online ? 'Live' : 'Waiting') + '</span>', null) +
         row('refresh-alert', 'rgba(0,122,255,.14)', 'var(--blue)',
-            '강제 새로고침', '최신 버전을 다시 받아옵니다',
+            'Hard refresh', 'Fetches the latest build',
             '', 'hardReload()') +
       '</div>' +
     '</div>' +
 
-    // ── 계정 ──
+    // ── Account ──
     '<div class="set-group">' +
-      '<div class="set-label">계정</div>' +
+      '<div class="set-label">Account</div>' +
       '<div class="set-card">' +
         row('user-check', 'rgba(88,86,214,.14)', 'var(--purple)',
             esc(_user || '—'), esc(email), '', null) +
         row('logout', 'rgba(255,59,48,.14)', 'var(--red)',
-            '로그아웃', '', '', 'sbLogout()') +
+            'Sign out', '', '', 'sbLogout()') +
       '</div>' +
-      '<div style="text-align:center;font-size:11px;color:var(--text3);padding:14px 0 0">빌드 ' + APP_BUILD + '</div>' +
+      '<div style="text-align:center;font-size:11px;color:var(--text3);padding:14px 0 0">Build ' + APP_BUILD + '</div>' +
     '</div>';
 }
 
 async function sbSettingsEnablePush() {
   const p = await Notification.requestPermission();
-  if (p === 'granted') { await sbFcmRegister(); sbShowToast('알림이 켜졌습니다'); }
-  else sbShowToast('알림이 허용되지 않았습니다');
+  if (p === 'granted') { await sbFcmRegister(); sbShowToast('Notifications are on'); }
+  else sbShowToast('Notifications were not allowed');
   sbRenderSettings();
 }
 
@@ -1062,21 +1062,21 @@ async function sbSettingsEnablePush() {
 // the same path a real push takes, so a pass here means the whole chain works,
 // not just that the permission flag is set.
 async function sbTestNotification() {
-  if (typeof Notification === 'undefined') return sbShowToast('이 기기는 알림을 지원하지 않습니다');
-  if (Notification.permission !== 'granted') return sbShowToast('먼저 알림을 켜주세요');
+  if (typeof Notification === 'undefined') return sbShowToast('This device does not support notifications');
+  if (Notification.permission !== 'granted') return sbShowToast('Turn notifications on first');
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     if (reg) {
-      await reg.showNotification('테스트 알림', {
-        body: '알림이 정상적으로 작동합니다 ✓',
+      await reg.showNotification('Test notification', {
+        body: 'Notifications are working ✓',
         icon: 'icon-192.png', badge: 'icon-192.png', tag: 'sb-test'
       });
     } else {
-      new Notification('테스트 알림', { body: '알림이 정상적으로 작동합니다 ✓' });
+      new Notification('Test notification', { body: 'Notifications are working ✓' });
     }
-    sbShowToast('알림을 보냈습니다');
+    sbShowToast('Notification sent');
   } catch (e) {
-    sbShowToast('알림 발송 실패: ' + (e.message || e));
+    sbShowToast('Could not send: ' + (e.message || e));
   }
 }
 
@@ -1086,22 +1086,22 @@ async function sbNotifDiagnostics() {
   const no = (t) => L.push('❌ ' + t);
   const wa = (t) => L.push('⚠️ ' + t);
 
-  typeof Notification !== 'undefined' ? ok('브라우저 알림 지원') : no('브라우저 알림 미지원');
-  'serviceWorker' in navigator     ? ok('서비스 워커 지원')   : no('서비스 워커 미지원');
+  typeof Notification !== 'undefined' ? ok('Browser notifications supported') : no('Browser notifications not supported');
+  'serviceWorker' in navigator     ? ok('Service worker supported')   : no('Service worker not supported');
 
   const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
-  perm === 'granted' ? ok('알림 권한 허용됨')
-    : perm === 'denied' ? no('알림 권한 차단됨 — 브라우저 설정에서 허용 필요')
-    : wa('알림 권한 미설정 — 설정에서 켜주세요');
+  perm === 'granted' ? ok('Notification permission granted')
+    : perm === 'denied' ? no('Notifications blocked — allow them in browser settings')
+    : wa('Notifications not set up — turn them on in Settings');
 
   try {
     const reg = await navigator.serviceWorker.getRegistration();
-    reg ? ok('서비스 워커 등록됨') : no('서비스 워커 미등록');
-  } catch (e) { no('서비스 워커 확인 실패'); }
+    reg ? ok('Service worker registered') : no('Service worker not registered');
+  } catch (e) { no('Could not check the service worker'); }
 
   // The single most common cause of "it works in the app but not when closed".
   const blocker = _sbIosPushBlocker();
-  if (blocker) wa(blocker); else ok('기기 설치 상태 정상');
+  if (blocker) wa(blocker); else ok('Install state OK');
 
   // Token must be filed under the name the server looks up, or the Cloud
   // Function finds nothing and returns silently — no error anywhere.
@@ -1110,46 +1110,46 @@ async function sbNotifDiagnostics() {
       const key  = _user.replace(/\s+/g, '_');
       const snap = await _db.ref('/fcmTokens/' + key).get();
       const n = snap.exists() ? Object.keys(snap.val()).length : 0;
-      n > 0 ? ok('푸시 등록됨 (' + key + ' · 기기 ' + n + '대)')
-            : no('푸시 미등록 (' + key + ') — 알림을 껐다 켜주세요');
+      n > 0 ? ok('Push registered (' + key + ' ·  devices ' + n + ')')
+            : no('Push not registered (' + key + ') — turn notifications off and on again');
     } catch (e) {
       // fcmTokens is admin-read-only by design, so a subcontractor account can
       // never read this back. Reporting it as a warning made a correct setup
       // look broken every single time.
-      ok('푸시 등록됨 (상세 확인은 관리자만 가능)');
+      ok('Push registered (details are admin-only)');
     }
   }
 
-  _db && _ordersListener ? ok('오더 실시간 연결됨') : wa('오더 연결 확인 필요');
+  _db && _ordersListener ? ok('Orders connected live') : wa('Order connection needs checking');
 
   // The most common "my app is empty" cause, made visible.
   // _mirrorSize: 0 = nothing sent yet, -1 = data exists but none matched me.
   if (_allOrders.length) {
-    ok('내 오더 ' + _allOrders.length + '건');
+    ok('My orders: ' + _allOrders.length + '');
   } else if (_mirrorSize === 0) {
-    no('사무실에서 내려보낸 오더 데이터가 없습니다 — 관리자에게 문의하세요');
+    no('No order data has been sent from the office — contact the office');
   } else {
     // Saying "your name does not match" was a guess dressed up as a finding: an
     // empty result also happens when the records simply predate the indexed
     // field. Read the mirror and report what is actually in there — the names
     // present settle it in one line instead of sending someone hunting.
-    no('내 오더를 찾지 못했습니다 (계정 이름: "' + (_user || '') + '")');
+    no('Could not find your orders (account name: "' + (_user || '') + '")');
     try {
       const snap = await _db.ref('/orders').once('value');
       const all  = Object.values(snap.val() || {});
       const withKey = all.filter(o => o && o.subbieKey).length;
       const names = [...new Set(all.map(o => (o && o.subbies || '').trim()).filter(Boolean))].sort();
-      L.push('   전체 오더 ' + all.length + '건 · 이름표 있는 것 ' + withKey + '건');
-      if (!withKey) L.push('   → 구버전 데이터입니다. 사무실 앱을 최신 빌드로 열면 자동 정리됩니다.');
-      else if (names.length) L.push('   등록된 이름: ' + names.slice(0, 12).join(', ') +
-        (names.length > 12 ? ' 외 ' + (names.length - 12) + '개' : ''));
+      L.push('   Total orders ' + all.length + ' · with name tag ' + withKey + '');
+      if (!withKey) L.push('   → Old-format data. It sorts itself out once an office app runs the latest build.');
+      else if (names.length) L.push('   Names on file: ' + names.slice(0, 12).join(', ') +
+        (names.length > 12 ? ' +' + (names.length - 12) + ' more' : ''));
     } catch (e) {
-      L.push('   목록 확인 실패: ' + (e.message || e));
+      L.push('   Could not read the list: ' + (e.message || e));
     }
   }
 
-  alert('알림 진단\n\n' + L.join('\n') +
-        '\n\n계정: ' + (_user || '—') + '\n빌드: ' + APP_BUILD);
+  alert('Notification check\n\n' + L.join('\n') +
+        '\n\nAccount: ' + (_user || '—') + '\nBuild: ' + APP_BUILD);
 }
 
 // ══════════════════════════════════════════
