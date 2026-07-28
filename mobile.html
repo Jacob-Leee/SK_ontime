@@ -608,7 +608,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 }
 
 /* ── VIEW SHEET ── */
-#mob-vbg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; }
+#mob-vbg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 300; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 #mob-vsheet {
   display: none; position: fixed; left: 0; right: 0; bottom: 0;
   max-height: 80vh; background: #F2F1EC;
@@ -997,7 +997,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 </div>
 
 <!-- View Sheet -->
-<div id="mob-vbg" onclick="mobVClose()"></div>
+<div id="mob-vbg" onclick="mobVClose(event)" ontouchend="mobVClose(event)"></div>
 <div id="mob-vsheet">
   <div id="mob-vsheet-inner"></div>
   <div class="mvs-actions">
@@ -2231,7 +2231,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-n';
+const APP_BUILD     = '2026-07-30-p';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -6981,6 +6981,11 @@ function mobSearch(v) {
 
 function mobDashboard() {
   const el = document.getElementById('mob-card-list');
+  // The dashboard renders into the same container as the card list. The list
+  // skips redrawing when its signature is unchanged, so without clearing that
+  // signature here, going Board → Active found a matching signature, skipped
+  // the redraw, and left the dashboard on screen under the Active tab.
+  if (el) el._sig = null;
   const bar = document.getElementById('mob-summary');
   if (bar) bar.style.display = 'none';
   if (!el) return;
@@ -7175,7 +7180,6 @@ function mobRefresh() {
      withReports ? frPendingFor(o.id).length : ''].join('~')
   ).join(';');
   if (el._sig === sig) { mobSummaryShow(list); return; }
-  el._sig = sig;
 
   el.innerHTML = list.map(o => {
     const st = o.status || 'active';
@@ -7210,6 +7214,8 @@ function mobRefresh() {
       ${mobCardActions(o)}
     </div>`;
   }).join('');
+  // Recorded only after the write actually happened.
+  el._sig = sig;
 
   mobSummaryShow(list);
 }
@@ -7318,6 +7324,9 @@ function mobSummaryHide() {
 
 // ── View Sheet ──
 function mobVOpen(id) {
+  // A tap that closed the sheet must not immediately re-open it on the card
+  // that was sitting underneath.
+  if (Date.now() - _vCloseAt < 400) return;
   const o = DB.orders.find(x => x.id === id);
   if (!o) return;
   _mobViewId = id;
@@ -7351,9 +7360,26 @@ function mobVOpen(id) {
   const editBtn = document.getElementById('mvs-edit-btn');
   if (editBtn) editBtn.style.display = (window._SUBBIE_MODE && !window._ADMIN_MODE) ? 'none' : '';
 }
-function mobVClose() {
-  document.getElementById('mob-vbg').style.display = 'none';
-  document.getElementById('mob-vsheet').style.display = 'none';
+// Closing by tapping the backdrop instead of the Close button used to leave the
+// app unresponsive. Two causes, both handled here:
+//
+//  · iOS does not reliably fire `click` on a plain <div>; the sheet simply
+//    stayed put and further taps hit the backdrop, which looks like a freeze.
+//    A touchend handler plus cursor:pointer makes the tap register.
+//  · Once it did close, the browser still delivered the synthesised click ~300ms
+//    later, which landed on the card underneath and re-opened the sheet.
+let _vCloseAt = 0;
+function mobVClose(ev) {
+  if (ev) {
+    // Swallow the ghost click that follows a touchend.
+    if (ev.type === 'touchend') { ev.preventDefault(); }
+    ev.stopPropagation();
+  }
+  _vCloseAt = Date.now();
+  const bg = document.getElementById('mob-vbg');
+  const sh = document.getElementById('mob-vsheet');
+  if (bg) bg.style.display = 'none';
+  if (sh) { sh.style.display = 'none'; sh.scrollTop = 0; }
   _mobViewId = null;
 }
 function mobVEdit() {
