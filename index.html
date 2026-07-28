@@ -1892,7 +1892,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-28-q';
+const APP_BUILD = '2026-07-28-r';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -7174,6 +7174,27 @@ function showSyncDiagnostics() {
     '\n\n다른 기기에서도 같은 화면을 열어\n"주소 지문"과 "빌드"를 비교해보세요.\n' +
     '지문이 다르면 서로 다른 시트를 보고 있는 것입니다.'
   );
+  // Offer the full URL only when there is one to hand over — this is how a
+  // device that lost its URL gets it back from one that still has it.
+  if (d.urlSet) copySyncUrlPrompt();
+}
+
+// Clipboard first, with a selectable prompt as the fallback: clipboard writes
+// are blocked outside a user gesture on iOS, and silently failing here would
+// leave no way to move the URL between devices.
+function copySyncUrlPrompt() {
+  const url = CLOUD.url;
+  if (!url) return;
+  if (!confirm('이 기기의 동기화 주소를 복사할까요?\n\n다른 기기에 붙여넣어 맞출 수 있습니다.')) return;
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url);
+      copied = true;
+    }
+  } catch (e) {}
+  if (copied) toast('주소가 복사되었습니다', 'success');
+  else prompt('아래 주소를 복사해서 다른 기기에 붙여넣으세요:', url);
 }
 
 
