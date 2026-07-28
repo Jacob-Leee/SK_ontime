@@ -1888,7 +1888,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-28-h';
+const APP_BUILD = '2026-07-28-j';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2870,12 +2870,17 @@ function showPage(page) {
   // Everything else moved into the single menu — see toggleHeaderMenu.
   const actions = document.getElementById('header-actions');
   const newBtn  = `<button class="btn btn-primary" onclick="openOrderModal()">${DB.uiLabels.btnNewOrder}</button>`;
-  const ORDER_PAGES = ['all','orders','vac','mpw','completed','claims','closed','issues','cancelled'];
+  // Import Email is how VAC/MPW work actually arrives, so on those two pages it
+  // earns a place in the header. Everywhere else it stays in the menu.
+  const emailBtn = `<button class="btn btn-secondary" onclick="openEmailImport()">&#128231; ${DB.uiLabels.btnImportEmail}</button>`;
+  const INTAKE_PAGES = ['vac','mpw'];
+  const ORDER_PAGES  = ['all','orders','vac','mpw','completed','claims','closed','issues','cancelled'];
 
-  if (ORDER_PAGES.includes(page)) actions.innerHTML = newBtn;
-  else if (page === 'calendar')   actions.innerHTML = `<button class="btn btn-primary" onclick="openCalEventModal()">+ New Event</button>`;
-  else if (page === 'sor')        actions.innerHTML = `<button class="btn btn-primary" onclick="openSORModal()">+ Add SOR Code</button>`;
-  else                            actions.innerHTML = '';
+  if (INTAKE_PAGES.includes(page))     actions.innerHTML = newBtn + emailBtn;
+  else if (ORDER_PAGES.includes(page)) actions.innerHTML = newBtn;
+  else if (page === 'calendar')        actions.innerHTML = `<button class="btn btn-primary" onclick="openCalEventModal()">+ New Event</button>`;
+  else if (page === 'sor')             actions.innerHTML = `<button class="btn btn-primary" onclick="openSORModal()">+ Add SOR Code</button>`;
+  else                                 actions.innerHTML = '';
 
   if      (page === 'all')       renderAll();
   else if (page === 'orders')    renderOrders();
@@ -7405,15 +7410,38 @@ async function authLoadAllowlist() {
   try {
     const snap = await AUTH.db.ref('/allowedUsers').once('value');
     const all  = snap.val() || {};
+    const myKey     = AUTH.user ? _emailKey(AUTH.user.email) : '';
+    const adminCount = Object.values(all).filter(v => (v.role || '') === 'admin').length;
+
     const rows = Object.entries(all).map(([k, v]) => {
-      const email = k.replace(/,/g, '.');
+      const email  = k.replace(/,/g, '.');
+      const role   = v.role || 'user';
+      const isSelf = k === myKey;
+      // Guard against the two ways this list can lock everyone out: demoting
+      // yourself, or removing the last admin so nobody can manage it again.
+      const lastAdmin = role === 'admin' && adminCount <= 1;
+      const locked    = isSelf || lastAdmin;
+      const why       = isSelf ? '본인 계정은 변경할 수 없습니다'
+                      : lastAdmin ? '마지막 관리자입니다 — 다른 관리자를 먼저 지정하세요' : '';
+
+      const sel = `<select onchange="authChangeRole('${esc(k)}',this.value,this)" ${locked ? 'disabled' : ''}
+        title="${esc(why)}"
+        style="font-size:10.5px;font-weight:700;padding:3px 6px;border-radius:6px;cursor:${locked ? 'not-allowed' : 'pointer'};
+               border:1px solid ${role==='admin'?'#7C3AED':role==='subbie'?'#D97706':'var(--border2)'};
+               background:${role==='admin'?'rgba(124,58,237,.10)':role==='subbie'?'rgba(217,119,6,.10)':'var(--cream2)'};
+               color:${role==='admin'?'#6D28D9':role==='subbie'?'#B45309':'var(--text2)'};opacity:${locked?0.55:1}">
+        <option value="user"   ${role==='user'  ?'selected':''}>직원</option>
+        <option value="admin"  ${role==='admin' ?'selected':''}>관리자</option>
+        <option value="subbie" ${role==='subbie'?'selected':''}>협력업체</option>
+      </select>`;
+
       return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(email)}</span>
-        <span style="color:var(--text3);font-size:11px">${esc(v.name || '—')}</span>
-        ${v.role === 'admin'  ? '<span class="badge badge-purple" style="font-size:9px">ADMIN</span>'
-        : v.role === 'subbie' ? '<span class="badge badge-yellow" style="font-size:9px">협력업체</span>'
-        : '<span class="badge badge-blue" style="font-size:9px">직원</span>'}
-        <button onclick="authRemoveUser('${esc(k)}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:0 2px" title="삭제">×</button>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(email)}${isSelf?' <span style="color:var(--text3);font-size:10px">(나)</span>':''}</span>
+        <span style="color:var(--text3);font-size:11px;flex-shrink:0">${esc(v.name || '—')}</span>
+        ${sel}
+        <button onclick="authRemoveUser('${esc(k)}')" ${locked ? 'disabled' : ''}
+          style="background:none;border:none;color:var(--red);cursor:${locked?'not-allowed':'pointer'};font-size:14px;padding:0 2px;opacity:${locked?0.3:1}"
+          title="${locked ? esc(why) : '삭제'}">×</button>
       </div>`;
     }).join('');
     box.innerHTML = rows || '<div style="font-size:11.5px;color:var(--text3)">등록된 사용자가 없습니다.</div>';
@@ -7440,10 +7468,38 @@ async function authAddUser() {
   } catch (e) { toast('추가 실패: ' + e.message, 'error'); }
 }
 
+async function authChangeRole(key, role, el) {
+  if (AUTH.user && _emailKey(AUTH.user.email) === key) {
+    toast('본인 계정의 역할은 바꿀 수 없습니다', 'error');
+    authLoadAllowlist();
+    return;
+  }
+  const email = key.replace(/,/g, '.');
+  const LABEL = { user: '직원', admin: '관리자', subbie: '협력업체' };
+  if (role === 'subbie' && !confirm(`${email} 을(를) 협력업체로 바꾸면\n관리자 앱에 더 이상 로그인할 수 없습니다.\n\n계속할까요?`)) {
+    authLoadAllowlist(); return;
+  }
+  try {
+    await AUTH.db.ref('/allowedUsers/' + key + '/role').set(role);
+    toast(`${email} → ${LABEL[role]}`, 'success');
+    authLoadAllowlist();
+  } catch (e) {
+    toast('변경 실패: ' + e.message, 'error');
+    authLoadAllowlist();
+  }
+}
+
 async function authRemoveUser(key) {
   if (AUTH.user && _emailKey(AUTH.user.email) === key) {
     toast('본인 계정은 삭제할 수 없습니다', 'error'); return;
   }
+  try {
+    const all = (await AUTH.db.ref('/allowedUsers').once('value')).val() || {};
+    const admins = Object.entries(all).filter(([, v]) => (v.role || '') === 'admin');
+    if (admins.length <= 1 && admins.some(([k]) => k === key)) {
+      toast('마지막 관리자는 삭제할 수 없습니다', 'error'); return;
+    }
+  } catch (e) { /* read failed — fall through to the confirm below */ }
   if (!confirm(key.replace(/,/g, '.') + ' 계정의 접근 권한을 삭제할까요?')) return;
   try {
     await AUTH.db.ref('/allowedUsers/' + key).remove();
