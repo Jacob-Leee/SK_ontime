@@ -1568,7 +1568,8 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <div id="fr-list"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="frMarkAllReviewed()">모두 Reviewed</button>
+      <button class="btn btn-secondary" onclick="frDiagnose()">Diagnose</button>
+      <button class="btn btn-secondary" onclick="frMarkAllReviewed()">Mark all reviewed</button>
       <button class="btn btn-primary" onclick="closeModal('fr-modal')">닫기</button>
     </div>
   </div>
@@ -1970,7 +1971,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-29-z';
+const APP_BUILD = '2026-07-30-a';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -10049,7 +10050,15 @@ function _rtdbWatchFieldReports() {
       const entries = byOrder[orderId] || {};
       Object.keys(entries).forEach(ts => {
         const r = entries[ts] || {};
-        if (r.type !== 'issue' && r.type !== 'done') return;   // pre-report record
+        // Entries written before the report format existed have no `type`.
+        // They are still something a subbie sent from site, so they belong in
+        // this list — they just do not move the order's status on their own.
+        if (r.type !== 'issue' && r.type !== 'done') {
+          if (!r.note && !r.photoUrl && !(r.photoUrls || []).length) return;
+          const legacy = Object.assign({}, r, { type: 'issue', _legacy: true });
+          out.push(shape(orderId, ts, legacy, orderId + '/' + ts));
+          return;
+        }
         out.push(shape(orderId, ts, r, orderId + '/' + ts));
       });
     });
@@ -10070,6 +10079,49 @@ function _frRepaint() {
         issues:renderIssues, cancelled:renderCancelled };
       (rr[currentPage] || function(){})();
     } catch (e) {}
+}
+
+// When the inbox is empty there are three very different reasons and no way to
+// tell them apart from the outside. This reads the raw nodes and says which.
+async function frDiagnose() {
+  if (!_rtdbDB) { _rtdbInit(); }
+  if (!_rtdbDB) return alert('Not connected to the database.');
+  const L = [];
+  try {
+    const a = await _rtdbDB.ref('/issues').once('value');
+    const byOrder = a.val() || {};
+    let total = 0, typed = 0, legacy = 0, reviewed = 0;
+    const samples = [];
+    Object.keys(byOrder).forEach(oid => {
+      Object.keys(byOrder[oid] || {}).forEach(ts => {
+        const r = byOrder[oid][ts] || {};
+        total++;
+        if (r.type === 'issue' || r.type === 'done') typed++; else legacy++;
+        if (r.reviewedAt) reviewed++;
+        if (samples.length < 4) samples.push(
+          '   · ' + oid.slice(0, 8) + ' @ ' + new Date(Number(ts) || 0).toLocaleString('en-AU') +
+          '  type=' + (r.type || '(none)') + '  by=' + (r.by || r.createdBy || '?'));
+      });
+    });
+    L.push('/issues');
+    L.push('   entries: ' + total + '   with type: ' + typed + '   old format: ' + legacy + '   reviewed: ' + reviewed);
+    if (samples.length) L.push(...samples);
+    if (!total) L.push('   (empty — no subcontractor has submitted anything)');
+  } catch (e) { L.push('/issues  READ FAILED: ' + (e.message || e)); }
+
+  try {
+    const b = await _rtdbDB.ref('/issueReports').once('value');
+    const n = b.exists() ? Object.keys(b.val() || {}).length : 0;
+    L.push('', '/issueReports (old path)');
+    L.push('   entries: ' + n);
+  } catch (e) { L.push('', '/issueReports  READ FAILED: ' + (e.message || e)); }
+
+  L.push('', 'Loaded into this app: ' + (_FR.list || []).length +
+            '   awaiting review: ' + frUnreviewed().length);
+  L.push('Watcher attached: ' + (window._frWatchOn ? 'yes' : 'NO — this is the problem'));
+  L.push('Build: ' + (typeof APP_BUILD !== 'undefined' ? APP_BUILD : '?'));
+
+  alert('Field Reports diagnostic\n──────────────────────────\n' + L.join('\n'));
 }
 
 function frUnreviewed() { return _FR.list.filter(r => !r.reviewedAt); }
