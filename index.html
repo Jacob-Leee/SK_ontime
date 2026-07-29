@@ -1004,7 +1004,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
                 <span id="cal-mini-label" style="font-size:13px;font-weight:700"></span>
                 <button class="icon-btn" onclick="calNavMini(1)" style="font-size:16px">&#8250;</button>
               </div>
-              <div id="cal-mini-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;text-align:center;font-size:11px"></div>
+              <div id="cal-mini-grid" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;text-align:center;font-size:11px"></div>
             </div>
             <!-- Category legend -->
             <div style="padding:8px 16px;border-top:1px solid var(--border)">
@@ -1063,7 +1063,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           </div>
         </div>
         <!-- Draggable Widget Grid -->
-        <div id="dash-widgets" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:stretch"></div>
+        <div id="dash-widgets" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:stretch"></div>
       </div>
 
       <!-- SOR PAGE -->
@@ -2055,7 +2055,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-31-r';
+const APP_BUILD = '2026-07-31-t';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4734,6 +4734,7 @@ async function docUpload(orderId, files) {
     // A 100 MB file over site internet is minutes, not seconds. Without a
     // progress bar people assume it failed and press upload again.
     const row = _docProgressRow(orderId, f.name, f.size);
+    let _docStage = 'upload';
     try {
       const task = st.ref(path).put(f);
       await new Promise((resolve, reject) => {
@@ -4743,6 +4744,10 @@ async function docUpload(orderId, files) {
           resolve);
       });
       const url = await task.snapshot.ref.getDownloadURL();
+      // Past this point the file is already in Storage. Anything that fails
+      // from here is the database index, not the upload — and the two are fixed
+      // in different consoles.
+      _docStage = 'index';
       // The order's own details ride along with the file. Without them the
       // subcontractor's list can only show a document if their order happens to
       // be in the mirror — and a file they cannot see is a file that does not
@@ -4757,11 +4762,22 @@ async function docUpload(orderId, files) {
     } catch (e) {
       console.error('[DOC] upload failed:', e);
       _docProgressDone(row, false, e.code || e.message);
-      if (/unauthorized|permission/i.test(e.code || e.message || '')) {
+
+      // Two different walls, two different consoles. Reporting "Storage rules"
+      // for a database refusal sends people to fix something that was never
+      // broken — the progress bar hitting 100% first makes that obvious to
+      // them, but the message was still saying Storage.
+      const msg = (e.code || '') + ' ' + (e.message || '');
+      if (/permission|unauthorized|PERMISSION_DENIED/i.test(msg)) {
+        const storageSide = /^storage\//.test(e.code || '') || _docStage === 'upload';
         if (!window._docRulesWarned) {
           window._docRulesWarned = true;
-          alert('파일 업로드가 Storage 규칙에 막혔습니다.\n\n' +
-                'Firebase Console → Storage → Rules 에 storage.rules 내용을 붙여넣고 [게시] 하세요.');
+          alert(storageSide
+            ? '파일 업로드가 Storage 규칙에 막혔습니다.\n\n' +
+              'Firebase Console → Storage → Rules 에 storage.rules 내용을 붙여넣고 [게시] 하세요.'
+            : '파일은 올라갔지만, 목록 기록이 Realtime Database 규칙에 막혔습니다.\n\n' +
+              'Firebase Console → Realtime Database → 규칙 에 database.rules.json 내용을 붙여넣고 [게시] 하세요.\n\n' +
+              '(Storage 가 아니라 Database 쪽입니다)');
         }
         break;   // the rest will fail the same way
       }
@@ -4930,10 +4946,17 @@ function renderMonthView() {
   const events = getExpandedEvents(startDay, endDay);
   const orderCounts = calOrderCounts();
 
-  let html = `<div style="display:grid;grid-template-columns:repeat(7,1fr);height:100%;min-height:0">`;
+  // minmax(0,1fr), not 1fr.
+  //
+  // A bare `1fr` track is really `minmax(auto, 1fr)`, so a long event title —
+  // "SK Ontime – Capital Upgrades Team - Scoping Operational Meeting" — forces
+  // its column wider than the others and the whole grid goes lopsided with a
+  // horizontal scrollbar. minmax(0,...) lets the track shrink and the text
+  // truncate instead.
+  let html = `<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));height:100%;min-height:0">`;
   // Day headers
   CAL_DAYS_SHORT.forEach(d => {
-    html += `<div style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);text-align:center;background:var(--surface)">${d}</div>`;
+    html += `<div style="padding:8px 10px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);text-align:center;background:var(--surface);min-width:0;overflow:hidden">${d}</div>`;
   });
   // Cells
   let cur = new Date(startDay);
@@ -4946,7 +4969,7 @@ function renderMonthView() {
     const dayEvents = events.filter(e => e.startDate <= ds && calEventEnd(e) >= ds).slice(0, 3);
     const oc = orderCounts[ds];
 
-    html += `<div onclick="calDayClick('${ds}')" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;min-height:104px;cursor:pointer;background:${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'};transition:background 0.1s" onmouseover="this.style.background='rgba(79,126,248,0.05)'" onmouseout="this.style.background='${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'}'">
+    html += `<div onclick="calDayClick('${ds}')" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;min-height:104px;overflow:hidden;min-width:0;cursor:pointer;background:${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'};transition:background 0.1s" onmouseover="this.style.background='rgba(79,126,248,0.05)'" onmouseout="this.style.background='${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'}'">
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
         <span style="font-size:12px;font-weight:${isToday?'800':'500'};color:${isToday?'#fff':isCurrentMonth?'var(--text)':'var(--text3)'};${isToday?'background:var(--gold);border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;':''}line-height:1">${cur.getDate()}</span>
         ${isHoliday ? `<span style="font-size:9px;color:var(--red);font-weight:700">PH</span>` : ''}
@@ -4965,7 +4988,7 @@ function renderMonthView() {
           }).join('')}
           ${dayEvents.length === 3 ? `<div style="font-size:9px;color:var(--text3)">+ more</div>` : ''}
         </div>
-        ${oc ? `<div style="width:46%;flex-shrink:0;display:flex;flex-direction:column;gap:2px">
+        ${oc ? `<div style="width:62px;flex-shrink:0;display:flex;flex-direction:column;gap:2px">
           ${Object.keys(oc.byArea).sort((a,b)=>_areaOrder(a)-_areaOrder(b)).slice(0,5).map(a =>
             `<div style="display:flex;align-items:center;gap:4px;font-size:9.5px;line-height:1.45">
                <span style="flex:1;min-width:0;color:var(--text3);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a)}</span>
@@ -6775,7 +6798,7 @@ function buildStatusPipeline(base) {
         <div style="font-size:9px;font-weight:700;color:var(--text3);margin:2px 0;text-transform:uppercase;letter-spacing:0.5px">${s.label}</div>
         <div style="font-size:10px;color:var(--text2);font-weight:600">$${fmtNum(sumAmt(s.arr))}</div>
       </div>`).join('');
-  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px">${cards}</div>
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px">${cards}</div>
     <div style="margin-top:4px;text-align:right;font-size:9px;color:var(--text3)">Click to navigate · Excludes cancelled</div>`;
 }
 
@@ -6804,7 +6827,7 @@ function buildClaimsPipeline(base) {
     { label:'Submitted — Awaiting',  sub:'Claimed, payment pending', count:pending.length,   amt:pendingAmt,   color:'#f39c12', icon:'&#9203;'   },
   ];
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:8px">
       ${cols.map(c=>`
         <div style="padding:8px 10px;border-radius:8px;background:var(--cream2);border-left:4px solid ${c.color}">
           <div style="font-size:14px;margin-bottom:3px">${c.icon}</div>
@@ -6923,7 +6946,7 @@ function buildCompareWidget(cur, prev, w) {
     </div>`).join('');
 
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px">
       ${cardHtml}
     </div>
     <div style="background:var(--cream2);border-radius:8px;border:1px solid var(--border);padding:12px 14px;display:grid;grid-template-columns:2fr 1px 1fr 1px 1fr;gap:12px;align-items:start">
