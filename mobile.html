@@ -2278,7 +2278,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-31-j';
+const APP_BUILD     = '2026-07-31-k';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -4871,16 +4871,22 @@ function checkCalReminders() {
   events.forEach(ev => {
     if (!ev.reminder || ev.reminder === 'none') return;
     const minsBefore = parseInt(ev.reminder);
-    if (ev.allDay === 'Y') return;
-    if (ev.startDate !== todayStr || !ev.startTime) return;
-    const [h,m] = ev.startTime.split(':').map(Number);
+    // All-day events used to be skipped outright, so a renewal or an
+    // inspection date could never remind anyone. They now remind at 08:00 —
+    // early enough to act on, late enough not to wake anybody.
+    if (ev.startDate !== todayStr) return;
+    const timeStr = (ev.allDay === 'Y' || !ev.startTime) ? '08:00' : ev.startTime;
+    const [h,m] = timeStr.split(':').map(Number);
     const evTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m);
     const remTime = new Date(evTime.getTime() - minsBefore * 60000);
     const diff = Math.abs(now.getTime() - remTime.getTime());
     const remKey = 'rem_' + (ev._baseId||ev.id) + '_' + todayStr;
     if (diff < 60000 && !sessionStorage.getItem(remKey)) {
       sessionStorage.setItem(remKey, '1');
-      toast('&#9201; Reminder: ' + ev.title + (minsBefore>0?' in '+minsBefore+'min':''), 'success');
+      const label = '⏰ ' + (ev.title || '') + (minsBefore > 0 ? ' — ' + minsBefore + '분 후' : '');
+      toast(label, 'success');
+      _fireOsNotification(label, ev.notes || '', null);
+      _pushCalReminder(label, ev.notes || '');
     }
   });
 }
@@ -9654,6 +9660,26 @@ function _calNotifSave(map) {
   lsSet('hom_cal_notified', JSON.stringify(trimmed));
 }
 
+// Sends a calendar reminder to this person's own devices, so it arrives even
+// with the app closed. Everything here used to be a toast, which only reaches
+// somebody already looking at the screen — no use for a renewal date.
+function _pushCalReminder(title, body) {
+  try {
+    if (!NOTIF.me) return;                       // no idea whose phone to ring
+    const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
+    if (!db) { if (typeof _rtdbInit === 'function') _rtdbInit(); }
+    const d = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
+    if (!d) return;
+    d.ref('/notifications').push({
+      subbies: NOTIF.me,      // the Cloud Function looks tokens up by this
+      type: 'calendar',
+      title: title,
+      body: body,
+      createdAt: Date.now()
+    }).catch(e => console.warn('[CAL] push failed:', e.message));
+  } catch (e) { console.warn('[CAL] push failed:', e); }
+}
+
 function checkTodayEvents() {
   if (!NOTIF.enabled) return;
   let events;
@@ -9693,10 +9719,13 @@ function checkTodayEvents() {
   const when  = first.startTime || 'All day';
   if (fresh.length === 1) {
     _fireOsNotification('오늘 일정 — ' + (first.title || ''), when, null);
+    _pushCalReminder('📅 오늘 일정 — ' + (first.title || ''), when);
     _showInAppBanner(`\u{1F4C5} <b>Today events</b><br><span style="opacity:.85;font-size:12px">${esc(first.title || '')} &middot; ${esc(when)}</span>`, null);
   } else {
     _fireOsNotification(`오늘 일정 ${fresh.length}건`,
       fresh.map(e => (e.startTime ? e.startTime + ' ' : '') + (e.title || '')).join('\n'), null);
+    _pushCalReminder(`📅 오늘 일정 ${fresh.length}건`,
+      fresh.map(e => (e.startTime ? e.startTime + ' ' : '') + (e.title || '')).join('\n'));
     _showInAppBanner(`\u{1F4C5} <b>오늘 일정 ${fresh.length}건</b><br><span style="opacity:.85;font-size:12px">${esc(fresh.map(e => e.title).join(', '))}</span>`, null);
   }
   _playNotifSound();
