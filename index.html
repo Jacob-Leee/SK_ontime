@@ -449,6 +449,11 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         <span id="navlabel-sor">SOR Codes</span>
       </div>
 
+      <div class="nav-item" onclick="showPage('files')" id="nav-files">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span id="navlabel-files">Documents</span>
+      </div>
+
       <!-- External tool. Opens in its own window so the order board is never
            replaced — losing an in-progress screen to a link is worse than an
            extra tab. -->
@@ -900,6 +905,20 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       </div>
 
       <!-- CANCELLED PAGE -->
+      <div id="page-files" class="page">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+          <input class="filter-input" id="files-search" placeholder="&#128269;  Search order, address, PRN" style="width:280px" oninput="renderFilesPage()">
+          <select class="filter-input" id="files-filter" onchange="renderFilesPage()">
+            <option value="all" selected>All orders</option>
+            <option value="with">With documents</option>
+            <option value="none">No documents yet</option>
+          </select>
+          <span id="files-count" style="font-size:12px;color:var(--text3)"></span>
+        </div>
+        <div id="files-note" style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6"></div>
+        <div id="files-list"></div>
+      </div>
+
       <div id="page-cancelled" class="page">
         <div class="filters">
           <input class="filter-input" id="search-cancelled" placeholder="🔍  Search cancelled orders..." style="width:260px" oninput="renderCancelled()">
@@ -2028,7 +2047,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-31-k';
+const APP_BUILD = '2026-07-31-l';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -3158,6 +3177,7 @@ function showPage(page) {
   else if (page === 'claims')    renderClaims();
   else if (page === 'closed')    renderClosed();
   else if (page === 'issues')    renderIssues();
+  else if (page === 'files')     renderFilesPage();
   else if (page === 'cancelled') renderCancelled();
   else if (page === 'subbies')   { subActivePerson = 'All'; renderSubbiesPage(); }
   else if (page === 'calendar')  renderCalendar();
@@ -4366,6 +4386,226 @@ function calGoToday() {
 }
 
 // ── Main render dispatcher ──
+// ============================================================
+// DOCUMENTS
+// ------------------------------------------------------------
+// A shared drop for order paperwork — scopes and plans going out, invoices,
+// reports and photos coming back. Subcontractors reach it on a desktop, where
+// the files actually live; the phone app stays a job list.
+//
+// Files sit in Firebase Storage under docs/<orderId>/, with an index in RTDB
+// so the list loads without walking Storage on every render.
+// ============================================================
+
+const DOC_MAX_MB = 100;                       // per file
+const DOC_TYPES = {
+  pdf:  { ext: ['pdf'], icon: '📄', label: 'PDF' },
+  xls:  { ext: ['xls','xlsx','xlsm','csv'], icon: '📊', label: 'Excel' },
+  img:  { ext: ['jpg','jpeg','png','heic','webp','gif'], icon: '🖼', label: 'Image' },
+  doc:  { ext: ['doc','docx'], icon: '📝', label: 'Word' },
+};
+function docKind(name) {
+  const e = (name.split('.').pop() || '').toLowerCase();
+  for (const k in DOC_TYPES) if (DOC_TYPES[k].ext.includes(e)) return DOC_TYPES[k];
+  return { icon: '📎', label: (e || 'file').toUpperCase() };
+}
+function docSize(bytes) {
+  if (!bytes) return '';
+  return bytes < 1048576 ? Math.round(bytes / 1024) + ' KB'
+                         : (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+let _docs = {};            // orderId -> { key: {name,size,url,by,at,path} }
+let _docsWatch = false;
+
+function _docsDb() {
+  if (!_rtdbDB) { _rtdbInit(); }
+  return _rtdbDB;
+}
+
+function watchDocs() {
+  const db = _docsDb();
+  if (!db || _docsWatch) return;
+  _docsWatch = true;
+  db.ref('/docs').on('value', snap => {
+    _docs = snap.val() || {};
+    if (currentPage === 'files') renderFilesPage();
+  });
+}
+
+// Which orders this person may see. A subcontractor gets only their own — the
+// document list is also a list of addresses, so this is not just tidiness.
+let _subbieMirror = null;     // orders read from the RTDB mirror, subbie only
+
+function _docOrders() {
+  if (window._SUBBIE_VIEW) {
+    // A subcontractor has no local order database — this app's data comes from
+    // the office's Apps Script sheet, which they are not on. Read the mirror
+    // instead, which is exactly the set of orders assigned to them.
+    return _subbieMirror || [];
+  }
+  return DB.orders || [];
+}
+
+// One listener, only for the subcontractor view.
+function watchSubbieMirror() {
+  if (!window._SUBBIE_VIEW || window._subbieMirrorOn) return;
+  const db = _docsDb();
+  if (!db) return;
+  window._subbieMirrorOn = true;
+  const me = _subbieKey(window._SUBBIE_NAME);
+  db.ref('/orders').on('value', snap => {
+    const all = snap.val() || {};
+    _subbieMirror = Object.values(all).filter(o => o && _subbieKey(o.subbies) === me);
+    if (currentPage === 'files') renderFilesPage();
+  });
+}
+
+function renderFilesPage() {
+  const list = document.getElementById('files-list');
+  if (!list) return;
+  watchDocs();
+  watchSubbieMirror();
+
+  const q    = (document.getElementById('files-search')?.value || '').toLowerCase();
+  const mode = document.getElementById('files-filter')?.value || 'all';
+
+  let orders = _docOrders().filter(o => o && o.id);
+  if (q) orders = orders.filter(o =>
+    [o.orderNumber, o.address, o.prn, o.area].some(v => String(v || '').toLowerCase().includes(q)));
+  const nDocs = o => Object.keys(_docs[o.id] || {}).length;
+  if (mode === 'with') orders = orders.filter(o => nDocs(o) > 0);
+  if (mode === 'none') orders = orders.filter(o => nDocs(o) === 0);
+
+  orders.sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || '') ||
+                        String(b.orderNumber || '').localeCompare(String(a.orderNumber || '')));
+
+  const note = document.getElementById('files-note');
+  if (note) note.innerHTML = window._SUBBIE_VIEW
+    ? `Documents for orders assigned to <b>${esc(window._SUBBIE_NAME || '')}</b>. ` +
+      `Upload PDFs, spreadsheets or photos — up to ${DOC_MAX_MB} MB per file.`
+    : `Shared with the assigned subcontractor. Up to ${DOC_MAX_MB} MB per file.`;
+
+  const cnt = document.getElementById('files-count');
+  if (cnt) cnt.textContent = orders.length + (orders.length === 1 ? ' order' : ' orders');
+
+  if (!orders.length) {
+    list.innerHTML = '<div style="padding:50px;text-align:center;color:var(--text3);font-size:13px">No orders to show.</div>';
+    return;
+  }
+
+  list.innerHTML = orders.slice(0, 200).map(o => {
+    const files = _docs[o.id] || {};
+    const keys = Object.keys(files).sort((a, b) => (files[b].at || 0) - (files[a].at || 0));
+    return `<div style="border:1px solid var(--border);border-radius:11px;margin-bottom:10px;overflow:hidden;background:var(--surface)">
+      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:${keys.length?'1px solid var(--border)':'none'};flex-wrap:wrap">
+        <b style="font-family:monospace;font-size:12.5px;color:var(--gold-dark)">${esc(o.orderNumber || '')}</b>
+        <span style="font-size:13px;color:var(--text)">${esc(o.address || '')}</span>
+        ${o.area ? `<span class="area-tag">${esc(o.area)}</span>` : ''}
+        ${o.prn ? `<span style="font-size:11.5px;color:var(--text3)">PRN ${esc(o.prn)}</span>` : ''}
+        ${!window._SUBBIE_VIEW && o.subbies ? `<span style="font-size:11.5px;color:var(--text3)">→ ${esc(o.subbies)}</span>` : ''}
+        <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          ${keys.length ? `<span style="font-size:11.5px;color:var(--text3)">${keys.length} file${keys.length>1?'s':''}</span>` : ''}
+          <button class="btn btn-sm btn-secondary" style="font-size:11.5px" onclick="docPick('${o.id}')">&#8593; Upload</button>
+        </span>
+      </div>
+      ${keys.map(k => {
+        const f = files[k], kind = docKind(f.name || '');
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border2);font-size:12.5px">
+          <span style="font-size:15px">${kind.icon}</span>
+          <a href="${esc(f.url)}" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(f.name)}">${esc(f.name)}</a>
+          <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${docSize(f.size)}</span>
+          <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${esc(f.by || '')}</span>
+          <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${f.at ? new Date(f.at).toLocaleDateString('en-AU',{day:'2-digit',month:'short'}) : ''}</span>
+          <a href="${esc(f.url)}" download="${escAttr(f.name)}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary" style="font-size:11px;text-decoration:none">&#8595;</a>
+          <button class="icon-btn" title="Delete" onclick="docDelete('${o.id}','${escAttr(k)}')">&#128465;</button>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
+
+function docPick(orderId) {
+  let inp = document.getElementById('doc-input');
+  if (!inp) {
+    inp = document.createElement('input');
+    inp.type = 'file'; inp.id = 'doc-input'; inp.multiple = true;
+    inp.style.display = 'none';
+    inp.accept = '.pdf,.xls,.xlsx,.xlsm,.csv,.doc,.docx,image/*';
+    document.body.appendChild(inp);
+  }
+  inp.onchange = () => { docUpload(orderId, Array.from(inp.files || [])); inp.value = ''; };
+  inp.click();
+}
+
+async function docUpload(orderId, files) {
+  if (!files.length) return;
+  const db = _docsDb();
+  if (!db) return toast('데이터베이스에 연결되지 않았습니다', 'error');
+  if (!firebase.storage) return toast('Storage SDK 미로드 — 새로고침 후 다시 시도', 'error');
+
+  const who = window._SUBBIE_VIEW ? (window._SUBBIE_NAME || 'Subcontractor')
+                                  : ((AUTH.entry && AUTH.entry.name) || NOTIF.me || 'SK');
+  const st = firebase.storage(firebase.apps[0]);
+
+  for (const f of files) {
+    if (f.size > DOC_MAX_MB * 1048576) {
+      toast(`${f.name} — ${DOC_MAX_MB}MB 를 넘습니다 (${docSize(f.size)})`, 'error');
+      continue;
+    }
+    const key = String(Date.now()) + '_' + Math.random().toString(36).slice(2, 8);
+    // The stored name is deliberately not the original: two people uploading
+    // "invoice.pdf" on the same order must not overwrite each other.
+    const safe = (f.name || 'file').replace(/[^\w.\-]+/g, '_').slice(-80);
+    const path = 'docs/' + orderId + '/' + key + '_' + safe;
+    try {
+      toast(`${f.name} 업로드 중…`, 'success');
+      const ref = st.ref(path);
+      await ref.put(f);
+      const url = await ref.getDownloadURL();
+      await db.ref('/docs/' + orderId + '/' + key).set({
+        name: f.name || safe, size: f.size || 0, url, path, by: who, at: Date.now()
+      });
+      toast(`${f.name} 업로드 완료`, 'success');
+    } catch (e) {
+      console.error('[DOC] upload failed:', e);
+      toast(`${f.name} 실패: ${e.code || e.message}`, 'error');
+    }
+  }
+  renderFilesPage();
+}
+
+async function docDelete(orderId, key) {
+  const f = (_docs[orderId] || {})[key];
+  if (!f) return;
+  if (!confirm(`${f.name}\n\n삭제할까요?`)) return;
+  const db = _docsDb();
+  try {
+    await db.ref('/docs/' + orderId + '/' + key).remove();
+    try {
+      if (firebase.storage && f.path) await firebase.storage(firebase.apps[0]).ref(f.path).delete();
+    } catch (e) { console.warn('[DOC] storage delete failed:', e.code || e.message); }
+    toast('삭제되었습니다', 'success');
+    renderFilesPage();
+  } catch (e) {
+    toast('삭제 실패: ' + (e.message || e), 'error');
+  }
+}
+
+// Locks the app down to Documents for a signed-in subcontractor. Everything
+// else on this screen is the office's own board.
+function applySubbieDesktopView() {
+  if (!window._SUBBIE_VIEW) return;
+  document.querySelectorAll('.nav-item').forEach(el => {
+    if (el.id !== 'nav-files') el.style.display = 'none';
+  });
+  ['nav-scope-master','hdr-scope-master','sidebar-stats','undo-btn','header-actions']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  const menu = document.getElementById('hdr-menu-btn');
+  if (menu) menu.style.display = '';        // sign-out still has to be reachable
+  showPage('files');
+}
+
 function renderCalendar() {
   renderMainLabel();
   if (calView === 'month') renderMonthView();
@@ -8345,14 +8585,19 @@ async function _authOnStateChanged(user) {
       AUTH.user  = user;
       AUTH.entry = snap.val() || {};
 
-      // Same rule as mobile: subcontractors do not belong in the admin app.
+      // Subcontractors on a phone get the job app; on a desktop they get the
+      // document exchange. Sending them to subbie.html here meant a laptop
+      // could only ever show a phone-shaped job list, which is the wrong tool
+      // for uploading an invoice or downloading a scope.
       if ((AUTH.entry.role || '') === 'subbie') {
-        // Send them, do not tell them. The role is already known, so making the
-        // user find the right link — or pick their own type at a menu — is a
-        // step that can only be got wrong.
-        _authShow('busy', '협력업체 앱으로 이동합니다…');
-        location.replace('subbie.html');
-        return;
+        const isPhone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+        if (isPhone) {
+          _authShow('busy', '협력업체 앱으로 이동합니다…');
+          location.replace('subbie.html');
+          return;
+        }
+        window._SUBBIE_VIEW = true;
+        window._SUBBIE_NAME = AUTH.entry.name || '';
       }
 
       lsSet('hom_auth_email', user.email || '');
@@ -8427,6 +8672,7 @@ function _authAfterSignIn() {
   // the lock screen back up in the middle of a Settings sign-in.
   if (AUTH_REQUIRED) { try { initLock(); } catch (e) {} }
   try { fcmMaintain(); } catch (e) {}
+  try { applySubbieDesktopView(); } catch (e) {}
 }
 
 // The standalone badge became part of the header menu button.
