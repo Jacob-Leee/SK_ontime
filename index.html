@@ -1540,7 +1540,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
         </div>
         <div class="form-group">
           <label class="form-label">Start Date *</label>
-          <input type="date" class="form-control" id="ce-start-date">
+          <input type="date" class="form-control" id="ce-start-date" onchange="onCalStartDateChange()">
         </div>
         <div class="form-group" id="ce-start-time-wrap">
           <label class="form-label">Start Time</label>
@@ -2028,7 +2028,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-31-i';
+const APP_BUILD = '2026-07-31-j';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4249,6 +4249,31 @@ const AEST_HOLIDAYS = [
 ];
 
 // ── Expand recurring events ──
+// The end of an event, for range checks.
+//
+// Creating an event from the month view fills BOTH dates with today. Move the
+// start to a future date and forget the end, and you get endDate < startDate —
+// which the range tests read as a zero-length window that never covers the
+// event's own day. The day view uses `startDate === ds` so it kept showing the
+// event, and only the month and week grids lost it. A reminder set for next
+// January simply was not on the calendar.
+//
+// An end before the start is meaningless, so treat it as absent.
+function calEventEnd(e) {
+  const end = e.endDate;
+  if (!end || end < e.startDate) return e.startDate;
+  return end;
+}
+
+// Keeps the end date at or after the start, the way every calendar app does.
+// Without it the two drift apart silently and the event drops off the grid.
+function onCalStartDateChange() {
+  const s = document.getElementById('ce-start-date');
+  const e = document.getElementById('ce-end-date');
+  if (!s || !e || !s.value) return;
+  if (!e.value || e.value < s.value) e.value = s.value;
+}
+
 function getExpandedEvents(from, to) {
   const raw = loadCalEvents();
   const expanded = [];
@@ -4389,7 +4414,7 @@ function renderMonthView() {
     const isCurrentMonth = cur.getMonth() === calCursor.getMonth();
     const isWeekend = cur.getDay() === 0 || cur.getDay() === 6;
     const isHoliday = AEST_HOLIDAYS.includes(ds);
-    const dayEvents = events.filter(e => e.startDate <= ds && (e.endDate || e.startDate) >= ds).slice(0, 4);
+    const dayEvents = events.filter(e => e.startDate <= ds && calEventEnd(e) >= ds).slice(0, 4);
 
     html += `<div onclick="calDayClick('${ds}')" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;min-height:90px;cursor:pointer;background:${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'};transition:background 0.1s" onmouseover="this.style.background='rgba(79,126,248,0.05)'" onmouseout="this.style.background='${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'}'">
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
@@ -4434,7 +4459,7 @@ function renderWeekView() {
   html += '<tr><td style="padding:4px 6px;font-size:10px;color:var(--text3);border-right:1px solid var(--border);text-align:right;vertical-align:top">all day</td>';
   days.forEach(d => {
     const ds = calYMD(d);
-    const allDayEvs = events.filter(e => e.allDay === 'Y' && e.startDate <= ds && (e.endDate || e.startDate) >= ds);
+    const allDayEvs = events.filter(e => e.allDay === 'Y' && e.startDate <= ds && calEventEnd(e) >= ds);
     html += `<td style="padding:2px 4px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);vertical-align:top;min-height:28px">
       ${allDayEvs.map(e => {
         const cat = CAL_CATS[e.category] || CAL_CATS.general;
@@ -4524,7 +4549,7 @@ function renderMiniCalendar() {
   for (let i = 0; i < 42; i++) {
     const ds = calYMD(cur);
     const isToday = ds === today;
-    const hasEv = events.some(e => e.startDate <= ds && (e.endDate||e.startDate) >= ds);
+    const hasEv = events.some(e => e.startDate <= ds && calEventEnd(e) >= ds);
     const inMonth = cur.getMonth() === calMiniCursor.getMonth();
     html += `<div onclick="calMiniClick('${ds}')" style="padding:3px 0;cursor:pointer;text-align:center;border-radius:50%;${isToday?'background:var(--gold);color:#fff;font-weight:800;':''}${!inMonth?'color:var(--text3);':'color:var(--text);'}${hasEv&&!isToday?'font-weight:700;':''}font-size:11px;position:relative">
       ${cur.getDate()}${hasEv&&!isToday?'<span style="position:absolute;bottom:1px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--accent);display:block"></span>':''}
