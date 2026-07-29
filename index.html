@@ -914,6 +914,10 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
             <option value="none">No documents yet</option>
           </select>
           <span id="files-count" style="font-size:12px;color:var(--text3)"></span>
+          <span id="files-admin-tools" style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <span id="files-usage" style="font-size:11.5px;color:var(--text3)"></span>
+            <button class="btn btn-secondary" style="font-size:11.5px" onclick="docCleanup()">&#128465; Clear old files</button>
+          </span>
         </div>
         <div id="files-note" style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6"></div>
         <div id="files-list"></div>
@@ -2047,7 +2051,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-31-l';
+const APP_BUILD = '2026-07-31-m';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4437,6 +4441,16 @@ function watchDocs() {
 // document list is also a list of addresses, so this is not just tidiness.
 let _subbieMirror = null;     // orders read from the RTDB mirror, subbie only
 
+// Real subcontractors only.
+//
+// The list is a document drop for people outside the office, so orders sitting
+// with SK staff — or with nobody yet — have no business being here. Showing all
+// 3,000 buried the handful that actually need paperwork.
+function _isSubbieName(n) {
+  const w = (n || '').trim();
+  return !!w && !w.toUpperCase().startsWith('SK_');
+}
+
 function _docOrders() {
   if (window._SUBBIE_VIEW) {
     // A subcontractor has no local order database — this app's data comes from
@@ -4444,7 +4458,11 @@ function _docOrders() {
     // instead, which is exactly the set of orders assigned to them.
     return _subbieMirror || [];
   }
-  return DB.orders || [];
+  // Finished work does not need a document drop, and dropping it keeps the
+  // list to the week or so of live orders this is actually for.
+  const DONE = ['closed', 'cancelled', 'paid'];
+  return (DB.orders || []).filter(o =>
+    o && o.id && _isSubbieName(o.subbies) && !DONE.includes(o.status || ''));
 }
 
 // One listener, only for the subcontractor view.
@@ -4459,6 +4477,22 @@ function watchSubbieMirror() {
     _subbieMirror = Object.values(all).filter(o => o && _subbieKey(o.subbies) === me);
     if (currentPage === 'files') renderFilesPage();
   });
+}
+
+let _docGroupOpen = {};
+function docToggleGroup(name) {
+  _docGroupOpen[name] = _docGroupOpen[name] === false;
+  renderFilesPage();
+}
+// Stable colour per name so the same person reads the same at a glance.
+const _docColourCache = new Map();
+function _subbieColour(name) {
+  if (_docColourCache.has(name)) return _docColourCache.get(name);
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+  const c = `hsl(${Math.abs(h) % 360},60%,45%)`;
+  _docColourCache.set(name, c);
+  return c;
 }
 
 function renderFilesPage() {
@@ -4489,21 +4523,28 @@ function renderFilesPage() {
   const cnt = document.getElementById('files-count');
   if (cnt) cnt.textContent = orders.length + (orders.length === 1 ? ' order' : ' orders');
 
+  const tools = document.getElementById('files-admin-tools');
+  if (tools) tools.style.display = window._SUBBIE_VIEW ? 'none' : 'flex';
+  const us = document.getElementById('files-usage');
+  if (us && !window._SUBBIE_VIEW) {
+    const u = docUsage();
+    us.textContent = u.n ? `${u.n} files · ${(u.bytes/1048576).toFixed(0)} MB stored` : '';
+  }
+
   if (!orders.length) {
     list.innerHTML = '<div style="padding:50px;text-align:center;color:var(--text3);font-size:13px">No orders to show.</div>';
     return;
   }
 
-  list.innerHTML = orders.slice(0, 200).map(o => {
+  const card = (o) => {
     const files = _docs[o.id] || {};
     const keys = Object.keys(files).sort((a, b) => (files[b].at || 0) - (files[a].at || 0));
-    return `<div style="border:1px solid var(--border);border-radius:11px;margin-bottom:10px;overflow:hidden;background:var(--surface)">
+    return `<div style="border:1px solid var(--border);border-radius:11px;margin-bottom:8px;overflow:hidden;background:var(--surface)">
       <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:${keys.length?'1px solid var(--border)':'none'};flex-wrap:wrap">
         <b style="font-family:monospace;font-size:12.5px;color:var(--gold-dark)">${esc(o.orderNumber || '')}</b>
         <span style="font-size:13px;color:var(--text)">${esc(o.address || '')}</span>
         ${o.area ? `<span class="area-tag">${esc(o.area)}</span>` : ''}
         ${o.prn ? `<span style="font-size:11.5px;color:var(--text3)">PRN ${esc(o.prn)}</span>` : ''}
-        ${!window._SUBBIE_VIEW && o.subbies ? `<span style="font-size:11.5px;color:var(--text3)">→ ${esc(o.subbies)}</span>` : ''}
         <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
           ${keys.length ? `<span style="font-size:11.5px;color:var(--text3)">${keys.length} file${keys.length>1?'s':''}</span>` : ''}
           <button class="btn btn-sm btn-secondary" style="font-size:11.5px" onclick="docPick('${o.id}')">&#8593; Upload</button>
@@ -4522,7 +4563,77 @@ function renderFilesPage() {
         </div>`;
       }).join('')}
     </div>`;
+  };
+
+  // A subcontractor sees a flat list — it is all theirs. The office sees it
+  // grouped, because "what is outstanding with Jake" is the actual question.
+  if (window._SUBBIE_VIEW) {
+    list.innerHTML = orders.map(card).join('');
+    return;
+  }
+
+  const groups = {};
+  orders.forEach(o => { (groups[o.subbies.trim()] = groups[o.subbies.trim()] || []).push(o); });
+  const names = Object.keys(groups).sort();
+
+  list.innerHTML = names.map(name => {
+    const rows = groups[name];
+    const nFiles = rows.reduce((n, o) => n + Object.keys(_docs[o.id] || {}).length, 0);
+    const open = _docGroupOpen[name] !== false;
+    return `<div style="margin-bottom:16px">
+      <div onclick="docToggleGroup('${escAttr(name)}')"
+        style="display:flex;align-items:center;gap:10px;padding:9px 13px;background:var(--cream2);border:1px solid var(--border);border-radius:9px;cursor:pointer;margin-bottom:${open?'8px':'0'}">
+        <span style="width:9px;height:9px;border-radius:50%;background:${_subbieColour(name)};flex-shrink:0"></span>
+        <b style="font-size:13.5px">${esc(name)}</b>
+        <span style="font-size:11.5px;color:var(--text3)">${rows.length} order${rows.length>1?'s':''}${nFiles?` · ${nFiles} file${nFiles>1?'s':''}`:''}</span>
+        <span style="margin-left:auto;font-size:12px;color:var(--text3)">${open?'&#9662;':'&#9656;'}</span>
+      </div>
+      ${open ? rows.map(card).join('') : ''}
+    </div>`;
   }).join('');
+}
+
+// Files are meant to be short-lived here: the order gets done, the paperwork
+// goes wherever it lives permanently, and this drop is emptied. Without a bulk
+// action that means clicking a bin icon a few hundred times, which nobody does
+// — and then the storage bill is the surprise.
+async function docCleanup() {
+  const days = parseInt(prompt('며칠보다 오래된 파일을 지울까요?\n\n(권장: 7)', '7') || '', 10);
+  if (!days || days < 1) return;
+
+  const cut = Date.now() - days * 86400000;
+  const victims = [];
+  Object.keys(_docs).forEach(oid => {
+    Object.keys(_docs[oid] || {}).forEach(k => {
+      const f = _docs[oid][k];
+      if ((f.at || 0) < cut) victims.push({ oid, k, f });
+    });
+  });
+
+  if (!victims.length) return toast(`${days}일보다 오래된 파일이 없습니다`, 'success');
+  const mb = victims.reduce((n, v) => n + (v.f.size || 0), 0) / 1048576;
+  if (!confirm(`${victims.length}개 파일 (${mb.toFixed(1)} MB) 을 삭제할까요?\n\n${days}일 이전에 올라온 파일입니다.\n되돌릴 수 없습니다.`)) return;
+
+  const db = _docsDb();
+  let done = 0, failed = 0;
+  for (const v of victims) {
+    try {
+      await db.ref('/docs/' + v.oid + '/' + v.k).remove();
+      try {
+        if (firebase.storage && v.f.path) await firebase.storage(firebase.apps[0]).ref(v.f.path).delete();
+      } catch (e) { /* record already gone; a stray blob is the lesser problem */ }
+      done++;
+    } catch (e) { failed++; }
+  }
+  toast(`${done}개 삭제됨${failed ? ` · ${failed}개 실패` : ''}`, failed ? 'error' : 'success');
+  renderFilesPage();
+}
+
+// Rough total, so the 5 GB free tier is never a surprise.
+function docUsage() {
+  let n = 0, bytes = 0;
+  Object.keys(_docs).forEach(oid => Object.values(_docs[oid] || {}).forEach(f => { n++; bytes += (f.size || 0); }));
+  return { n, bytes };
 }
 
 function docPick(orderId) {
