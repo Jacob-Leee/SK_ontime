@@ -907,7 +907,11 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <!-- CANCELLED PAGE -->
       <div id="page-files" class="page">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-          <input class="filter-input" id="files-search" placeholder="&#128269;  Search order, address, PRN" style="width:280px" oninput="renderFilesPage()">
+          <span style="position:relative;display:inline-flex;align-items:center">
+            <input class="filter-input" id="files-search" placeholder="&#128269;  Search order, address, PRN" style="width:280px;padding-right:26px" oninput="renderFilesPage()">
+            <button id="files-search-clear" onclick="document.getElementById('files-search').value='';renderFilesPage()"
+              style="display:none;position:absolute;right:6px;background:none;border:none;color:var(--text3);font-size:15px;cursor:pointer;padding:0 4px;line-height:1">&times;</button>
+          </span>
           <select class="filter-input" id="files-filter" onchange="renderFilesPage()">
             <option value="all" selected>All orders</option>
             <option value="with">With documents</option>
@@ -2051,7 +2055,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-31-m';
+const APP_BUILD = '2026-07-31-p';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4440,6 +4444,7 @@ function watchDocs() {
 // Which orders this person may see. A subcontractor gets only their own — the
 // document list is also a list of addresses, so this is not just tidiness.
 let _subbieMirror = null;     // orders read from the RTDB mirror, subbie only
+let _subbieMirrorTotal = 0;   // how many orders the office has shared in total
 
 // Real subcontractors only.
 //
@@ -4474,7 +4479,9 @@ function watchSubbieMirror() {
   const me = _subbieKey(window._SUBBIE_NAME);
   db.ref('/orders').on('value', snap => {
     const all = snap.val() || {};
-    _subbieMirror = Object.values(all).filter(o => o && _subbieKey(o.subbies) === me);
+    const vals = Object.values(all);
+    _subbieMirrorTotal = vals.length;
+    _subbieMirror = vals.filter(o => o && _subbieKey(o.subbies) === me);
     if (currentPage === 'files') renderFilesPage();
   });
 }
@@ -4531,8 +4538,37 @@ function renderFilesPage() {
     us.textContent = u.n ? `${u.n} files · ${(u.bytes/1048576).toFixed(0)} MB stored` : '';
   }
 
+  const clearBtn = document.getElementById('files-search-clear');
+  if (clearBtn) clearBtn.style.display = q ? '' : 'none';
+
   if (!orders.length) {
-    list.innerHTML = '<div style="padding:50px;text-align:center;color:var(--text3);font-size:13px">No orders to show.</div>';
+    // Three different reasons, and "No orders to show" covered all of them.
+    // A stray character in the search box looks exactly like having no work.
+    const total = _docOrders().length;
+    let why;
+    if (q) {
+      why = `<p style="margin:0 0 6px">No match for <b>${esc(document.getElementById('files-search').value)}</b></p>` +
+            `<button class="btn btn-sm btn-secondary" onclick="document.getElementById('files-search').value='';renderFilesPage()">Clear search</button>`;
+    } else if (mode !== 'all') {
+      why = `<p style="margin:0 0 6px">No orders in this filter.</p>` +
+            `<button class="btn btn-sm btn-secondary" onclick="document.getElementById('files-filter').value='all';renderFilesPage()">Show all</button>`;
+    } else if (window._SUBBIE_VIEW) {
+      if (!_subbieMirror) {
+        why = '<p>Loading your orders…</p>';
+      } else {
+        // Say which of the two it is: nothing sent from the office at all, or
+        // orders exist but none carry this name.
+        why = _subbieMirrorTotal === 0
+          ? '<p style="margin:0 0 6px">The office has not shared any orders yet.</p>' +
+            '<p style="font-size:12px">Ask them to open the desktop app once — it publishes automatically.</p>'
+          : `<p style="margin:0 0 6px">No orders are assigned to <b>${esc(window._SUBBIE_NAME || '')}</b>.</p>` +
+            `<p style="font-size:12px">${_subbieMirrorTotal} orders shared, none under this name — ` +
+            'ask the office to check the spelling on your account.</p>';
+      }
+    } else {
+      why = '<p>No orders are with a subcontractor right now.</p>';
+    }
+    list.innerHTML = `<div style="padding:50px;text-align:center;color:var(--text3);font-size:13px;line-height:1.7">${why}</div>`;
     return;
   }
 
@@ -4680,6 +4716,18 @@ async function docUpload(orderId, files) {
       toast(`${f.name} 업로드 완료`, 'success');
     } catch (e) {
       console.error('[DOC] upload failed:', e);
+      // storage/unauthorized means the rules were never published — retrying
+      // will fail identically, so say what actually has to happen.
+      if (/unauthorized|permission/i.test(e.code || e.message || '')) {
+        toast(`${f.name} — Storage 규칙이 게시되지 않았습니다`, 'error');
+        if (!window._docRulesWarned) {
+          window._docRulesWarned = true;
+          alert('파일 업로드가 Storage 규칙에 막혔습니다.\n\n' +
+                'Firebase Console → Storage → Rules 에 storage.rules 내용을 붙여넣고 [게시] 하세요.\n\n' +
+                '이 창은 한 번만 표시됩니다.');
+        }
+        break;   // the rest will fail the same way
+      }
       toast(`${f.name} 실패: ${e.code || e.message}`, 'error');
     }
   }
@@ -4707,13 +4755,34 @@ async function docDelete(orderId, key) {
 // else on this screen is the office's own board.
 function applySubbieDesktopView() {
   if (!window._SUBBIE_VIEW) return;
+
   document.querySelectorAll('.nav-item').forEach(el => {
     if (el.id !== 'nav-files') el.style.display = 'none';
   });
-  ['nav-scope-master','hdr-scope-master','sidebar-stats','undo-btn','header-actions']
+  ['nav-scope-master','hdr-scope-master','sidebar-stats','undo-btn','header-actions',
+   'notif-bell-wrap','sync-status-pill']
     .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
-  const menu = document.getElementById('hdr-menu-btn');
-  if (menu) menu.style.display = '';        // sign-out still has to be reachable
+
+  // The dropdown is the office's toolbox — CSV of every order, backup export,
+  // Force Push, Field Reports, Settings. None of it belongs to a contractor,
+  // and "Export CSV" in particular would hand them the whole order book.
+  // Whitelist what stays rather than hiding items one by one, so anything added
+  // to this menu later is hidden by default instead of quietly exposed.
+  const menu = document.getElementById('hdr-menu');
+  if (menu) {
+    const KEEP = ['hardReload', 'authSignOut'];
+    Array.from(menu.children).forEach(el => {
+      if (el.id === 'hdr-menu-who') return;                 // shows who is signed in
+      const code = el.getAttribute('onclick') || el.getAttribute('href') || '';
+      const keep = KEEP.some(k => code.includes(k));
+      el.style.display = keep ? '' : 'none';
+    });
+    const out = document.getElementById('hdr-menu-signout');
+    if (out) out.style.display = '';                        // always a way out
+  }
+
+  const btn = document.getElementById('hdr-menu-btn');
+  if (btn) btn.style.display = '';
   showPage('files');
 }
 
@@ -8777,7 +8846,8 @@ async function _authApplyConfig() {
 
 function _authAfterSignIn() {
   renderAuthBadge();
-  _openAuthSettings();
+  // Subcontractors have no settings to open — and it is the office's panel.
+  if (!window._SUBBIE_VIEW) _openAuthSettings();
   // Only start the PIN/Face ID layer here when sign-in gated the boot. With the
   // gate off, initLock() already ran at startup — running it again would throw
   // the lock screen back up in the middle of a Settings sign-in.
