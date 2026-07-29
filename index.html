@@ -2005,7 +2005,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-31-f';
+const APP_BUILD = '2026-07-31-g';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4239,6 +4239,29 @@ function getExpandedEvents(from, to) {
     let cur = new Date(ev.startDate + 'T00:00:00');
     const until = ev.repeatEnd ? new Date(ev.repeatEnd + 'T00:00:00') : calAddDays(to, 0);
     const maxDate = until < to ? until : to;
+
+    // Jump the cursor close to the window before stepping one period at a time.
+    //
+    // This used to walk from the original start date on every render. A daily
+    // event created a few years back needs thousands of steps to reach the
+    // month being viewed — it hit the 500-iteration guard first and vanished
+    // from the calendar entirely, with no error. Weekly events were heading the
+    // same way. Skipping ahead in whole periods keeps the loop short and makes
+    // the guard a genuine safety net again rather than a silent cut-off.
+    if (cur < from) {
+      const perDay = { daily: 1, weekly: 7, fortnightly: 14 }[ev.repeat];
+      if (perDay) {
+        const behind = Math.floor((from - cur) / 86400000 / perDay);
+        if (behind > 0) cur.setDate(cur.getDate() + behind * perDay);
+      } else if (ev.repeat === 'monthly') {
+        const months = (from.getFullYear() - cur.getFullYear()) * 12 + (from.getMonth() - cur.getMonth());
+        if (months > 0) cur.setMonth(cur.getMonth() + months - 1);
+      } else if (ev.repeat === 'yearly') {
+        const years = from.getFullYear() - cur.getFullYear();
+        if (years > 0) cur.setFullYear(cur.getFullYear() + years - 1);
+      }
+    }
+
     let iter = 0;
     while (cur <= maxDate && iter++ < 500) {
       const ds = calYMD(cur);
