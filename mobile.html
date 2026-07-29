@@ -2256,7 +2256,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-y';
+const APP_BUILD     = '2026-07-30-z';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8675,6 +8675,40 @@ function _authCopyLink() {
   }
 }
 
+// Temporary, platform-specific, self-cancelling.
+let _gisBypassDone = false;
+async function _gisBypassCheck() {
+  if (_gisBypassDone) return;
+  if (!_needsGis()) return;            // only iOS Home Screen apps
+  _gisBypassDone = true;
+  try {
+    const cid = await _gisClientId();
+    if (cid) return;                   // configured — no bypass, sign in properly
+  } catch (e) { /* offline: fall through and let people work */ }
+
+  console.warn('[AUTH] iOS Home Screen app with no client ID — opening on device identity only');
+  _authRecordError({ stage: 'ios-bypass-no-client-id' });
+  window._AUTH_BYPASS = true;
+  _authHide();
+  try { mobShowPane('mob-role-select'); } catch (e) {}
+  _authBypassBanner();
+}
+
+// Says out loud that this device is not signed in, so nobody assumes the gate
+// is working when it is not.
+function _authBypassBanner() {
+  if (document.getElementById('auth-bypass-bar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'auth-bypass-bar';
+  bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99991;background:#B45309;color:#fff;' +
+    'padding:9px 14px;padding-bottom:calc(9px + env(safe-area-inset-bottom));font-size:12px;font-weight:600;' +
+    'display:flex;align-items:center;gap:9px;box-shadow:0 -4px 16px rgba(0,0,0,.2)';
+  bar.innerHTML = '<span style="flex:1;line-height:1.45">Not signed in — this iPhone app is waiting on setup. ' +
+    'Alerts still work.</span><span style="text-decoration:underline;flex-shrink:0">Hide</span>';
+  bar.onclick = () => bar.remove();
+  document.body.appendChild(bar);
+}
+
 async function _gisSignIn() {
   const cid = await _gisClientId();
   if (!cid) {
@@ -8815,9 +8849,15 @@ async function _authOnStateChanged(user) {
     AUTH.user = null; AUTH.entry = null;
     renderAuthDrawerStatus();
     if (AUTH_REQUIRED) {
+      // iOS Home Screen apps cannot complete Google sign-in until the client ID
+      // is configured. Holding the gate shut there locks out the whole field
+      // team on iPhones — and it buys nothing, because /orders is currently
+      // readable by anyone with the link anyway (see database.rules.json).
+      // So on that one platform, and only while the client ID is unset, fall
+      // back to the name-picker the app used before the Google gate existed.
+      // The moment the client ID is saved, this path stops being taken.
+      _gisBypassCheck();
       _authShow('signin');
-      // Put the working button up front rather than waiting for the user to
-      // press one that cannot work on this device.
       if (_needsGis()) setTimeout(() => { _gisSignIn().catch(() => {}); }, 300);
     }
     return;
