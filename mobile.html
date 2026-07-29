@@ -2278,7 +2278,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-31-p';
+const APP_BUILD     = '2026-07-31-r';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -10261,7 +10261,11 @@ function _rtdbWatchFieldReports() {
   });
 
   const publish = () => {
-    const out = [..._FR._main, ..._FR._legacy].sort((a, b) => b.ts - a.ts);
+    // Both buckets are read here, and either listener can fire before the other
+    // is initialised — Firebase delivers cached data synchronously, so the
+    // /issueReports callback can land while _FR._main is still undefined and
+    // the spread throws. Default them at the point of use.
+    const out = [...(_FR._main || []), ...(_FR._legacy || [])].sort((a, b) => (b.ts || 0) - (a.ts || 0));
     _FR.list = out;
     _FR.loaded = true;
     _frIndex = null;          // rebuilt lazily on next read
@@ -10271,6 +10275,7 @@ function _rtdbWatchFieldReports() {
   // Reports briefly went to /issueReports before that path turned out to need a
   // rules change nobody had made. A handful may have got through from devices
   // that were on that build — read them too rather than losing them.
+  _FR._main = [];
   _FR._legacy = [];
   _rtdbDB.ref('/issueReports').on('value', snap => {
     const all = snap.val() || {};

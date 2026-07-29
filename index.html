@@ -2055,7 +2055,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-31-p';
+const APP_BUILD = '2026-07-31-r';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4456,18 +4456,43 @@ function _isSubbieName(n) {
   return !!w && !w.toUpperCase().startsWith('SK_');
 }
 
+// Orders reconstructed from the document index, for anything the mirror has
+// not caught up with. Keeps a file visible to the person it was sent to even if
+// the order itself has not synced across yet.
+function _docOrdersFromFiles(me) {
+  const out = [];
+  Object.keys(_docs || {}).forEach(oid => {
+    const any = Object.values(_docs[oid] || {})[0];
+    if (!any) return;
+    if (me && _subbieKey(any.subbies) !== me) return;
+    out.push({ id: oid, orderNumber: any.orderNumber || '', address: any.address || '',
+               area: any.area || '', prn: any.prn || '', subbies: any.subbies || '' });
+  });
+  return out;
+}
+
 function _docOrders() {
   if (window._SUBBIE_VIEW) {
     // A subcontractor has no local order database — this app's data comes from
     // the office's Apps Script sheet, which they are not on. Read the mirror
     // instead, which is exactly the set of orders assigned to them.
-    return _subbieMirror || [];
+    const me = _subbieKey(window._SUBBIE_NAME);
+    const mirror = _subbieMirror || [];
+    const seen = new Set(mirror.map(o => o.id));
+    const extra = _docOrdersFromFiles(me).filter(o => !seen.has(o.id));
+    return mirror.concat(extra);
   }
   // Finished work does not need a document drop, and dropping it keeps the
   // list to the week or so of live orders this is actually for.
   const DONE = ['closed', 'cancelled', 'paid'];
-  return (DB.orders || []).filter(o =>
+  const live = (DB.orders || []).filter(o =>
     o && o.id && _isSubbieName(o.subbies) && !DONE.includes(o.status || ''));
+  // An order that has been closed off still shows here while it holds files, so
+  // paperwork never disappears before someone has taken it.
+  const seen = new Set(live.map(o => o.id));
+  const held = _docOrdersFromFiles(null)
+    .filter(o => !seen.has(o.id) && _isSubbieName(o.subbies));
+  return live.concat(held);
 }
 
 // One listener, only for the subcontractor view.
@@ -4705,33 +4730,91 @@ async function docUpload(orderId, files) {
     // "invoice.pdf" on the same order must not overwrite each other.
     const safe = (f.name || 'file').replace(/[^\w.\-]+/g, '_').slice(-80);
     const path = 'docs/' + orderId + '/' + key + '_' + safe;
+
+    // A 100 MB file over site internet is minutes, not seconds. Without a
+    // progress bar people assume it failed and press upload again.
+    const row = _docProgressRow(orderId, f.name, f.size);
     try {
-      toast(`${f.name} 업로드 중…`, 'success');
-      const ref = st.ref(path);
-      await ref.put(f);
-      const url = await ref.getDownloadURL();
-      await db.ref('/docs/' + orderId + '/' + key).set({
-        name: f.name || safe, size: f.size || 0, url, path, by: who, at: Date.now()
+      const task = st.ref(path).put(f);
+      await new Promise((resolve, reject) => {
+        task.on('state_changed',
+          snap => _docProgressSet(row, snap.bytesTransferred / (snap.totalBytes || 1)),
+          reject,
+          resolve);
       });
-      toast(`${f.name} 업로드 완료`, 'success');
+      const url = await task.snapshot.ref.getDownloadURL();
+      // The order's own details ride along with the file. Without them the
+      // subcontractor's list can only show a document if their order happens to
+      // be in the mirror — and a file they cannot see is a file that does not
+      // exist as far as they are concerned.
+      const src = (_docOrders().find(o => o.id === orderId)) || {};
+      await db.ref('/docs/' + orderId + '/' + key).set({
+        name: f.name || safe, size: f.size || 0, url, path, by: who, at: Date.now(),
+        orderNumber: src.orderNumber || '', address: src.address || '',
+        area: src.area || '', prn: src.prn || '', subbies: src.subbies || ''
+      });
+      _docProgressDone(row, true);
     } catch (e) {
       console.error('[DOC] upload failed:', e);
-      // storage/unauthorized means the rules were never published — retrying
-      // will fail identically, so say what actually has to happen.
+      _docProgressDone(row, false, e.code || e.message);
       if (/unauthorized|permission/i.test(e.code || e.message || '')) {
-        toast(`${f.name} — Storage 규칙이 게시되지 않았습니다`, 'error');
         if (!window._docRulesWarned) {
           window._docRulesWarned = true;
           alert('파일 업로드가 Storage 규칙에 막혔습니다.\n\n' +
-                'Firebase Console → Storage → Rules 에 storage.rules 내용을 붙여넣고 [게시] 하세요.\n\n' +
-                '이 창은 한 번만 표시됩니다.');
+                'Firebase Console → Storage → Rules 에 storage.rules 내용을 붙여넣고 [게시] 하세요.');
         }
         break;   // the rest will fail the same way
       }
-      toast(`${f.name} 실패: ${e.code || e.message}`, 'error');
     }
   }
   renderFilesPage();
+}
+
+// ── Upload progress, shown bottom-right so it survives a re-render ──
+function _docProgressHost() {
+  let h = document.getElementById('doc-progress');
+  if (!h) {
+    h = document.createElement('div');
+    h.id = 'doc-progress';
+    h.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:9500;display:flex;' +
+      'flex-direction:column;gap:8px;width:290px;max-height:60vh;overflow-y:auto';
+    document.body.appendChild(h);
+  }
+  return h;
+}
+function _docProgressRow(orderId, name, size) {
+  const row = document.createElement('div');
+  row.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;' +
+    'padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.12);font-size:12px';
+  row.innerHTML =
+    `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+       <span class="dp-icon">&#8593;</span>
+       <span class="dp-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</span>
+       <span class="dp-pct" style="color:var(--text3);font-size:11px">0%</span>
+     </div>
+     <div style="height:4px;background:var(--cream2);border-radius:2px;overflow:hidden">
+       <div class="dp-bar" style="height:100%;width:0;background:var(--accent);transition:width .2s"></div>
+     </div>
+     <div class="dp-sub" style="font-size:10.5px;color:var(--text3);margin-top:5px">${docSize(size)}</div>`;
+  _docProgressHost().appendChild(row);
+  return row;
+}
+function _docProgressSet(row, ratio) {
+  const p = Math.round(Math.min(1, Math.max(0, ratio)) * 100);
+  row.querySelector('.dp-bar').style.width = p + '%';
+  row.querySelector('.dp-pct').textContent = p + '%';
+}
+function _docProgressDone(row, ok, err) {
+  row.querySelector('.dp-icon').innerHTML = ok ? '&#10003;' : '&#10007;';
+  row.querySelector('.dp-icon').style.color = ok ? 'var(--green)' : 'var(--red)';
+  row.querySelector('.dp-bar').style.width = '100%';
+  row.querySelector('.dp-bar').style.background = ok ? 'var(--green)' : 'var(--red)';
+  row.querySelector('.dp-pct').textContent = ok ? '완료' : '실패';
+  if (!ok && err) row.querySelector('.dp-sub').textContent = err;
+  // Successes clear themselves; failures stay until dismissed, because the
+  // reason is the useful part.
+  if (ok) setTimeout(() => row.remove(), 3500);
+  else row.onclick = () => row.remove();
 }
 
 async function docDelete(orderId, key) {
@@ -4819,12 +4902,22 @@ function renderMainLabel() {
 // full is that day already", and a number answers it without the noise.
 // Cancelled orders are excluded; they are not work.
 function calOrderCounts() {
-  const map = {};
+  const map = {};                 // date -> { total, byArea: {CA1: 3, ...} }
   (DB.orders || []).forEach(o => {
     if (!o || !o.orderDate || o.status === 'cancelled') return;
-    map[o.orderDate] = (map[o.orderDate] || 0) + 1;
+    const d = map[o.orderDate] || (map[o.orderDate] = { total: 0, byArea: {} });
+    d.total++;
+    const a = (o.area || '').trim() || '—';
+    d.byArea[a] = (d.byArea[a] || 0) + 1;
   });
   return map;
+}
+
+// Areas sorted by their number (CA1, CA2, CA3, CA9, CA10, CA11) rather than as
+// text, which would put CA10 and CA11 before CA2.
+function _areaOrder(a) {
+  const m = /^CA(\d+)$/i.exec(a);
+  return m ? parseInt(m[1], 10) : 999;
 }
 
 function renderMonthView() {
@@ -4850,19 +4943,37 @@ function renderMonthView() {
     const isCurrentMonth = cur.getMonth() === calCursor.getMonth();
     const isWeekend = cur.getDay() === 0 || cur.getDay() === 6;
     const isHoliday = AEST_HOLIDAYS.includes(ds);
-    const dayEvents = events.filter(e => e.startDate <= ds && calEventEnd(e) >= ds).slice(0, 4);
+    const dayEvents = events.filter(e => e.startDate <= ds && calEventEnd(e) >= ds).slice(0, 3);
+    const oc = orderCounts[ds];
 
-    html += `<div onclick="calDayClick('${ds}')" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;min-height:90px;cursor:pointer;background:${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'};transition:background 0.1s" onmouseover="this.style.background='rgba(79,126,248,0.05)'" onmouseout="this.style.background='${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'}'">
+    html += `<div onclick="calDayClick('${ds}')" style="border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;min-height:104px;cursor:pointer;background:${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'};transition:background 0.1s" onmouseover="this.style.background='rgba(79,126,248,0.05)'" onmouseout="this.style.background='${isToday?'rgba(79,126,248,0.08)':isWeekend?'rgba(0,0,0,0.08)':'transparent'}'">
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
         <span style="font-size:12px;font-weight:${isToday?'800':'500'};color:${isToday?'#fff':isCurrentMonth?'var(--text)':'var(--text3)'};${isToday?'background:var(--gold);border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;':''}line-height:1">${cur.getDate()}</span>
         ${isHoliday ? `<span style="font-size:9px;color:var(--red);font-weight:700">PH</span>` : ''}
-        ${orderCounts[ds] ? `<span title="${orderCounts[ds]} orders on this day" style="margin-left:auto;font-size:9.5px;font-weight:700;color:var(--gold-dark);background:rgba(201,168,76,0.16);border-radius:9px;padding:1px 6px;line-height:1.5">${orderCounts[ds]}</span>` : ''}
+        ${oc ? `<span title="${oc.total} orders" style="margin-left:auto;font-size:9.5px;font-weight:800;color:var(--gold-dark);background:rgba(201,168,76,0.16);border-radius:9px;padding:1px 6px;line-height:1.5">${oc.total}</span>` : ''}
       </div>
-      ${dayEvents.map(e => {
-        const cat = CAL_CATS[e.category] || CAL_CATS.general;
-        return `<div onclick="event.stopPropagation();openCalEventModal('${e._baseId || e.id}')" style="font-size:10px;padding:2px 6px;border-radius:3px;margin-bottom:2px;background:${cat.color}22;color:${cat.color};border-left:2px solid ${cat.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="${esc(e.title)}">${esc(e.title)}</div>`;
-      }).join('')}
-      ${dayEvents.length === 4 ? `<div style="font-size:9px;color:var(--text3)">+ more</div>` : ''}
+
+      <!-- Split cell: schedule on the left, the day's order load by area on the
+           right. Only a few events land on any one day, so the space is better
+           spent showing where the work actually is. Days with no orders keep
+           the right side empty rather than printing a row of zeroes. -->
+      <div style="display:flex;gap:5px;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          ${dayEvents.map(e => {
+            const cat = CAL_CATS[e.category] || CAL_CATS.general;
+            return `<div onclick="event.stopPropagation();openCalEventModal('${e._baseId || e.id}')" style="font-size:10px;padding:2px 5px;border-radius:3px;margin-bottom:2px;background:${cat.color}22;color:${cat.color};border-left:2px solid ${cat.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="${esc(e.title)}">${esc(e.title)}</div>`;
+          }).join('')}
+          ${dayEvents.length === 3 ? `<div style="font-size:9px;color:var(--text3)">+ more</div>` : ''}
+        </div>
+        ${oc ? `<div style="width:46%;flex-shrink:0;display:flex;flex-direction:column;gap:2px">
+          ${Object.keys(oc.byArea).sort((a,b)=>_areaOrder(a)-_areaOrder(b)).slice(0,5).map(a =>
+            `<div style="display:flex;align-items:center;gap:4px;font-size:9.5px;line-height:1.45">
+               <span style="flex:1;min-width:0;color:var(--text3);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a)}</span>
+               <span style="font-weight:800;color:var(--gold-dark);background:rgba(201,168,76,0.14);border-radius:7px;padding:0 5px;min-width:16px;text-align:center">${oc.byArea[a]}</span>
+             </div>`).join('')}
+          ${Object.keys(oc.byArea).length > 5 ? `<div style="font-size:8.5px;color:var(--text3);text-align:right">+${Object.keys(oc.byArea).length-5}</div>` : ''}
+        </div>` : ''}
+      </div>
     </div>`;
     cur = calAddDays(cur, 1);
   }
@@ -10779,7 +10890,11 @@ function _rtdbWatchFieldReports() {
   });
 
   const publish = () => {
-    const out = [..._FR._main, ..._FR._legacy].sort((a, b) => b.ts - a.ts);
+    // Both buckets are read here, and either listener can fire before the other
+    // is initialised — Firebase delivers cached data synchronously, so the
+    // /issueReports callback can land while _FR._main is still undefined and
+    // the spread throws. Default them at the point of use.
+    const out = [...(_FR._main || []), ...(_FR._legacy || [])].sort((a, b) => (b.ts || 0) - (a.ts || 0));
     _FR.list = out;
     _FR.loaded = true;
     _frIndex = null;          // rebuilt lazily on next read
@@ -10789,6 +10904,7 @@ function _rtdbWatchFieldReports() {
   // Reports briefly went to /issueReports before that path turned out to need a
   // rules change nobody had made. A handful may have got through from devices
   // that were on that build — read them too rather than losing them.
+  _FR._main = [];
   _FR._legacy = [];
   _rtdbDB.ref('/issueReports').on('value', snap => {
     const all = snap.val() || {};
