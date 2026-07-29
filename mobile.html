@@ -249,11 +249,11 @@ async function hardReload() {
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --gold:        #C9A84C;
-  --gold-light:  #E8C96A;
-  --gold-dark:   #7A5C10;
-  --gold-bg:     #FBF7EE;
-  --gold-border: rgba(201,168,76,0.35);
+  --gold:        #E0AC28;
+  --gold-light:  #F5D682;
+  --gold-dark:   #96690A;
+  --gold-bg:     #FEFAEF;
+  --gold-border: rgba(224,172,40,0.42);
   --black:       #1C1C1E;
   --cream:       #F2F1EC;
   --cream2:      #EAEAE5;
@@ -293,7 +293,9 @@ body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(
 /* ── Sidebar ── */
 .logo { padding: 22px 20px 18px; border-bottom: 1px solid rgba(255,255,255,0.07); }
 .logo-mark { display: flex; align-items: baseline; gap: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px; line-height: 1; }
-.logo-sk   { color: var(--gold); font-style: italic; }
+.logo-sk   { font-style: italic;
+  background: linear-gradient(135deg,#F7DC8A 0%,#E0AC28 45%,#B8860B 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
 .logo-on   { color: #fff; }
 .logo-time { color: #fff; }
 .logo-sub  { font-size: 9px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-top: 5px; }
@@ -301,7 +303,7 @@ body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(
 nav { flex: 1; padding: 10px 0; overflow-y: auto; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 20px; cursor: pointer; color: rgba(255,255,255,0.45); transition: all 0.15s; border-left: 3px solid transparent; font-size: 13px; font-weight: 500; margin: 1px 0; }
 .nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
-.nav-item.active { background: rgba(201,168,76,0.15); color: var(--gold-light); border-left-color: var(--gold); }
+.nav-item.active { background: rgba(224,172,40,0.18); color: var(--gold-light); border-left-color: var(--gold); }
 .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
 .nav-item.active svg { opacity: 1; }
 .nav-badge { margin-left: auto; background: var(--red); color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 10px; font-weight: 700; }
@@ -323,7 +325,7 @@ nav { flex: 1; padding: 10px 0; overflow-y: auto; }
 
 /* ── Buttons ── */
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 7px; border: 1px solid transparent; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; font-family: inherit; }
-.btn-primary { background: var(--gold); color: #fff; border-color: #A8862E; }
+.btn-primary { background: linear-gradient(180deg,#F0C44E,#D99F1C); color: #3D2E00; border-color: #A8862E; }
 .btn-primary:hover { background: #B8962A; }
 .btn-secondary { background: var(--surface); color: var(--text2); border: 1px solid var(--border2); }
 .btn-secondary:hover { background: var(--cream2); color: var(--text); }
@@ -410,7 +412,7 @@ textarea.form-control { resize: vertical; min-height: 72px; }
 /* ── Period tabs ── */
 .period-tabs { display: flex; background: var(--cream2); border-radius: 7px; padding: 3px; border: 1px solid var(--border); }
 .period-tab { padding: 5px 14px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text3); transition: all 0.15s; }
-.period-tab.active { background: var(--gold); color: #fff; box-shadow: 0 1px 4px rgba(201,168,76,0.35); }
+.period-tab.active { background: linear-gradient(180deg,#F0C44E,#D99F1C); color: #3D2E00; box-shadow: 0 1px 4px rgba(224,172,40,0.42); }
 
 /* ── Empty state ── */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
@@ -683,7 +685,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 <div id="auth-gate" style="display:flex;position:fixed;inset:0;z-index:100001;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;padding-top:calc(28px + env(safe-area-inset-top))">
   <div style="text-align:center;margin-bottom:32px">
     <img src="icon-192.png" alt="" width="66" height="66" style="border-radius:16px;margin-bottom:14px">
-    <div style="font-size:24px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#C9A84C">ON</span>TIME</div>
+    <div style="font-size:24px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#E0AC28">ON</span>TIME</div>
     <div id="auth-gate-sub" style="font-size:10.5px;color:rgba(255,255,255,0.42);letter-spacing:1.4px;text-transform:uppercase;margin-top:5px">Homes NSW · Field Ops</div>
   </div>
 
@@ -704,7 +706,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
   </div>
 
   <div id="auth-busy" style="display:none;text-align:center;color:rgba(255,255,255,0.55);font-size:13px">
-    <div style="width:26px;height:26px;border:2.5px solid rgba(255,255,255,0.16);border-top-color:#C9A84C;border-radius:50%;margin:0 auto 12px;animation:authSpin .8s linear infinite"></div>
+    <div style="width:26px;height:26px;border:2.5px solid rgba(255,255,255,0.16);border-top-color:#E0AC28;border-radius:50%;margin:0 auto 12px;animation:authSpin .8s linear infinite"></div>
     <span id="auth-busy-text">Checking…</span>
   </div>
 </div>
@@ -746,7 +748,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
          off a phone in the morning is what is already booked. -->
     <div id="mob-entry-upcoming" style="display:none;width:100%;max-width:320px;background:#fff;border:1px solid #E5E5E0;border-radius:14px;overflow:hidden;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:7px;padding:10px 14px;border-bottom:1px solid #F0F0EC">
-        <i class="ti ti-calendar-event" style="font-size:15px;color:#C9A84C"></i>
+        <i class="ti ti-calendar-event" style="font-size:15px;color:#E0AC28"></i>
         <span style="font-size:12px;font-weight:700;color:#1C1C1E;flex:1">Upcoming events</span>
         <span id="mob-entry-upcoming-count" style="font-size:11px;color:#8A8A8E"></span>
       </div>
@@ -795,7 +797,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 
     <div id="mob-lock-bio" style="display:none;text-align:center;margin-bottom:18px">
       <button onclick="mobTryBiometric(true)" style="width:70px;height:70px;border-radius:50%;border:2px solid rgba(201,168,76,.55);background:rgba(201,168,76,.10);display:flex;align-items:center;justify-content:center;margin:0 auto 8px">
-        <i class="ti ti-face-id" style="font-size:31px;color:#C9A84C"></i>
+        <i class="ti ti-face-id" style="font-size:31px;color:#E0AC28"></i>
       </button>
       <div style="font-size:11.5px;color:#8A8A8E">Face ID / Fingerprint</div>
     </div>
@@ -961,7 +963,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span class="dl-i" style="background:#F1F5F9"><i class="ti ti-lock" style="color:#64748B"></i></span>Closed
     </div>
     <div class="mob-dl" onclick="openNotifSheet();mobDrawerClose()">
-      <span class="dl-i" style="background:#FEF3C7"><i class="ti ti-bell" style="color:#C9A84C"></i></span>내 알림
+      <span class="dl-i" style="background:#FEF3C7"><i class="ti ti-bell" style="color:#E0AC28"></i></span>내 알림
       <span id="mob-notif-badge" style="display:none;margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#DC2626;color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;line-height:1">0</span>
     </div>
     <div class="mob-dl" onclick="mobDrawerClose();openFieldReports()">
@@ -996,7 +998,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span style="flex:1">Background alert check</span>
     </div>
     <div class="mob-dl" onclick="showNotifDiagnostics();mobDrawerClose()">
-      <span class="dl-i" style="background:#FEF3C7"><i class="ti ti-bell-question" style="color:#C9A84C"></i></span>
+      <span class="dl-i" style="background:#FEF3C7"><i class="ti ti-bell-question" style="color:#E0AC28"></i></span>
       <span style="flex:1">Notification check</span>
     </div>
     <div class="mob-dl" onclick="testNotification();mobDrawerClose()">
@@ -2281,7 +2283,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-01-b';
+const APP_BUILD     = '2026-08-01-f';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -2303,8 +2305,8 @@ const DEFAULT_UI_LABELS = {
 };
 
 const DEFAULT_UI_COLORS = {
-  accent: '#C9A84C',       // main brand/accent color — buttons, active states, calendar "today", focus rings
-  badgeOrders: '#E8C96A', badgeCompleted: '#FACC15', badgeClaims: '#F97316', badgeIssues: '#DC2626',
+  accent: '#E0AC28',       // main brand/accent color — buttons, active states, calendar "today", focus rings
+  badgeOrders: '#F5D682', badgeCompleted: '#FACC15', badgeClaims: '#F97316', badgeIssues: '#DC2626',
   // Closed/Cancelled badges stay intentionally plain (no color) — that was a deliberate
   // de-emphasis decision earlier, not exposed here on purpose.
 };
@@ -4316,7 +4318,7 @@ function renderSupList() {
               <div style="font-size:12px;color:var(--gold-dark)">&#9993; ${esc(s.email)}</div>
             </div>
             <div style="margin-top:6px;display:flex;gap:6px">
-              <a href="mailto:${esc(s.email)}" style="flex:1;text-align:center;padding:5px 0;border-radius:6px;background:var(--gold);color:#fff;font-size:11px;font-weight:600;text-decoration:none">&#128231; Email</a>
+              <a href="mailto:${esc(s.email)}" style="flex:1;text-align:center;padding:5px 0;border-radius:6px;background:linear-gradient(180deg,#F0C44E,#D99F1C);color:#3D2E00;font-size:11px;font-weight:600;text-decoration:none">&#128231; Email</a>
               <button class="btn btn-sm" style="font-size:11px;padding:5px 8px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer" onclick="openEditSupervisor(${s._idx})">&#9998;</button>
               <button class="btn btn-sm btn-danger" style="font-size:11px;padding:5px 8px" onclick="deleteSupervisor(${s._idx})">&#10005;</button>
             </div>
@@ -4747,7 +4749,7 @@ function renderMiniCalendar() {
     const isToday = ds === today;
     const hasEv = events.some(e => e.startDate <= ds && calEventEnd(e) >= ds);
     const inMonth = cur.getMonth() === calMiniCursor.getMonth();
-    html += `<div onclick="calMiniClick('${ds}')" style="padding:3px 0;cursor:pointer;text-align:center;border-radius:50%;${isToday?'background:var(--gold);color:#fff;font-weight:800;':''}${!inMonth?'color:var(--text3);':'color:var(--text);'}${hasEv&&!isToday?'font-weight:700;':''}font-size:11px;position:relative">
+    html += `<div onclick="calMiniClick('${ds}')" style="padding:3px 0;cursor:pointer;text-align:center;border-radius:50%;${isToday?'background:linear-gradient(180deg,#F0C44E,#D99F1C);color:#3D2E00;font-weight:800;':''}${!inMonth?'color:var(--text3);':'color:var(--text);'}${hasEv&&!isToday?'font-weight:700;':''}font-size:11px;position:relative">
       ${cur.getDate()}${hasEv&&!isToday?'<span style="position:absolute;bottom:1px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--accent);display:block"></span>':''}
     </div>`;
     cur = calAddDays(cur, 1);
@@ -7282,7 +7284,7 @@ function _mobTrendCard() {
 
   const btn = (m, label) => `<button onclick="mobTrendMetric('${m}')"
     style="padding:4px 10px;border:none;border-radius:7px;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer;
-    background:${_mobTrendMetric===m?'var(--accent)':'transparent'};color:${_mobTrendMetric===m?'#fff':'var(--text3)'}">${label}</button>`;
+    background:${_mobTrendMetric===m?'linear-gradient(180deg,#F0C44E,#D99F1C)':'transparent'};color:${_mobTrendMetric===m?'#3D2E00':'var(--text3)'}">${label}</button>`;
 
   return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -7298,7 +7300,9 @@ function _mobTrendCard() {
         return `<div onclick="mobPickPeriod(${p.back})" style="flex:1;min-width:0;display:flex;flex-direction:column;
           align-items:center;justify-content:flex-end;height:100%;cursor:pointer">
           <span style="font-size:9px;font-weight:700;color:${on?'var(--accent)':'var(--text3)'};margin-bottom:2px;white-space:nowrap">${val(p)?fmt(val(p)):''}</span>
-          <span style="width:100%;height:${h}px;border-radius:3px 3px 0 0;background:${on?'var(--accent)':'var(--border2)'}"></span>
+          <span style="width:100%;height:${h}px;border-radius:3px 3px 0 0;background:${on
+            ? 'linear-gradient(180deg,#F5D682 0%,#E0AC28 55%,#C79318 100%)'
+            : 'var(--border2)'};box-shadow:${on?'0 1px 3px rgba(224,172,40,.45)':'none'}"></span>
           <span style="font-size:8.5px;color:${on?'var(--accent)':'var(--text3)'};font-weight:${on?'800':'600'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${esc(p.label)}</span>
         </div>`;
       }).join('')}
@@ -7331,7 +7335,7 @@ function _mobCompareCard() {
 
   const btn = (m, label) => `<button onclick="mobDashMode('${m}')"
     style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;
-    background:${_mobDashMode===m?'var(--accent)':'transparent'};color:${_mobDashMode===m?'#fff':'var(--text3)'}">${label}</button>`;
+    background:${_mobDashMode===m?'linear-gradient(180deg,#F0C44E,#D99F1C)':'transparent'};color:${_mobDashMode===m?'#3D2E00':'var(--text3)'}">${label}</button>`;
 
   return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -7379,7 +7383,7 @@ function _mobAreaCard() {
       return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0">
         <span style="width:42px;flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--text2)">${esc(a)}</span>
         <span style="flex:1;min-width:0">
-          <span style="display:block;height:7px;border-radius:4px;background:var(--accent);width:${Math.round(n/max*100)}%;min-width:${n?'3px':'0'}"></span>
+          <span style="display:block;height:7px;border-radius:4px;background:linear-gradient(90deg,#E0AC28,#F5D682);width:${Math.round(n/max*100)}%;min-width:${n?'3px':'0'}"></span>
           <span style="display:block;height:4px;border-radius:3px;background:var(--border2);width:${Math.round(p/max*100)}%;min-width:${p?'3px':'0'};margin-top:2px"></span>
         </span>
         <span style="width:52px;flex-shrink:0;text-align:right;font-size:11.5px">
@@ -8031,9 +8035,9 @@ function mobRenderEntryUpcoming() {
     const isToday = e.startDate === todayStr;
     return `<div onclick="mobEntryEvent(${idx})" style="display:flex;gap:10px;padding:9px 14px;border-bottom:1px solid #F0F0EC;align-items:center;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.05)">
       <div style="width:36px;text-align:center;flex-shrink:0">
-        <div style="font-size:9px;font-weight:700;color:${isToday ? '#C9A84C' : '#8A8A8E'};text-transform:uppercase">
+        <div style="font-size:9px;font-weight:700;color:${isToday ? '#E0AC28' : '#8A8A8E'};text-transform:uppercase">
           ${isToday ? 'Today' : d.toLocaleDateString('en-AU', { weekday: 'short' })}</div>
-        <div style="font-size:15px;font-weight:800;line-height:1.15;color:${isToday ? '#C9A84C' : '#1C1C1E'}">${d.getDate()}</div>
+        <div style="font-size:15px;font-weight:800;line-height:1.15;color:${isToday ? '#E0AC28' : '#1C1C1E'}">${d.getDate()}</div>
       </div>
       <div style="flex:1;min-width:0;border-left:3px solid ${cat.color};padding-left:9px">
         <div style="font-size:12.5px;font-weight:600;color:#1C1C1E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
@@ -8325,7 +8329,29 @@ function mobPinSkip() {
   mobRefresh();
 }
 
-const _SK_NAMES = ['SK_Jacob', 'SK_Mo', 'SK_June', 'SK_Jay'];
+// Fallback only. The real list is the allow-list — hard-coding it meant adding
+// SK_TK to the accounts screen changed nothing here, and the person could sign
+// in but had no name to pick.
+const _SK_NAMES_FALLBACK = ['SK_Jacob', 'SK_Mo', 'SK_June', 'SK_Jay'];
+
+// Cached copy so the picker still works before the database answers, and
+// offline. Refreshed every time the allow-list is read.
+function _skNames() {
+  let cached = [];
+  try { cached = JSON.parse(lsGet('hom_sk_names') || '[]'); } catch (e) {}
+  return cached.length ? cached : _SK_NAMES_FALLBACK.slice();
+}
+
+// Everyone on the allow-list who is not a subcontractor. Sorted, deduped.
+function _cacheStaffNames(all) {
+  const names = Object.values(all || {})
+    .filter(u => u && u.name && (u.role || '') !== 'subbie')
+    .map(u => String(u.name).trim())
+    .filter(Boolean);
+  const uniq = [...new Set(names)].sort();
+  if (uniq.length) { try { lsSet('hom_sk_names', JSON.stringify(uniq)); } catch (e) {} }
+  return uniq;
+}
 
 function mobShowSkPicker() {
   document.getElementById('mob-pin-entry').style.display = 'none';
@@ -8335,9 +8361,9 @@ function mobShowSkPicker() {
     // Admin (All Orders) option at top
     const adminRow = document.createElement('div');
     adminRow.setAttribute('data-skname', 'admin');
-    adminRow.style.cssText = 'display:flex;align-items:center;gap:14px;padding:14px 16px;background:#fff;border:1.5px solid #C9A84C;border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0.05);user-select:none;';
+    adminRow.style.cssText = 'display:flex;align-items:center;gap:14px;padding:14px 16px;background:#fff;border:1.5px solid #E0AC28;border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0.05);user-select:none;';
     const adminAv = document.createElement('div');
-    adminAv.style.cssText = 'width:42px;height:42px;border-radius:50%;background:#1C1C1E;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#C9A84C;flex-shrink:0;pointer-events:none';
+    adminAv.style.cssText = 'width:42px;height:42px;border-radius:50%;background:#1C1C1E;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#E0AC28;flex-shrink:0;pointer-events:none';
     adminAv.textContent = 'ALL';
     const adminLbl = document.createElement('div');
     adminLbl.style.cssText = 'pointer-events:none';
@@ -8346,7 +8372,7 @@ function mobShowSkPicker() {
     adminRow.appendChild(adminLbl);
     listEl.appendChild(adminRow);
 
-    _SK_NAMES.forEach(function(name) {
+    _skNames().forEach(function(name) {
       const bare = name.replace(/^SK_/,'');
       const parts = bare.split(' ');
       const initials = parts.length > 1 ? (parts[0][0]+parts[parts.length-1][0]).toUpperCase() : bare.slice(0,2).toUpperCase();
@@ -8743,7 +8769,7 @@ function _openOrderFromNotification(orderId) {
     if (row) {
       row.scrollIntoView({ behavior: 'smooth', block: 'center' });
       row.style.transition = 'box-shadow .3s';
-      row.style.boxShadow = 'inset 0 0 0 2px #C9A84C';
+      row.style.boxShadow = 'inset 0 0 0 2px #E0AC28';
       setTimeout(() => { row.style.boxShadow = ''; }, 2500);
     }
   }, 300);
@@ -8766,7 +8792,7 @@ function _showInAppBanner(html, orderId) {
   while (host.children.length >= 3) host.removeChild(host.firstChild);
 
   const card = document.createElement('div');
-  card.style.cssText = 'pointer-events:auto;position:relative;background:#fff;border-left:4px solid #C9A84C;' +
+  card.style.cssText = 'pointer-events:auto;position:relative;background:#fff;border-left:4px solid #E0AC28;' +
     'border-radius:12px;padding:12px 34px 12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.18);' +
     'font-size:13px;color:#222;animation:notifSlide .25s ease-out';
   card.innerHTML = html +
@@ -8861,7 +8887,7 @@ function renderNotifSheet() {
                       : `${esc(n.area)} · $${Number(n.amount||0).toFixed(2)} · ${_timeAgo(n.at)}`;
     return `<div onclick="${click}"
       style="padding:13px 16px;border-bottom:1px solid #eee;display:flex;gap:10px;align-items:flex-start;background:${n.read ? 'transparent' : 'rgba(201,168,76,.08)'}">
-      <span style="width:7px;height:7px;border-radius:50%;background:${n.read ? 'transparent' : (isEv?'#8B5CF6':'#C9A84C')};margin-top:5px;flex-shrink:0"></span>
+      <span style="width:7px;height:7px;border-radius:50%;background:${n.read ? 'transparent' : (isEv?'#8B5CF6':'#E0AC28')};margin-top:5px;flex-shrink:0"></span>
       <div style="flex:1;min-width:0">
         ${title}
         <div style="font-size:12px;color:#555;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n.address)}</div>
@@ -9223,6 +9249,12 @@ async function _authOnStateChanged(user) {
   try {
     const key  = _emailKey(user.email);
     const snap = await AUTH.db.ref('/allowedUsers/' + key).once('value');
+    // Refresh the staff picker list while we are here — one read, and it keeps
+    // the name list in step with the accounts screen without anyone thinking
+    // about it.
+    AUTH.db.ref('/allowedUsers').once('value')
+      .then(a => { try { _cacheStaffNames(a.val() || {}); } catch (e) {} })
+      .catch(() => {});
 
     if (!snap.exists()) {
       _authRecordError({ stage: 'not-on-allow-list', key, email: user.email });
@@ -9377,6 +9409,7 @@ async function authDiagnose() {
     row('Lookup key', key, null);
     try {
       const all  = await AUTH.db.ref('/allowedUsers').once('value');
+      try { _cacheStaffNames(all.val() || {}); } catch (e) {}
       const keys = Object.keys(all.val() || {});
       row('Allow-list read', 'OK — ' + keys.length + '', true);
       row('Key match', keys.includes(key) ? 'match ✓' : 'mismatch', keys.includes(key));

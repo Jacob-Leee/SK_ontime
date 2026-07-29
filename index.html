@@ -81,11 +81,11 @@ async function hardReload() {
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --gold:        #C9A84C;
-  --gold-light:  #E8C96A;
-  --gold-dark:   #7A5C10;
-  --gold-bg:     #FBF7EE;
-  --gold-border: rgba(201,168,76,0.35);
+  --gold:        #E0AC28;
+  --gold-light:  #F5D682;
+  --gold-dark:   #96690A;
+  --gold-bg:     #FEFAEF;
+  --gold-border: rgba(224,172,40,0.42);
   --black:       #111111;
   --cream:       #FAF8F4;
   --cream2:      #F2EDE4;
@@ -96,7 +96,7 @@ async function hardReload() {
   --border:      #E8E0D0;
   --border2:     #D6CABC;
 
-  --accent:      #C9A84C;
+  --accent:      #E0AC28;
   --green:       #15803D;
   --red:         #DC2626;
   --yellow:      #B45309;
@@ -136,7 +136,9 @@ body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(
 /* ── Sidebar ── */
 .logo { padding: 22px 20px 18px; border-bottom: 1px solid rgba(255,255,255,0.07); }
 .logo-mark { display: flex; align-items: baseline; gap: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; line-height: 1; }
-.logo-sk   { color: var(--gold); font-style: italic; }
+.logo-sk   { font-style: italic;
+  background: linear-gradient(135deg,#F7DC8A 0%,#E0AC28 45%,#B8860B 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
 .logo-on   { color: #fff; }
 .logo-time { color: #fff; }
 .logo-sub  { font-size: 9px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-top: 5px; }
@@ -144,7 +146,7 @@ body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: var(
 nav { flex: 1; padding: 10px 0; overflow-y: auto; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 20px; cursor: pointer; color: rgba(255,255,255,0.45); transition: all 0.15s; border-left: 3px solid transparent; font-size: 14px; font-weight: 500; margin: 1px 0; }
 .nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
-.nav-item.active { background: rgba(201,168,76,0.15); color: var(--gold-light); border-left-color: var(--gold); }
+.nav-item.active { background: rgba(224,172,40,0.18); color: var(--gold-light); border-left-color: var(--gold); }
 .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
 .nav-item.active svg { opacity: 1; }
 .nav-badge { margin-left: auto; background: var(--red); color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
@@ -174,7 +176,7 @@ nav { flex: 1; padding: 10px 0; overflow-y: auto; }
 
 /* ── Buttons ── */
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 7px; border: 1px solid transparent; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; font-family: inherit; }
-.btn-primary { background: var(--gold); color: #fff; border-color: #A8862E; }
+.btn-primary { background: linear-gradient(180deg,#F0C44E,#D99F1C); color: #3D2E00; border-color: #A8862E; }
 .btn-primary:hover { background: #B8962A; }
 .btn-secondary { background: var(--surface); color: var(--text2); border: 1px solid var(--border2); }
 .btn-secondary:hover { background: var(--cream2); color: var(--text); }
@@ -261,7 +263,7 @@ textarea.form-control { resize: vertical; min-height: 72px; }
 /* ── Period tabs ── */
 .period-tabs { display: flex; background: var(--cream2); border-radius: 7px; padding: 3px; border: 1px solid var(--border); }
 .period-tab { padding: 5px 14px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text3); transition: all 0.15s; }
-.period-tab.active { background: var(--gold); color: #fff; box-shadow: 0 1px 4px rgba(201,168,76,0.35); }
+.period-tab.active { background: linear-gradient(180deg,#F0C44E,#D99F1C); color: #3D2E00; box-shadow: 0 1px 4px rgba(224,172,40,0.42); }
 
 /* ── Empty state ── */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
@@ -1952,7 +1954,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 <div id="auth-gate" style="display:flex;position:fixed;inset:0;z-index:100000;background:#1C1C1E;flex-direction:column;align-items:center;justify-content:center;padding:24px">
   <div style="text-align:center;margin-bottom:34px">
     <img src="icon-192.png" alt="" width="72" height="72" style="border-radius:18px;margin-bottom:16px">
-    <div style="font-size:26px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#C9A84C">ON</span>TIME</div>
+    <div style="font-size:26px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#E0AC28">ON</span>TIME</div>
     <div id="auth-gate-sub" style="font-size:11.5px;color:rgba(255,255,255,0.42);letter-spacing:1.4px;text-transform:uppercase;margin-top:5px">Holmes Order Manager</div>
   </div>
 
@@ -1969,7 +1971,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   </div>
 
   <div id="auth-busy" style="display:none;text-align:center;color:rgba(255,255,255,0.55);font-size:13px">
-    <div style="width:26px;height:26px;border:2.5px solid rgba(255,255,255,0.16);border-top-color:#C9A84C;border-radius:50%;margin:0 auto 12px;animation:authSpin 0.8s linear infinite"></div>
+    <div style="width:26px;height:26px;border:2.5px solid rgba(255,255,255,0.16);border-top-color:#E0AC28;border-radius:50%;margin:0 auto 12px;animation:authSpin 0.8s linear infinite"></div>
     <span id="auth-busy-text">확인 중…</span>
   </div>
 
@@ -1980,7 +1982,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 <div id="lock-screen" style="display:none;position:fixed;inset:0;z-index:99999;background:var(--sidebar,#1a1a2e);flex-direction:column;align-items:center;justify-content:center;gap:0">
   <!-- Logo -->
   <div style="margin-bottom:36px;text-align:center">
-    <div style="font-size:28px;font-weight:900;letter-spacing:2px;color:#fff">SK <span style="color:#C9A84C">ON</span>TIME</div>
+    <div style="font-size:28px;font-weight:900;letter-spacing:2px;color:#fff">SK <span style="color:#E0AC28">ON</span>TIME</div>
     <div id="lock-subtitle" style="font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:1.5px;text-transform:uppercase;margin-top:4px">Holmes Order Manager</div>
   </div>
 
@@ -1989,7 +1991,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
     <button id="lock-bio-btn" onclick="tryBiometric(true)"
       style="width:88px;height:88px;border-radius:50%;border:2px solid rgba(201,168,76,0.5);background:rgba(201,168,76,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;transition:all 0.2s"
       onmouseover="this.style.background='rgba(201,168,76,0.2)'" onmouseout="this.style.background='rgba(201,168,76,0.1)'">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" stroke-width="1.5">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#E0AC28" stroke-width="1.5">
         <path d="M12 2C9.38 2 7 3.56 7 6v1c-1.5.5-2.5 2-2.5 3.5 0 2 1.5 4 2.5 5v2c0 1.1.9 2 2 2h6c1.1 0 2-.9 2-2v-2c1-1 2.5-3 2.5-5C19.5 8.56 17.12 7 15.5 7V6c0-2.44-1.5-4-3.5-4z"/>
         <circle cx="12" cy="11" r="2"/>
         <path d="M9 15c0-1.66 1.34-3 3-3s3 1.34 3 3"/>
@@ -2010,7 +2012,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
     </div>
     <div id="lock-pin-error" style="display:none;color:#ef4444;font-size:12px;margin-bottom:8px">PIN이 틀렸습니다</div>
     <button onclick="checkLockPin()"
-      style="padding:10px 32px;border-radius:10px;border:none;background:#C9A84C;color:#1a1a2e;font-weight:700;font-size:14px;cursor:pointer">
+      style="padding:10px 32px;border-radius:10px;border:none;background:#E0AC28;color:#1a1a2e;font-weight:700;font-size:14px;cursor:pointer">
       잠금해제
     </button>
   </div>
@@ -2055,7 +2057,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-b';
+const APP_BUILD = '2026-08-01-f';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2094,8 +2096,8 @@ const DEFAULT_APP_SETTINGS = {
 };
 
 const DEFAULT_UI_COLORS = {
-  accent: '#C9A84C',       // main brand/accent color — buttons, active states, calendar "today", focus rings
-  badgeOrders: '#E8C96A', badgeCompleted: '#FACC15', badgeClaims: '#F97316', badgeIssues: '#DC2626',
+  accent: '#E0AC28',       // main brand/accent color — buttons, active states, calendar "today", focus rings
+  badgeOrders: '#F5D682', badgeCompleted: '#FACC15', badgeClaims: '#F97316', badgeIssues: '#DC2626',
   badgeVac: '#4f7ef8', badgeMpw: '#a78bfa',
   // Closed/Cancelled badges stay intentionally plain (no color) — that was a deliberate
   // de-emphasis decision earlier, not exposed here on purpose.
@@ -4148,7 +4150,7 @@ function renderSupList() {
               <div style="font-size:12px;color:var(--gold-dark)">&#9993; ${esc(s.email)}</div>
             </div>
             <div style="margin-top:6px;display:flex;gap:6px">
-              <a href="mailto:${esc(s.email)}" style="flex:1;text-align:center;padding:5px 0;border-radius:6px;background:var(--gold);color:#fff;font-size:11px;font-weight:600;text-decoration:none">&#128231; Email</a>
+              <a href="mailto:${esc(s.email)}" style="flex:1;text-align:center;padding:5px 0;border-radius:6px;background:linear-gradient(180deg,#F0C44E,#D99F1C);color:#3D2E00;font-size:11px;font-weight:600;text-decoration:none">&#128231; Email</a>
               <button class="btn btn-sm" style="font-size:11px;padding:5px 8px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer" onclick="openEditSupervisor(${s._idx})">&#9998;</button>
               <button class="btn btn-sm btn-danger" style="font-size:11px;padding:5px 8px" onclick="deleteSupervisor(${s._idx})">&#10005;</button>
             </div>
@@ -4999,7 +5001,7 @@ function renderMonthView() {
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
         <span style="font-size:12px;font-weight:${isToday?'800':'500'};color:${isToday?'#fff':isCurrentMonth?'var(--text)':'var(--text3)'};${isToday?'background:var(--gold);border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;':''}line-height:1">${cur.getDate()}</span>
         ${isHoliday ? `<span style="font-size:9px;color:var(--red);font-weight:700">PH</span>` : ''}
-        ${oc ? `<span title="${oc.total} orders" style="margin-left:auto;font-size:9.5px;font-weight:800;color:var(--gold-dark);background:rgba(201,168,76,0.16);border-radius:9px;padding:1px 6px;line-height:1.5">${oc.total}</span>` : ''}
+        ${oc ? `<span title="${oc.total} orders" style="margin-left:auto;font-size:9.5px;font-weight:800;color:var(--gold-dark);background:rgba(224,172,40,0.20);border-radius:9px;padding:1px 6px;line-height:1.5">${oc.total}</span>` : ''}
       </div>
 
       <!-- Split cell: schedule on the left, the day's order load by area on the
@@ -5018,7 +5020,7 @@ function renderMonthView() {
           ${Object.keys(oc.byArea).sort((a,b)=>_areaOrder(a)-_areaOrder(b)).slice(0,5).map(a =>
             `<div style="display:flex;align-items:center;gap:4px;font-size:9.5px;line-height:1.45">
                <span style="flex:1;min-width:0;color:var(--text3);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a)}</span>
-               <span style="font-weight:800;color:var(--gold-dark);background:rgba(201,168,76,0.14);border-radius:7px;padding:0 5px;min-width:16px;text-align:center">${oc.byArea[a]}</span>
+               <span style="font-weight:800;color:var(--gold-dark);background:linear-gradient(180deg,rgba(245,214,130,.35),rgba(224,172,40,.22));border-radius:7px;padding:0 5px;min-width:16px;text-align:center">${oc.byArea[a]}</span>
              </div>`).join('')}
           ${Object.keys(oc.byArea).length > 5 ? `<div style="font-size:8.5px;color:var(--text3);text-align:right">+${Object.keys(oc.byArea).length-5}</div>` : ''}
         </div>` : ''}
@@ -5148,7 +5150,7 @@ function renderMiniCalendar() {
     const isToday = ds === today;
     const hasEv = events.some(e => e.startDate <= ds && calEventEnd(e) >= ds);
     const inMonth = cur.getMonth() === calMiniCursor.getMonth();
-    html += `<div onclick="calMiniClick('${ds}')" style="padding:3px 0;cursor:pointer;text-align:center;border-radius:50%;${isToday?'background:var(--gold);color:#fff;font-weight:800;':''}${!inMonth?'color:var(--text3);':'color:var(--text);'}${hasEv&&!isToday?'font-weight:700;':''}font-size:11px;position:relative">
+    html += `<div onclick="calMiniClick('${ds}')" style="padding:3px 0;cursor:pointer;text-align:center;border-radius:50%;${isToday?'background:linear-gradient(180deg,#F0C44E,#D99F1C);color:#3D2E00;font-weight:800;':''}${!inMonth?'color:var(--text3);':'color:var(--text);'}${hasEv&&!isToday?'font-weight:700;':''}font-size:11px;position:relative">
       ${cur.getDate()}${hasEv&&!isToday?'<span style="position:absolute;bottom:1px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--accent);display:block"></span>':''}
     </div>`;
     cur = calAddDays(cur, 1);
@@ -6165,7 +6167,7 @@ function renderOrdersTable(orders, tbodyId, emptyId, countId, moveTo) {
   const moveLabel = moveTo === 'mpw' ? '→ MPW' : '→ VAC';
   const moveBtnStyle = moveTo === 'mpw'
     ? 'background:rgba(167,139,250,0.15);color:#a78bfa;border:1px solid rgba(167,139,250,0.3)'
-    : 'background:rgba(201,168,76,0.15);color:var(--gold-light);border:1px solid rgba(201,168,76,0.3)';
+    : 'background:rgba(224,172,40,0.18);color:var(--gold-light);border:1px solid rgba(201,168,76,0.3)';
   tbody.innerHTML = orders.map(o => {
     const payment = DB.claims.find(c => c.orderNumber === o.orderNumber);
     const hasClaim2 = payment && payment.status && payment.status !== 'none';
@@ -7249,7 +7251,7 @@ function buildRevenueChart(orders, base, w) {
         label: w ? w.prevLabel+' (last yr)' : 'Last year',
         type: 'line',
         data: keys.map(k => prevG[k]||0),
-        borderColor: '#C9A84C',
+        borderColor: '#E0AC28',
         borderWidth: 2,
         borderDash: [5,3],
         pointRadius: 0,
@@ -7800,7 +7802,7 @@ function _showInAppBanner(html, orderId) {
   while (host.children.length >= 4) host.removeChild(host.firstChild);
 
   const card = document.createElement('div');
-  card.style.cssText = 'pointer-events:auto;background:var(--surface,#fff);border:1px solid var(--accent,#C9A84C);border-left:4px solid var(--accent,#C9A84C);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.18);font-size:13px;color:var(--text,#222);cursor:pointer;animation:notifSlide 0.25s ease-out';
+  card.style.cssText = 'pointer-events:auto;background:var(--surface,#fff);border:1px solid var(--accent,#E0AC28);border-left:4px solid var(--accent,#E0AC28);border-radius:10px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.18);font-size:13px;color:var(--text,#222);cursor:pointer;animation:notifSlide 0.25s ease-out';
   card.innerHTML = html;
   const kill = () => { if (card.parentNode) card.remove(); };
   card.onclick = () => { if (orderId) _openOrderFromNotification(orderId); kill(); };
@@ -9114,6 +9116,26 @@ async function loadGoogleClientId() {
   } catch (e) {}
 }
 
+// Keeps the assignment name list in step with the accounts list.
+//
+// Adding SK_TK to accounts used to change nothing else: the name never
+// appeared in the assignment dropdown or the phone's staff picker, so the
+// person could sign in but no work could be pointed at them. Two lists, one
+// of them invisible, is a trap.
+function _syncNameLists(name, action) {
+  const n = (name || '').trim();
+  if (!n) return;
+  DB.subbies = DB.subbies || [];
+  if (action === 'add') {
+    DB.removedSubbies = (DB.removedSubbies || []).filter(x => x !== n);
+    if (!DB.subbies.includes(n)) DB.subbies.push(n);
+  } else {
+    DB.subbies = DB.subbies.filter(x => x !== n);
+    DB.removedSubbies = [...new Set([...(DB.removedSubbies || []), n])];
+  }
+  save();
+}
+
 async function authAddUser() {
   const email = (document.getElementById('auth-new-email')?.value || '').trim();
   const name  = (document.getElementById('auth-new-name')?.value || '').trim();
@@ -9125,9 +9147,10 @@ async function authAddUser() {
       name: name || '', role, addedAt: Date.now(),
       addedBy: (AUTH.user && AUTH.user.email) || '',
     });
+    _syncNameLists(name, 'add');
     document.getElementById('auth-new-email').value = '';
     document.getElementById('auth-new-name').value  = '';
-    toast('✓ 추가됨: ' + email, 'success');
+    toast('✓ 추가됨: ' + email + (name ? ` — ${name} 배정 목록에도 추가` : ''), 'success');
     authLoadAllowlist();
   } catch (e) { toast('추가 Failed: ' + e.message, 'error'); }
 }
@@ -9165,9 +9188,15 @@ async function authRemoveUser(key) {
     }
   } catch (e) { /* read failed — fall through to the confirm below */ }
   if (!confirm(key.replace(/,/g, '.') + ' 계정의 접근 권한을 삭제할까요?')) return;
+  let removedName = '';
+  try {
+    const snap = await AUTH.db.ref('/allowedUsers/' + key).once('value');
+    removedName = ((snap.val() || {}).name || '').trim();
+  } catch (e) {}
   try {
     await AUTH.db.ref('/allowedUsers/' + key).remove();
-    toast('삭제됨', 'success');
+    if (removedName) _syncNameLists(removedName, 'remove');
+    toast('삭제됨' + (removedName ? ` — ${removedName} 배정 목록에서도 제거` : ''), 'success');
     authLoadAllowlist();
   } catch (e) { toast('삭제 Failed: ' + e.message, 'error'); }
 }
