@@ -648,6 +648,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 </head>
@@ -668,8 +669,11 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     <button onclick="authSignIn()" id="auth-signin-btn"
       style="width:100%;display:flex;align-items:center;justify-content:center;gap:11px;padding:15px 18px;border-radius:13px;border:none;background:#fff;color:#3c4043;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.25)">
       <svg width="19" height="19" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24s.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      Google로 로그인
+      Sign in with Google
     </button>
+    <!-- Google Identity Services renders its own button here for Home Screen
+         apps on iOS, where the popup and redirect flows both fail. -->
+    <div id="gis-btn" style="display:none;justify-content:center;margin-top:4px"></div>
     <div style="font-size:11.5px;color:rgba(255,255,255,0.35);margin-top:14px;line-height:1.6">Approved accounts only.</div>
     <div id="auth-error" style="display:none;margin-top:16px;padding:12px 14px;border-radius:10px;background:rgba(220,38,38,0.14);border:1px solid rgba(220,38,38,0.35);color:#fca5a5;font-size:12px;line-height:1.6;text-align:left;white-space:pre-line"></div>
     <button onclick="authDiagnose()" style="margin-top:14px;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11.5px;text-decoration:underline;cursor:pointer">Sign-in check</button>
@@ -2252,7 +2256,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-30-v';
+const APP_BUILD     = '2026-07-30-y';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8598,6 +8602,139 @@ function _authFeedback(msg, kind) {
 // Popup, not redirect: signInWithRedirect depends on cross-site storage between
 // this origin and homes-nsw.firebaseapp.com, which Safari ITP partitions — the
 // redirect comes back still signed out, with no error to show.
+// ============================================================
+// GOOGLE SIGN-IN FOR HOME SCREEN APPS
+// ------------------------------------------------------------
+// On iOS, an app launched from the Home Screen cannot open the Firebase
+// sign-in popup, and the redirect flow does not survive either: the app lives
+// on jacob-leee.github.io while Firebase's auth handler is on
+// homes-nsw.firebaseapp.com, and Safari partitions storage between the two, so
+// the redirect comes back with nothing.
+//
+// This is not something a retry fixes. The way through is Google Identity
+// Services, which returns an ID token in the page itself — no second window,
+// no cross-origin round trip — which is then exchanged for a Firebase session.
+//
+// Push notifications on iOS only work in a Home Screen app, so "just use
+// Safari" is not an answer: it trades sign-in for alerts.
+//
+// SETUP: paste the OAuth Web client ID below, or set /config/googleClientId in
+// the database and every device picks it up. Google Cloud Console →
+// APIs & Services → Credentials → OAuth 2.0 Client IDs → "Web client".
+let GOOGLE_CLIENT_ID = '';   // e.g. '1064085096701-xxxxxxxx.apps.googleusercontent.com'
+
+function _needsGis() {
+  const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                     window.navigator.standalone === true;
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent || '');
+  return isIOS && standalone;
+}
+
+async function _gisClientId() {
+  if (GOOGLE_CLIENT_ID) return GOOGLE_CLIENT_ID;
+  try {
+    const snap = await AUTH.db.ref('/config/googleClientId').once('value');
+    if (snap.exists()) { GOOGLE_CLIENT_ID = String(snap.val() || ''); }
+  } catch (e) {}
+  return GOOGLE_CLIENT_ID;
+}
+
+// The Home Screen app cannot sign in until the office sets the client ID.
+// Until then Safari works — so say so plainly and hand them the link instead of
+// letting them tap a button that will keep failing.
+function _authShowSafariHelp() {
+  const box = document.getElementById('auth-error');
+  const btn = document.getElementById('auth-signin-btn');
+  if (btn) btn.style.display = 'none';
+  if (!box) return;
+  box.style.display = '';
+  box.style.background = 'rgba(255,255,255,0.06)';
+  box.style.borderColor = 'rgba(255,255,255,0.18)';
+  box.style.color = 'rgba(255,255,255,0.85)';
+  box.innerHTML =
+    '<div style="font-weight:800;font-size:13px;margin-bottom:8px">Sign in using Safari</div>' +
+    '<div style="line-height:1.65">iPhone blocks the Google sign-in window inside a Home Screen app. ' +
+    'Open this page in Safari and sign in there.</div>' +
+    '<div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">' +
+      '<button onclick="_authCopyLink()" style="padding:11px;border:none;border-radius:10px;background:#fff;color:#1C1C1E;font-size:13.5px;font-weight:700;font-family:inherit;cursor:pointer">Copy the link</button>' +
+      '<div style="font-size:11.5px;color:rgba(255,255,255,0.5);line-height:1.6">Paste it into Safari, sign in, and use the app from that tab for now.</div>' +
+    '</div>' +
+    '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.12);font-size:11.5px;color:rgba(255,255,255,0.5);line-height:1.6">' +
+      'To make this icon work — and to get push alerts, which only arrive in the Home Screen app — the office needs to set the Google client ID once in Settings.' +
+    '</div>';
+}
+
+function _authCopyLink() {
+  const url = location.origin + location.pathname;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url)
+      .then(() => alert('Link copied.\n\nOpen Safari, paste it in the address bar, and sign in.'))
+      .catch(() => prompt('Copy this link and open it in Safari:', url));
+  } else {
+    prompt('Copy this link and open it in Safari:', url);
+  }
+}
+
+async function _gisSignIn() {
+  const cid = await _gisClientId();
+  if (!cid) {
+    // Say what is happening and give the way through, rather than bouncing off
+    // a login button with no explanation.
+    _authRecordError({ stage: 'gis-not-configured' });
+    _authShowSafariHelp();
+    return false;
+  }
+  if (!window.google || !google.accounts || !google.accounts.id) {
+    _authFeedback('Google sign-in could not load. Check the connection and try again.');
+    _authRecordError({ stage: 'gis-script-missing' });
+    return false;
+  }
+
+  return new Promise((resolve) => {
+    try {
+      google.accounts.id.initialize({
+        client_id: cid,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        callback: async (resp) => {
+          try {
+            if (!resp || !resp.credential) { resolve(false); return; }
+            const cred = firebase.auth.GoogleAuthProvider.credential(resp.credential);
+            await AUTH.auth.signInWithCredential(cred);
+            resolve(true);
+          } catch (e) {
+            console.warn('[AUTH] GIS credential exchange failed:', e.code, e.message);
+            _authRecordError({ stage: 'gis-exchange', code: e.code || '', message: e.message || '' });
+            _authFeedback(_authErrorMessage(e));
+            resolve(false);
+          }
+        }
+      });
+
+      // Render a real Google button — One Tap is suppressed too often to rely
+      // on, and a button the user pressed is what iOS wants to see.
+      const host = document.getElementById('gis-btn');
+      if (host) {
+        host.innerHTML = '';
+        host.style.display = 'flex';
+        google.accounts.id.renderButton(host, {
+          type: 'standard', theme: 'outline', size: 'large',
+          text: 'signin_with', shape: 'pill', logo_alignment: 'center',
+          width: Math.min(320, Math.floor(window.innerWidth - 64))
+        });
+        const std = document.getElementById('auth-signin-btn');
+        if (std) std.style.display = 'none';
+        _authFeedback('Tap the Google button below to sign in.');
+      }
+      resolve(true);
+    } catch (e) {
+      console.warn('[AUTH] GIS init failed:', e);
+      _authRecordError({ stage: 'gis-init', message: e.message || '' });
+      resolve(false);
+    }
+  });
+}
+
 async function authSignIn() {
   _authError('');
   if (typeof firebase === 'undefined')  { _authFeedback('Firebase SDK가 로드되지 않았습니다. 네트워크를 확인해주세요.'); return; }
@@ -8606,6 +8743,16 @@ async function authSignIn() {
 
   const btn = document.getElementById('auth-signin-btn');
   if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+
+  // A Home Screen app on iOS goes straight to Google Identity Services —
+  // popup and redirect both fail there, and trying them first just costs the
+  // user two failures before anything works.
+  if (_needsGis()) {
+    try { if (await _gisSignIn()) return; }
+    finally { if (btn) { btn.disabled = false; btn.style.opacity = '1'; } }
+    return;
+  }
+
   try {
     const p = new firebase.auth.GoogleAuthProvider();
     p.setCustomParameters({ prompt: 'select_account' });
@@ -8667,7 +8814,12 @@ async function _authOnStateChanged(user) {
   if (!user) {
     AUTH.user = null; AUTH.entry = null;
     renderAuthDrawerStatus();
-    if (AUTH_REQUIRED) _authShow('signin');
+    if (AUTH_REQUIRED) {
+      _authShow('signin');
+      // Put the working button up front rather than waiting for the user to
+      // press one that cannot work on this device.
+      if (_needsGis()) setTimeout(() => { _gisSignIn().catch(() => {}); }, 300);
+    }
     return;
   }
   if (AUTH_REQUIRED) _authShow('busy', 'Checking access…');

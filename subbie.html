@@ -67,7 +67,15 @@
     .order-card:active{transform:scale(0.98)}
     .order-num{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.3px;margin-bottom:4px}
     .order-addr{font-size:15px;font-weight:700;color:var(--text1);margin-bottom:4px;line-height:1.3}
-    .order-meta{font-size:12px;color:var(--text3);display:flex;gap:8px;align-items:center}
+    .order-meta{font-size:12px;color:var(--text3)}
+    .oc-top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+    .oc-badge{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:20px;margin-left:auto;white-space:nowrap}
+    .oc-comment{font-size:11.5px;color:var(--text3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .oc-acts{margin-top:8px;display:flex;gap:6px}
+    .oc-btn{padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer}
+    .oc-done{border:1px solid #86EFAC;background:#DCFCE7;color:#15803D}
+    .oc-iss{border:1px solid #FCD34D;background:#FEF3C7;color:#B45309}
+    .oc-chip{margin-top:8px;display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700}
     .status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 
     /* Status colours */
@@ -430,7 +438,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-30-v';
+const APP_BUILD = '2026-07-30-y';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -578,6 +586,7 @@ function sbLogin(name, auto) {
     _storage = firebase.storage(_app);
 
     sbLoadOrders();
+    sbWatchReports();
     sbFcmSetup();
   }, 30);
 
@@ -680,6 +689,73 @@ function sbTab(tab) {
   sbRender();
 }
 
+const SB_ST_COL = { active:'#007AFF', issue:'#FF9500', completed:'#34C759',
+                    claim:'#AF52DE', invoiced:'#FF9500', paid:'#AF52DE',
+                    closed:'#8A8A8E', cancelled:'#FF3B30' };
+const SB_ST_LBL = { active:'Active', issue:'Issue', completed:'Completed',
+                    claim:'Claim', invoiced:'Invoiced', paid:'Paid',
+                    closed:'Closed', cancelled:'Cancelled' };
+
+// Reports this subbie has filed that the office has not reviewed yet. Keyed by
+// order so the card can show "already sent" instead of offering the buttons
+// again — the most common way to end up with three duplicate reports.
+let _sbReports = {};
+function sbWatchReports() {
+  if (!_db) return;
+  _db.ref('/issues').on('value', snap => {
+    const byOrder = snap.val() || {};
+    const map = {};
+    Object.keys(byOrder).forEach(oid => {
+      Object.keys(byOrder[oid] || {}).forEach(ts => {
+        const r = byOrder[oid][ts] || {};
+        if (r.type !== 'issue' && r.type !== 'done') return;
+        if (r.reviewedAt) return;
+        (map[oid] = map[oid] || []).push(r);
+      });
+    });
+    _sbReports = map;
+    sbRender();
+  });
+}
+function sbPendingFor(id) { return _sbReports[id] || []; }
+
+// Only on jobs still to do. A closed order has nothing left to report.
+function sbCardActions(o) {
+  if ((o.status || 'active') !== 'active') return '';
+  const pending = sbPendingFor(o.id);
+  if (pending.length) {
+    const isIssue = pending.some(r => r.type === 'issue');
+    return '<div class="oc-chip" style="background:' + (isIssue ? '#FEF3C7' : '#DCFCE7') +
+      ';color:' + (isIssue ? '#B45309' : '#15803D') + '">' +
+      (isIssue ? '&#9888; Issue sent' : '&#10003; Done sent') + '</div>';
+  }
+  return '<div class="oc-acts" onclick="event.stopPropagation()">' +
+    '<button class="oc-btn oc-done" onclick="sbQuickDone(\'' + o.id + '\')">&#10003; Complete</button>' +
+    '<button class="oc-btn oc-iss" onclick="sbQuickIssue(\'' + o.id + '\')">&#9888; Issue</button>' +
+  '</div>';
+}
+
+// Straight through, no dialog — the same one tap the office app gives.
+async function sbQuickDone(id) {
+  const o = _allOrders.find(x => x.id === id);
+  if (!o) return;
+  if (!confirm((o.orderNumber || '') + '\n' + (o.address || '') + '\n\nReport this job as finished?')) return;
+  _currentOrder = o;
+  try {
+    await _sbWriteReport('done', '', []);
+    sbShowToast('Reported as done ✓');
+  } catch (e) { _sbReportError(e); }
+}
+
+// Opens the order so the photo and note fields are right there.
+function sbQuickIssue(id) {
+  sbOpenOrder(id);
+  setTimeout(() => {
+    const el = document.getElementById('issue-note');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 220);
+}
+
 function sbRender() {
   const list = document.getElementById('order-list');
   let orders;
@@ -732,17 +808,18 @@ function sbRender() {
 
   list.innerHTML = orders.map(o => {
     const st = o.status || 'active';
-    const stClass = 's-' + st;
-    const stLabel = st === 'issue' ? 'Issue reported' : st.charAt(0).toUpperCase() + st.slice(1);
-    return '<div class="order-card" onclick="sbOpenOrder(\'' + o.id + '\')">' +
-      '<div class="order-num">' + esc(o.orderNumber || '') + '</div>' +
-      '<div class="order-addr">' + esc(o.address || 'No address') + '</div>' +
-      '<div class="order-meta">' +
-        '<div class="status-dot ' + stClass + '"></div>' +
-        '<span>' + stLabel + '</span>' +
-        (o.area ? '<span>·</span><span>' + esc(o.area) + '</span>' : '') +
-        (o.workType ? '<span>·</span><span>' + esc(o.workType) + '</span>' : '') +
+    const col = SB_ST_COL[st] || '#007AFF';
+    const lbl = SB_ST_LBL[st] || (st.charAt(0).toUpperCase() + st.slice(1));
+    const meta = [o.area, o.prn ? 'PRN ' + o.prn : ''].filter(Boolean).join(' · ');
+    return '<div class="order-card" style="border-left:4px solid ' + col + '" onclick="sbOpenOrder(\'' + o.id + '\')">' +
+      '<div class="oc-top">' +
+        '<span class="order-num">' + esc(o.orderNumber || '') + '</span>' +
+        '<span class="oc-badge" style="background:' + col + '1e;color:' + col + '">' + lbl + '</span>' +
       '</div>' +
+      '<div class="order-addr">' + esc(o.address || 'No address') + '</div>' +
+      (meta ? '<div class="order-meta">' + esc(meta) + '</div>' : '') +
+      (o.comments ? '<div class="oc-comment">&#128172; ' + esc(o.comments) + '</div>' : '') +
+      sbCardActions(o) +
     '</div>';
   }).join('');
 }
