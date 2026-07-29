@@ -445,7 +445,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-31-a';
+const APP_BUILD = '2026-07-31-f';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -599,8 +599,11 @@ async function sbSignOut() {
   location.reload();
 }
 
+let _sbAuthAttached = false;
 function _sbWatchAuth() {
   if (!_sbFirebase()) return;
+  if (_sbAuthAttached) return;      // one listener, however often this is called
+  _sbAuthAttached = true;
   _sbAuth.onAuthStateChanged(async (user) => {
     if (!user) {
       document.getElementById('login-screen').style.display = '';
@@ -684,6 +687,10 @@ function sbLogout() {
   // back in — the screen flashed and nothing changed. Identity now comes from
   // the session, so the session is what has to go.
   sbDetachOrders();
+  if (_sbReportsRef && _sbReportsCb) {
+    try { _sbReportsRef.off('value', _sbReportsCb); } catch (e) {}
+    _sbReportsRef = null; _sbReportsCb = null;
+  }
   _user = null;
   _allOrders = [];
   sbSignOut();          // clears the session, then reloads
@@ -784,9 +791,18 @@ const SB_ST_LBL = { active:'Active', issue:'Issue', completed:'Completed',
 // order so the card can show "already sent" instead of offering the buttons
 // again — the most common way to end up with three duplicate reports.
 let _sbReports = {};
+let _sbReportsRef = null, _sbReportsCb = null;
 function sbWatchReports() {
   if (!_db) return;
-  _db.ref('/issues').on('value', snap => {
+  // sbLogin() runs again on every auth state change — a token refresh is enough
+  // — and without this each pass attached another /issues listener. Every one
+  // of them fires on every report, so the work and the memory grow with the
+  // length of the session.
+  if (_sbReportsRef && _sbReportsCb) {
+    try { _sbReportsRef.off('value', _sbReportsCb); } catch (e) {}
+  }
+  _sbReportsRef = _db.ref('/issues');
+  _sbReportsCb = _sbReportsRef.on('value', snap => {
     const byOrder = snap.val() || {};
     const map = {};
     Object.keys(byOrder).forEach(oid => {

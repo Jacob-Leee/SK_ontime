@@ -2256,7 +2256,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-31-a';
+const APP_BUILD     = '2026-07-31-f';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -3276,6 +3276,17 @@ function showPage(page) {
 // which is UTC and rolls back to "yesterday" for roughly the first 10-11 hours of
 // every Sydney day (this caused Order Date/Claim Date/Issue Date etc. to silently
 // default to the wrong day whenever used before ~10-11am local time).
+// Local month, not UTC.
+//
+// Sydney runs 10-11 hours ahead of UTC, so between midnight and mid-morning
+// `new Date().toISOString()` still reports YESTERDAY. On the first of the month
+// that meant the sidebar showed LAST month's revenue and order count for the
+// entire working morning, every month.
+function localMonthStr(d) {
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
 function localDateStr(d) {
   d = d || new Date();
   const y = d.getFullYear();
@@ -4986,7 +4997,7 @@ function renderSubbiePerson(name, allOrders) {
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
         <span style="font-size:12px;padding:4px 12px;border-radius:20px;background:rgba(46,204,113,0.15);color:var(--green);font-weight:600">Settled: $${fmtNum(paidAmt)} (${paid.length})</span>
         <span style="font-size:12px;padding:4px 12px;border-radius:20px;background:rgba(243,156,18,0.15);color:var(--yellow);font-weight:600">Outstanding: $${fmtNum(unpaidAmt)} (${unpaid.length})</span>
-        ${unpaid.length ? `<button class="btn btn-sm btn-success" onclick="bulkSubbiePaid('${esc(name)}')">&#10003; Mark All Settled</button>` : ''}
+        ${unpaid.length ? `<button class="btn btn-sm btn-success" onclick="bulkSubbiePaid('${escAttr(name)}')">&#10003; Mark All Settled</button>` : ''}
       </div>
     </div>
     <div class="card-body" style="padding:0">
@@ -5023,7 +5034,7 @@ function renderSubbiePerson(name, allOrders) {
       ${unpaid.length ? `
         <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
           <span style="font-size:12px;color:var(--text3)">Selected:</span>
-          <button class="btn btn-sm btn-success" onclick="markCheckedPaid('${esc(name)}')">&#10003; Mark Selected as Paid</button>
+          <button class="btn btn-sm btn-success" onclick="markCheckedPaid('${escAttr(name)}')">&#10003; Mark Selected as Paid</button>
           <span id="sel-count-${esc(name).replace(/\s/g,'-')}" style="font-size:12px;color:var(--text3)">0 selected</span>
         </div>` : ''}
     </div>
@@ -6443,7 +6454,7 @@ function renderTabSummary(page) {
 
 function updateSidebar() {
   const now = new Date();
-  const thisMonth = now.toISOString().slice(0, 7);
+  const thisMonth = localMonthStr(now);
 
   // This month (order date, exclude cancelled)
   const monthOrders = DB.orders.filter(o => o.status !== 'cancelled' && o.orderDate && o.orderDate.startsWith(thisMonth));
@@ -6502,7 +6513,7 @@ function exportCSV() {
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'Holmes_Orders_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.download = 'Holmes_Orders_' + localDateStr() + '.csv';
   a.click();
   toast('CSV exported', 'success');
 }
@@ -6511,6 +6522,23 @@ function exportCSV() {
 // HELPERS
 // ============================================================
 function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+// esc() is for TEXT between tags — it leaves quotes alone, which is fine there
+// and broken inside an attribute. A supervisor called Sean O'Brien produced
+//     onclick="mobSupContact('Sean O'Brien')"
+// which closes the attribute early: the click silently does nothing, and the
+// rest of the row's markup is mangled. Real names do this.
+//
+// escAttr() is for values going inside a quoted JS call in an attribute.
+function escAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, '\\&#39;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtDate(d) { if (!d) return '—'; const [y,m,dd] = d.split('-'); return `${dd}/${m}/${y}`; }
 function fmtNum(n) {
@@ -6800,7 +6828,7 @@ function exportData() {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'SK_Ontime_data_' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = 'SK_Ontime_data_' + localDateStr() + '.json';
   a.click();
   toast('Data exported successfully', 'success');
 }
@@ -7040,8 +7068,8 @@ function mobDashboard() {
   if (!el) return;
 
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const thisMonth = now.toISOString().slice(0, 7);
+  const todayStr = localDateStr(now);
+  const thisMonth = localMonthStr(now);
 
   // Individual SK user → show calendar only
   if (window._SK_USER) {
@@ -7399,7 +7427,7 @@ function mobVOpen(id) {
     (window._ADMIN_MODE ? row('Amount', '$' + Number(o.amount||0).toFixed(2)) : '') +
     row('Order Date', o.orderDate) +
     row('Subbie', o.subbies) +
-    (o.supervisor ? `<div class="mvs-row"><span class="mvs-lbl">Supervisor</span><span class="mvs-val"><span onclick="mobSupContact('${_esc(o.supervisor)}')" style="cursor:pointer;color:var(--accent);text-decoration:underline">👤 ${_esc(o.supervisor)}</span></span></div>` : '') +
+    (o.supervisor ? `<div class="mvs-row"><span class="mvs-lbl">Supervisor</span><span class="mvs-val"><span onclick="mobSupContact('${escAttr(o.supervisor)}')" style="cursor:pointer;color:var(--accent);text-decoration:underline">👤 ${_esc(o.supervisor)}</span></span></div>` : '') +
     row('PRN', o.prn) +
     row('Comments', o.comments) +
     row('Notes', o.notes);
@@ -10444,7 +10472,7 @@ function _applyIssueReport(reportId, r, orderIdHint) {
 
   const when = r.at ? new Date(r.at) : new Date();
   const stamp = when.toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
-  const today = _ymdLocal ? _ymdLocal(when) : when.toISOString().slice(0, 10);
+  const today = localDateStr(when);
 
   // Two kinds of report come up the same pipe. A completion is not an issue and
   // must not land in the Issues tab.

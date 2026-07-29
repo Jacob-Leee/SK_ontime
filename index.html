@@ -356,6 +356,10 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<!-- Needed by frDeletePhoto / frDeleteReport: without it firebase.storage is
+     undefined, the guarded delete quietly skips, and removed photos stay in
+     storage forever while the report says they are gone. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <!-- jsPDF for PDF export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -2001,7 +2005,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-31-a';
+const APP_BUILD = '2026-07-31-f';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -3144,6 +3148,17 @@ function showPage(page) {
 // which is UTC and rolls back to "yesterday" for roughly the first 10-11 hours of
 // every Sydney day (this caused Order Date/Claim Date/Issue Date etc. to silently
 // default to the wrong day whenever used before ~10-11am local time).
+// Local month, not UTC.
+//
+// Sydney runs 10-11 hours ahead of UTC, so between midnight and mid-morning
+// `new Date().toISOString()` still reports YESTERDAY. On the first of the month
+// that meant the sidebar showed LAST month's revenue and order count for the
+// entire working morning, every month.
+function localMonthStr(d) {
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
 function localDateStr(d) {
   d = d || new Date();
   const y = d.getFullYear();
@@ -4846,7 +4861,7 @@ function renderSubbiePerson(name, allOrders) {
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
         <span style="font-size:12px;padding:4px 12px;border-radius:20px;background:rgba(46,204,113,0.15);color:var(--green);font-weight:600">Settled: $${fmtNum(paidAmt)} (${paid.length})</span>
         <span style="font-size:12px;padding:4px 12px;border-radius:20px;background:rgba(243,156,18,0.15);color:var(--yellow);font-weight:600">Outstanding: $${fmtNum(unpaidAmt)} (${unpaid.length})</span>
-        ${unpaid.length ? `<button class="btn btn-sm btn-success" onclick="bulkSubbiePaid('${esc(name)}')">&#10003; Mark All Settled</button>` : ''}
+        ${unpaid.length ? `<button class="btn btn-sm btn-success" onclick="bulkSubbiePaid('${escAttr(name)}')">&#10003; Mark All Settled</button>` : ''}
       </div>
     </div>
     <div class="card-body" style="padding:0">
@@ -4883,7 +4898,7 @@ function renderSubbiePerson(name, allOrders) {
       ${unpaid.length ? `
         <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px">
           <span style="font-size:12px;color:var(--text3)">Selected:</span>
-          <button class="btn btn-sm btn-success" onclick="markCheckedPaid('${esc(name)}')">&#10003; Mark Selected as Paid</button>
+          <button class="btn btn-sm btn-success" onclick="markCheckedPaid('${escAttr(name)}')">&#10003; Mark Selected as Paid</button>
           <span id="sel-count-${esc(name).replace(/\s/g,'-')}" style="font-size:12px;color:var(--text3)">0 selected</span>
         </div>` : ''}
     </div>
@@ -6651,7 +6666,11 @@ function buildIssuesChart(orders) {
 // FILTERS
 // ============================================================
 function updateAreaFilter() {
+  // These two controls belonged to the single Orders page that was split into
+  // VAC / MPW / All. The elements are gone but the calls stayed, so anything
+  // that reached renderOrders() died on `sel.value` of null.
   const sel = document.getElementById('filter-area');
+  if (!sel) return;
   const cur = sel.value;
   const areas = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
   sel.innerHTML = '<option value="">All Areas</option>' + areas.map(a => `<option ${a === cur ? 'selected' : ''}>${a}</option>`).join('');
@@ -6705,6 +6724,7 @@ function updateSupervisorDatalist() {
 
 function updateMonthFilter() {
   const sel = document.getElementById('filter-month');
+  if (!sel) return;
   const cur = sel.value;
   const months = [...new Set(DB.orders.map(o => o.orderDate?.slice(0, 7)).filter(Boolean))].sort().reverse();
   sel.innerHTML = '<option value="">All Months</option>' + months.map(m => `<option value="${m}" ${m === cur ? 'selected' : ''}>${m}</option>`).join('');
@@ -6766,7 +6786,7 @@ function renderTabSummary(page) {
 
 function updateSidebar() {
   const now = new Date();
-  const thisMonth = now.toISOString().slice(0, 7);
+  const thisMonth = localMonthStr(now);
 
   // This month (order date, exclude cancelled)
   const monthOrders = DB.orders.filter(o => o.status !== 'cancelled' && o.orderDate && o.orderDate.startsWith(thisMonth));
@@ -8338,7 +8358,7 @@ async function authLoadAllowlist() {
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(email)}${isSelf?' <span style="color:var(--text3);font-size:10px">(나)</span>':''}</span>
         <span style="color:var(--text3);font-size:11px;flex-shrink:0">${esc(v.name || '—')}</span>
         ${sel}
-        <button onclick="authRemoveUser('${esc(k)}')" ${locked ? 'disabled' : ''}
+        <button onclick="authRemoveUser('${escAttr(k)}')" ${locked ? 'disabled' : ''}
           style="background:none;border:none;color:var(--red);cursor:${locked?'not-allowed':'pointer'};font-size:14px;padding:0 2px;opacity:${locked?0.3:1}"
           title="${locked ? esc(why) : '삭제'}">×</button>
       </div>`;
@@ -8999,7 +9019,7 @@ document.addEventListener('visibilitychange', () => {
 // Month picker prompt → calls exportMonthlyPDF
 function promptMonthlyPDF() {
   const now = new Date();
-  const defaultMonth = now.toISOString().slice(0, 7); // YYYY-MM
+  const defaultMonth = localMonthStr(now); // YYYY-MM
   const input = prompt('Which month? (YYYY-MM)', defaultMonth);
   if (!input || !/^\d{4}-\d{2}$/.test(input.trim())) {
     if (input !== null) toast('올바른 형식으로 입력해주세요 (예: 2026-07)', 'error');
@@ -9290,7 +9310,7 @@ function exportCSV() {
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'Holmes_Orders_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.download = 'Holmes_Orders_' + localDateStr() + '.csv';
   a.click();
   toast('CSV exported', 'success');
 }
@@ -9299,6 +9319,23 @@ function exportCSV() {
 // HELPERS
 // ============================================================
 function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+// esc() is for TEXT between tags — it leaves quotes alone, which is fine there
+// and broken inside an attribute. A supervisor called Sean O'Brien produced
+//     onclick="mobSupContact('Sean O'Brien')"
+// which closes the attribute early: the click silently does nothing, and the
+// rest of the row's markup is mangled. Real names do this.
+//
+// escAttr() is for values going inside a quoted JS call in an attribute.
+function escAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, '\\&#39;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function fmtDate(d) { if (!d) return '—'; const [y,m,dd] = d.split('-'); return `${dd}/${m}/${y}`; }
 function fmtNum(n) {
@@ -9624,7 +9661,7 @@ function exportData() {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'SK_Ontime_data_' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = 'SK_Ontime_data_' + localDateStr() + '.json';
   a.click();
   toast('Data exported successfully', 'success');
 }
@@ -10427,8 +10464,12 @@ async function frDeletePhoto(key, idx) {
     // Best effort — the record is already corrected, and a leftover blob is a
     // smaller problem than a half-updated report.
     try {
-      if (firebase.storage) await firebase.storage(firebase.apps[0]).refFromURL(url).delete();
-    } catch (e) { console.warn('[FR] storage delete failed:', e.code || e.message); }
+      if (!firebase.storage) throw new Error('Storage SDK not loaded');
+      await firebase.storage(firebase.apps[0]).refFromURL(url).delete();
+    } catch (e) {
+      console.warn('[FR] storage delete failed:', e.code || e.message);
+      toast('기록에서는 지웠지만 파일 삭제에 실패했습니다: ' + (e.code || e.message), 'error');
+    }
     toast('Photo removed', 'success');
   } catch (e) {
     toast('Could not remove: ' + (e.message || e), 'error');
@@ -10515,7 +10556,7 @@ function _applyIssueReport(reportId, r, orderIdHint) {
 
   const when = r.at ? new Date(r.at) : new Date();
   const stamp = when.toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
-  const today = _ymdLocal ? _ymdLocal(when) : when.toISOString().slice(0, 10);
+  const today = localDateStr(when);
 
   // Two kinds of report come up the same pipe. A completion is not an issue and
   // must not land in the Issues tab.
