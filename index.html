@@ -490,7 +490,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
       <div style="display:flex;gap:9px;align-items:center">
 
         <!-- ── STATUS ── -->
-        <div onclick="CLOUD.enabled && !CLOUD.url ? openCloudModal() : showSyncDiagnostics()" title="클릭: 동기화 진단 (주소 없음이면 설정 열기)" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 8px;background:var(--cream2);border-radius:7px;border:1px solid var(--border2);cursor:pointer">
+        <div id="sync-pill" onclick="CLOUD.enabled && !CLOUD.url ? openCloudModal() : showSyncDiagnostics()" title="클릭: 동기화 진단 (주소 없음이면 설정 열기)" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap;padding:4px 8px;background:var(--cream2);border-radius:7px;border:1px solid var(--border2);cursor:pointer">
           <span id="cloud-dot" style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0"></span>
           <span id="cloud-status" style="font-weight:600;color:var(--text2)">off</span>
         </div>
@@ -2055,7 +2055,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-07-31-t';
+const APP_BUILD = '2026-07-31-v';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4634,7 +4634,13 @@ function renderFilesPage() {
   }
 
   const groups = {};
-  orders.forEach(o => { (groups[o.subbies.trim()] = groups[o.subbies.trim()] || []).push(o); });
+  // Guard rail. This page is meant for a week of live work, but a stale filter
+  // or a bad import could put thousands of rows through here and lock the tab.
+  orders.slice(0, 400).forEach(o => {
+    const k = (o.subbies || '').trim() || '—';
+    (groups[k] = groups[k] || []).push(o);
+  });
+  if (orders.length > 400) console.warn('[DOC] list capped at 400 of', orders.length);
   const names = Object.keys(groups).sort();
 
   list.innerHTML = names.map(name => {
@@ -4664,14 +4670,22 @@ async function docCleanup() {
 
   const cut = Date.now() - days * 86400000;
   const victims = [];
+  let skipped = 0;
   Object.keys(_docs).forEach(oid => {
     Object.keys(_docs[oid] || {}).forEach(k => {
       const f = _docs[oid][k];
-      if ((f.at || 0) < cut) victims.push({ oid, k, f });
+      // No timestamp means we cannot say how old it is. `(f.at || 0) < cut`
+      // treated that as "older than everything" and deleted it at any
+      // threshold — including a file uploaded seconds ago whose timestamp
+      // failed to write. Skip it instead; a stray record is recoverable, a
+      // deleted invoice is not.
+      if (!f.at) { skipped++; return; }
+      if (f.at < cut) victims.push({ oid, k, f });
     });
   });
 
-  if (!victims.length) return toast(`${days}일보다 오래된 파일이 없습니다`, 'success');
+  if (!victims.length) return toast(
+    `${days}일보다 오래된 파일이 없습니다` + (skipped ? ` (날짜 없는 파일 ${skipped}개는 건너뜀)` : ''), 'success');
   const mb = victims.reduce((n, v) => n + (v.f.size || 0), 0) / 1048576;
   if (!confirm(`${victims.length}개 파일 (${mb.toFixed(1)} MB) 을 삭제할까요?\n\n${days}일 이전에 올라온 파일입니다.\n되돌릴 수 없습니다.`)) return;
 
@@ -4812,7 +4826,10 @@ function _docProgressRow(orderId, name, size) {
        <div class="dp-bar" style="height:100%;width:0;background:var(--accent);transition:width .2s"></div>
      </div>
      <div class="dp-sub" style="font-size:10.5px;color:var(--text3);margin-top:5px">${docSize(size)}</div>`;
-  _docProgressHost().appendChild(row);
+  const host = _docProgressHost();
+  // A failing batch would otherwise stack a card per file and cover the screen.
+  while (host.children.length >= 6) host.removeChild(host.firstChild);
+  host.appendChild(row);
   return row;
 }
 function _docProgressSet(row, ratio) {
@@ -4858,9 +4875,18 @@ function applySubbieDesktopView() {
   document.querySelectorAll('.nav-item').forEach(el => {
     if (el.id !== 'nav-files') el.style.display = 'none';
   });
+  // The bell, the sync pill and Undo are the office's own instrumentation. A
+  // contractor has nothing to undo here and no sync of their own — leaving them
+  // on screen only invites questions about controls that do nothing for them.
+  //
+  // Note the bell is #notif-bell (not notif-bell-wrap) and the sync indicator
+  // had no id at all until now — the earlier list was hiding nothing.
   ['nav-scope-master','hdr-scope-master','sidebar-stats','undo-btn','header-actions',
-   'notif-bell-wrap','sync-status-pill']
+   'notif-bell','sync-pill','notif-panel']
     .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+
+  // renderNotifBell() runs on a timer and would put the bell straight back.
+  window._SUBBIE_HIDE_BELL = true;
 
   // The dropdown is the office's toolbox — CSV of every order, backup export,
   // Force Push, Field Reports, Settings. None of it belongs to a contractor,
@@ -7811,6 +7837,12 @@ function _playNotifSound() {
 function unreadNotifCount() { return NOTIF.inbox.filter(n => !n.read).length; }
 
 function renderNotifBell() {
+  // Once a contractor is in, the bell stays down however often this re-runs.
+  if (window._SUBBIE_HIDE_BELL) {
+    const b = document.getElementById('notif-bell');
+    if (b) b.style.display = 'none';
+    return;
+  }
   const badge = document.getElementById('notif-bell-badge');
   const bell  = document.getElementById('notif-bell');
   if (!bell) return;
