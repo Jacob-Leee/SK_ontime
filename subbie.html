@@ -69,7 +69,10 @@
     .order-addr{font-size:15px;font-weight:700;color:var(--text1);margin-bottom:4px;line-height:1.3}
     .order-meta{font-size:12px;color:var(--text3)}
     .oc-top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-    .oc-badge{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:20px;margin-left:auto;white-space:nowrap}
+    .oc-badge{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:20px;white-space:nowrap}
+    .oc-copy{margin-left:auto;background:none;border:none;padding:2px 6px;font-size:17px;line-height:1;
+      color:var(--text3);cursor:pointer;flex-shrink:0}
+    .oc-copy:active{color:var(--purple)}
     .oc-comment{font-size:11.5px;color:var(--text3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .oc-acts{margin-top:8px;display:flex;gap:6px}
     .oc-btn{padding:5px 12px;border-radius:20px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer}
@@ -231,6 +234,9 @@
         <div id="dm-num" style="font-size:11px;font-weight:700;color:var(--text3)"></div>
         <div id="dm-title" style="font-size:17px;font-weight:800;margin-top:2px"></div>
       </div>
+      <button id="dm-copy" onclick="sbCopyOrder(_currentOrder && _currentOrder.id)"
+        style="background:var(--bg);border:none;border-radius:8px;padding:6px 11px;font-size:12.5px;
+        font-weight:600;color:var(--text2);cursor:pointer;margin-right:8px;font-family:inherit">&#9112; Copy</button>
       <button class="modal-close" onclick="closeModal()"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body">
@@ -439,7 +445,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-07-30-z';
+const APP_BUILD = '2026-07-31-a';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -798,6 +804,47 @@ function sbWatchReports() {
 function sbPendingFor(id) { return _sbReports[id] || []; }
 
 // Only on jobs still to do. A closed order has nothing left to report.
+// Copies the order in the shape people paste into a text or an email:
+//   SCO-02641963 - 11_8-14 GROVE ST, GUILDFORD, NSW 2161 - PRN 237591
+// Same format the office app uses, so both sides quote a job identically.
+function sbCopyOrder(id) {
+  const o = (_allOrders || []).find(x => x.id === id) || _currentOrder;
+  if (!o) return;
+  const text = [
+    o.orderNumber || '',
+    o.address || '',
+    o.prn ? 'PRN ' + o.prn : ''
+  ].filter(Boolean).join(' - ');
+
+  const done = () => {
+    sbShowToast('Copied');
+    const b = document.getElementById('cp-' + id);
+    if (b) { const old = b.innerHTML; b.innerHTML = '&#10003;'; setTimeout(() => { b.innerHTML = old; }, 1200); }
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => sbCopyFallback(text, done));
+  } else {
+    sbCopyFallback(text, done);
+  }
+}
+
+// Older iOS Safari refuses the clipboard API outside a few narrow cases, and a
+// copy button that silently does nothing is worse than none at all.
+function sbCopyFallback(text, done) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) return done();
+  } catch (e) {}
+  prompt('Copy this:', text);
+}
+
 function sbCardActions(o) {
   if ((o.status || 'active') !== 'active') return '';
   const pending = sbPendingFor(o.id);
@@ -892,6 +939,8 @@ function sbRender() {
     return '<div class="order-card" style="border-left:4px solid ' + col + '" onclick="sbOpenOrder(\'' + o.id + '\')">' +
       '<div class="oc-top">' +
         '<span class="order-num">' + esc(o.orderNumber || '') + '</span>' +
+        '<button class="oc-copy" id="cp-' + o.id + '" title="Copy order details" ' +
+          'onclick="event.stopPropagation();sbCopyOrder(\'' + o.id + '\')">&#9112;</button>' +
         '<span class="oc-badge" style="background:' + col + '1e;color:' + col + '">' + lbl + '</span>' +
       '</div>' +
       '<div class="order-addr">' + esc(o.address || 'No address') + '</div>' +
