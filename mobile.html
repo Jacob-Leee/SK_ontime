@@ -914,9 +914,6 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     <button class="mob-tab" id="mt-issues" onclick="mobNav('issues')">
       <i class="ti ti-alert-triangle" aria-hidden="true"></i><span class="mob-tab-lbl">Issues</span>
     </button>
-    <button class="mob-tab" id="mt-all" onclick="mobNav('all')">
-      <i class="ti ti-clipboard-list" aria-hidden="true"></i><span class="mob-tab-lbl">Orders</span>
-    </button>
   </div>
 
 </div>
@@ -1734,8 +1731,14 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
           <div class="section-title">Work Info</div>
           <div class="form-group">
             <label class="form-label">Subbies</label>
-            <input type="text" class="form-control" id="f-subbies" placeholder="Select or type a name..." list="subbies-datalist" autocomplete="off">
-            <datalist id="subbies-datalist"></datalist>
+            <!-- A <datalist> on a phone is a hint, not a picker: the keyboard
+                 covers it and a typo silently creates a new "subcontractor"
+                 that nothing else recognises. A real select cannot be mistyped. -->
+            <div style="display:flex;gap:6px">
+              <select class="form-control" id="f-subbies-sel" style="flex:1" onchange="mobSubbieSelChange()"></select>
+              <button type="button" class="btn btn-secondary" style="flex-shrink:0;padding:0 12px" onclick="mobSubbieManage()" title="Add or remove names">&#9881;</button>
+            </div>
+            <input type="hidden" id="f-subbies">
           </div>
           <div class="form-group">
             <label class="form-label">Supervisor</label>
@@ -2278,7 +2281,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-07-31-v';
+const APP_BUILD     = '2026-08-01-a';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -3327,6 +3330,63 @@ let editingSORIdx = null;
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+// ── Subbie picker (mobile) ─────────────────────────────────────
+// Options come from DB.subbies, the same list the desktop manages, so a name
+// added on either side shows up on both.
+function mobFillSubbieSelect(current) {
+  const sel = document.getElementById('f-subbies-sel');
+  if (!sel) return;
+  const names = (DB.subbies || []).slice().sort((a, b) => {
+    const sa = a.toUpperCase().startsWith('SK_'), sb = b.toUpperCase().startsWith('SK_');
+    return sa === sb ? a.localeCompare(b) : (sa ? -1 : 1);   // staff first, then subbies
+  });
+  const cur = (current || '').trim();
+  const opts = ['<option value="">— Unassigned —</option>']
+    .concat(names.map(n => `<option value="${escAttr(n)}"${n === cur ? ' selected' : ''}>${esc(n)}</option>`));
+  // A name already on the order but no longer on the list must still show, or
+  // saving the form would quietly clear the assignment.
+  if (cur && !names.includes(cur)) opts.push(`<option value="${escAttr(cur)}" selected>${esc(cur)} (not on list)</option>`);
+  sel.innerHTML = opts.join('');
+  const hid = document.getElementById('f-subbies');
+  if (hid) hid.value = cur;
+}
+
+function mobSubbieSelChange() {
+  const sel = document.getElementById('f-subbies-sel');
+  const hid = document.getElementById('f-subbies');
+  if (sel && hid) hid.value = sel.value;
+}
+
+// Add or remove names without leaving the order form.
+async function mobSubbieManage() {
+  const names = (DB.subbies || []).filter(n => !n.toUpperCase().startsWith('SK_'));
+  const choice = prompt(
+    'Subcontractors\n\n' + (names.length ? names.map((n, i) => (i + 1) + '. ' + n).join('\n') : '(none)') +
+    '\n\n• Type a NEW name to add it\n• Type a NUMBER to remove that person\n• Leave blank to cancel', '');
+  if (choice === null) return;
+  const v = choice.trim();
+  if (!v) return;
+
+  const asNum = /^\d+$/.test(v) ? parseInt(v, 10) : 0;
+  if (asNum >= 1 && asNum <= names.length) {
+    const name = names[asNum - 1];
+    const used = (DB.orders || []).filter(o => (o.subbies || '').trim() === name).length;
+    if (!confirm(`Remove ${name}?` + (used ? `\n\n${used} order(s) stay as they are, but you cannot assign new work to this name.` : ''))) return;
+    DB.subbies = (DB.subbies || []).filter(n => n !== name);
+    DB.removedSubbies = [...new Set([...(DB.removedSubbies || []), name])];
+    save();
+    toast(name + ' removed', 'success');
+  } else {
+    if (v.toUpperCase().startsWith('SK_')) return toast('SK_ names are for staff', 'error');
+    if ((DB.subbies || []).includes(v)) return toast('Already on the list', 'error');
+    DB.removedSubbies = (DB.removedSubbies || []).filter(n => n !== v);
+    DB.subbies = [...(DB.subbies || []), v];
+    save();
+    toast(v + ' added', 'success');
+  }
+  mobFillSubbieSelect(document.getElementById('f-subbies')?.value || '');
+}
+
 function openOrderModal(id = null) {
   editingOrderId = id;
   const form = document.getElementById('order-form');
@@ -3371,6 +3431,7 @@ function openOrderModal(id = null) {
     const today = localDateStr();
     document.getElementById('f-orderDate').value = today;
   }
+  mobFillSubbieSelect(document.getElementById('f-subbies') ? document.getElementById('f-subbies').value : '');
   openModal('order-modal');
 }
 
@@ -7132,6 +7193,143 @@ function mobSearch(v) {
     matches.slice(0, 100).map(mobSearchCardHtml).join('');
 }
 
+// ============================================================
+// MOBILE DASHBOARD — period comparison
+// ------------------------------------------------------------
+// The stat rows this replaces restated what the tab badges already showed, and
+// took a full screen to do it. What is missing on a phone is the shape of the
+// month: are we ahead of last month, ahead of last year, and where is the work
+// coming from.
+// ============================================================
+
+function _mobPeriodBounds(mode, ref) {
+  const y = ref.getFullYear(), m = ref.getMonth();
+  if (mode === 'quarter') {
+    const q = Math.floor(m / 3);
+    return { from: new Date(y, q * 3, 1), to: new Date(y, q * 3 + 3, 0),
+             prevFrom: new Date(y, q * 3 - 3, 1), prevTo: new Date(y, q * 3, 0),
+             lastYearFrom: new Date(y - 1, q * 3, 1), lastYearTo: new Date(y - 1, q * 3 + 3, 0),
+             label: 'Q' + (q + 1) + ' ' + y, prevLabel: 'prev quarter', lyLabel: 'Q' + (q + 1) + ' ' + (y - 1) };
+  }
+  return { from: new Date(y, m, 1), to: new Date(y, m + 1, 0),
+           prevFrom: new Date(y, m - 1, 1), prevTo: new Date(y, m, 0),
+           lastYearFrom: new Date(y - 1, m, 1), lastYearTo: new Date(y - 1, m + 1, 0),
+           label: ref.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' }),
+           prevLabel: 'prev month',
+           lyLabel: ref.toLocaleDateString('en-AU', { month: 'short' }) + ' ' + (y - 1) };
+}
+
+function _mobInRange(dateStr, from, to) {
+  if (!dateStr) return false;
+  return dateStr >= localDateStr(from) && dateStr <= localDateStr(to);
+}
+
+// Cancelled orders are excluded everywhere: they are not work and not revenue.
+function _mobSlice(from, to) {
+  const list = (DB.orders || []).filter(o =>
+    o && o.status !== 'cancelled' && _mobInRange(o.orderDate, from, to));
+  return { n: list.length, amt: list.reduce((s, o) => s + (o.amount || 0), 0), list };
+}
+
+function _mobDelta(now, then) {
+  if (!then) return { txt: '—', colour: 'var(--text3)' };
+  const pct = Math.round((now - then) / then * 100);
+  return { txt: (pct > 0 ? '▲' : pct < 0 ? '▼' : '') + Math.abs(pct) + '%',
+           colour: pct > 0 ? '#16A34A' : pct < 0 ? '#DC2626' : 'var(--text3)' };
+}
+
+let _mobDashMode = 'month';     // 'month' | 'quarter'
+function mobDashMode(m) { _mobDashMode = m; mobDashboard(); }
+
+function _mobCompareCard() {
+  const b = _mobPeriodBounds(_mobDashMode, new Date());
+  const cur = _mobSlice(b.from, b.to);
+  const prev = _mobSlice(b.prevFrom, b.prevTo);
+  const ly = _mobSlice(b.lastYearFrom, b.lastYearTo);
+  const fmt = n => '$' + Math.round(n).toLocaleString('en-AU');
+
+  const tile = (title, nowV, prevV, lyV, isMoney) => {
+    const f = v => isMoney ? fmt(v) : String(v);
+    const dP = _mobDelta(nowV, prevV), dY = _mobDelta(nowV, lyV);
+    return `<div style="flex:1;min-width:0;background:var(--bg2);border-radius:11px;padding:11px 12px">
+      <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">${title}</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin:3px 0 6px">
+        <span style="font-size:22px;font-weight:800;color:var(--text)">${f(nowV)}</span>
+        <span style="font-size:12px;font-weight:700;color:${dP.colour}">${dP.txt}</span>
+      </div>
+      <div style="font-size:10.5px;color:var(--text3);line-height:1.6">
+        ${b.prevLabel} ${f(prevV)}<br>
+        ${b.lyLabel} ${f(lyV)} <span style="color:${dY.colour};font-weight:700">${dY.txt}</span>
+      </div>
+    </div>`;
+  };
+
+  const btn = (m, label) => `<button onclick="mobDashMode('${m}')"
+    style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;
+    background:${_mobDashMode===m?'var(--accent)':'transparent'};color:${_mobDashMode===m?'#fff':'var(--text3)'}">${label}</button>`;
+
+  return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-size:12.5px;font-weight:800;flex:1">${esc(b.label)}</span>
+      <span style="display:flex;gap:3px;background:var(--bg2);border-radius:9px;padding:2px;width:132px">
+        ${btn('month','Month')}${btn('quarter','Quarter')}
+      </span>
+    </div>
+    <div style="display:flex;gap:8px">
+      ${tile('Orders', cur.n, prev.n, ly.n, false)}
+      ${tile('Revenue', cur.amt, prev.amt, ly.amt, true)}
+    </div>
+  </div>`;
+}
+
+// Area breakdown for the period, each against the same period last year. This
+// is the one view that answers "which patch is busy" without opening a filter.
+function _mobAreaCard() {
+  const b = _mobPeriodBounds(_mobDashMode, new Date());
+  const cur = _mobSlice(b.from, b.to).list;
+  const ly = _mobSlice(b.lastYearFrom, b.lastYearTo).list;
+
+  const tally = list => {
+    const m = {};
+    list.forEach(o => { const a = (o.area || '').trim() || '—'; m[a] = (m[a] || 0) + 1; });
+    return m;
+  };
+  const A = tally(cur), B = tally(ly);
+  const areas = [...new Set([...Object.keys(A), ...Object.keys(B)])]
+    .sort((x, y) => (A[y] || 0) - (A[x] || 0) || _areaOrderM(x) - _areaOrderM(y));
+  if (!areas.length) return '';
+
+  const max = Math.max(...areas.map(a => Math.max(A[a] || 0, B[a] || 0)), 1);
+
+  return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-size:12.5px;font-weight:800;flex:1">By area</span>
+      <span style="font-size:10px;color:var(--text3)">
+        <b style="color:var(--accent)">■</b> now &nbsp; <b style="color:var(--text3)">■</b> ${esc(b.lyLabel)}
+      </span>
+    </div>
+    ${areas.map(a => {
+      const n = A[a] || 0, p = B[a] || 0;
+      const d = _mobDelta(n, p);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0">
+        <span style="width:42px;flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--text2)">${esc(a)}</span>
+        <span style="flex:1;min-width:0">
+          <span style="display:block;height:7px;border-radius:4px;background:var(--accent);width:${Math.round(n/max*100)}%;min-width:${n?'3px':'0'}"></span>
+          <span style="display:block;height:4px;border-radius:3px;background:var(--border2);width:${Math.round(p/max*100)}%;min-width:${p?'3px':'0'};margin-top:2px"></span>
+        </span>
+        <span style="width:52px;flex-shrink:0;text-align:right;font-size:11.5px">
+          <b>${n}</b> <span style="color:${d.colour};font-size:10px;font-weight:700">${d.txt}</span>
+        </span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function _areaOrderM(a) {
+  const m = /^CA(\d+)$/i.exec(a);
+  return m ? parseInt(m[1], 10) : 999;
+}
+
 function mobDashboard() {
   const el = document.getElementById('mob-card-list');
   // The dashboard renders into the same container as the card list. The list
@@ -7191,17 +7389,6 @@ function mobDashboard() {
   const sum = arr => arr.reduce((s,o) => s + (o.amount||0), 0);
   const fmt = n => '$' + Math.round(n).toLocaleString('en-AU');
 
-  const statCard = (label, count, amount, color, page) =>
-    `<div onclick="mobNav('${page}')" style="background:var(--surface);border-radius:12px;padding:12px 16px;border-left:4px solid ${color};cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.08);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">${label}</div>
-        <div style="font-size:26px;font-weight:800;color:${color};line-height:1.1">${count}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:15px;font-weight:700;color:var(--gold-dark)">${amount}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">tap to view →</div>
-      </div>
-    </div>`;
 
   // Upcoming events (next 21 days) — uses same expanded engine as desktop calendar
   const _evFrom = new Date(now); _evFrom.setHours(0,0,0,0);
@@ -7233,16 +7420,8 @@ function mobDashboard() {
   }).join('') : '<div style="font-size:13px;color:var(--text3);padding:8px 0">No upcoming events in the next 21 days</div>';
 
   el.innerHTML =
-    `<div style="background:var(--surface);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
-      <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px">This Month Revenue</div>
-      <div style="font-size:30px;font-weight:800;color:var(--gold-dark);margin:4px 0">${fmt(sum(thisMonthOrders))}</div>
-      <div style="font-size:12px;color:var(--text3)">${thisMonthOrders.length} orders</div>
-    </div>` +
-    statCard('Active Orders', active.length, fmt(sum(active)), '#4f7ef8', 'orders') +
-    statCard('Completed', completed.length, fmt(sum(completed)), '#2ecc71', 'completed') +
-    statCard('Claims', claims.length, fmt(sum(claims)), '#f39c12', 'claims') +
-    (issues.length ? statCard('Issues', issues.length, fmt(sum(issues)), '#e74c3c', 'issues') : '') +
-    statCard('Closed', closed.length, fmt(sum(closed)), '#8b90a7', 'closed') +
+    _mobCompareCard() +
+    _mobAreaCard() +
     `<div style="background:var(--surface);border-radius:12px;padding:14px 16px;margin-top:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
       <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">📅 Upcoming Events</div>
       ${evtHtml}
@@ -7408,6 +7587,12 @@ function mobCardActions(o) {
 async function mobQuickComplete(id) {
   const o = DB.orders.find(x => x.id === id);
   if (!o) return toast('Order not found', 'error');
+
+  // Ask first. A one-tap report was too easy to fire by accident in a pocket
+  // or with a glove on, and the office then has to work out whether a job is
+  // really finished.
+  if (!confirm((o.orderNumber || '') + '\n' + (o.address || '') +
+               '\n\nReport this job as finished?')) return;
 
   try {
     const db = (typeof _rtdbDb === 'function' ? _rtdbDb() : null) || _rtdbDB;
@@ -7577,7 +7762,7 @@ function mobBackToHome() {
     if (el) el.style.display = '';
   });
   // Restore all nav tabs
-  ['mt-dashboard','mt-orders','mt-completed','mt-issues','mt-all'].forEach(id => {
+  ['mt-dashboard','mt-orders','mt-completed','mt-issues'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = '';
   });
@@ -7991,7 +8176,7 @@ function mobApplySubbieUI() {
   // Subbie sees: Active, Completed, Issues, All Orders — NO dashboard, NO FAB
   const dash = document.getElementById('mt-dashboard');
   if (dash) dash.style.display = 'none';
-  ['mt-orders','mt-completed','mt-issues','mt-all'].forEach(id => {
+  ['mt-orders','mt-completed','mt-issues'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = '';
   });
@@ -8019,9 +8204,9 @@ function mobApplyAdminUI() {
   const isSKUser    = window._ADMIN_MODE && !!_skVal && _skVal !== 'admin';
 
   // Tab visibility
-  const allTabs     = ['mt-dashboard','mt-orders','mt-completed','mt-issues','mt-all'];
-  const skUserTabs  = ['mt-dashboard','mt-orders','mt-completed','mt-issues']; // no All Orders
-  const hiddenForSK = ['mt-all'];
+  const allTabs     = ['mt-dashboard','mt-orders','mt-completed','mt-issues'];
+  const skUserTabs  = ['mt-dashboard','mt-orders','mt-completed','mt-issues'];
+  const hiddenForSK = [];
 
   if (isFullAdmin) {
     // Admin — all tabs visible
