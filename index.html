@@ -2056,7 +2056,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-02-u';
+const APP_BUILD = '2026-08-02-v';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2553,8 +2553,18 @@ function _subbieColourMap() {
   try { return JSON.parse(lsGet('hom_subbie_colours') || '{}'); } catch (e) { return {}; }
 }
 
+let _subbieAssignCache = null, _subbieAssignSig = '';
+
 function _subbieAssign() {
   const manual = _subbieColourMap();
+  // This walks every order. The Subcontractors page renders on each 3s poll and
+  // getSubbieStyle() calls it per row, so recomputing meant thousands of passes
+  // over 3,000+ orders a minute — the page never settled and read as a
+  // permanent refresh. Cache on the set of names plus the manual overrides.
+  const sig = (typeof DB !== 'undefined' && DB.orders ? DB.orders.length : 0) + '|' +
+              (typeof TRACKED_SUBBIES !== 'undefined' ? TRACKED_SUBBIES.join(',') : '') + '|' +
+              JSON.stringify(manual);
+  if (_subbieAssignCache && _subbieAssignSig === sig) return _subbieAssignCache;
   const names = [...new Set(
     (typeof DB !== 'undefined' && DB.orders ? DB.orders.map(o => o && o.subbies) : [])
       .concat(typeof TRACKED_SUBBIES !== 'undefined' ? TRACKED_SUBBIES : [])
@@ -2578,6 +2588,8 @@ function _subbieAssign() {
     const p = _SUBBIE_PALETTES[next % _SUBBIE_PALETTES.length];
     out[n] = p; used.add(p.border); next++;
   });
+  _subbieAssignCache = out;
+  _subbieAssignSig = sig;
   return out;
 }
 
@@ -2594,6 +2606,7 @@ function getSubbieStyle(name) {
 // A new name changes the assignment, so the cache has to go with it.
 function subbieColoursChanged() {
   _subbieColorCache = {};
+  _subbieAssignCache = null;
   try { if (typeof renderAll === 'function' && currentPage) showPage(currentPage); } catch (e) {}
 }
 
@@ -4631,14 +4644,38 @@ function _docDisposition(name) {
 // Files uploaded before the metadata fix still open inline instead of
 // downloading. Patching the object metadata is a one-line Storage call and it
 // is permanent, so it happens on first download and never again.
+// updateMetadata resolving is not proof the header changed — read it back.
+// Every earlier attempt assumed success and then flagged the record as fixed,
+// so a silently ineffective write looked identical to a working one and the
+// PDF kept opening in a tab.
 async function _docFixDisposition(orderId, key, fl) {
   if (!fl.path || !firebase.storage) return false;
-  await firebase.storage(firebase.apps[0]).ref(fl.path).updateMetadata({
+  const ref = firebase.storage(firebase.apps[0]).ref(fl.path);
+  await ref.updateMetadata({
     contentType: fl.type || _docMime(fl.name),
     contentDisposition: _docDisposition(fl.name)
   });
-  try { await _docsDb().ref('/docs/' + orderId + '/' + key + '/disp').set(true); } catch (e) {}
-  return true;
+
+  let ok = false;
+  try {
+    const meta = await ref.getMetadata();
+    ok = /^attachment/i.test(String(meta.contentDisposition || ''));
+    if (!ok) console.warn('[DOC] disposition did not stick:', fl.name, meta.contentDisposition);
+  } catch (e) {
+    console.warn('[DOC] could not verify metadata:', e.code || e.message);
+  }
+
+  if (ok) { try { await _docsDb().ref('/docs/' + orderId + '/' + key + '/disp').set(true); } catch (e) {} }
+  return ok;
+}
+
+// Storage answers the same URL from the browser cache, headers and all. A PDF
+// opened inline once keeps opening inline even after the header is corrected.
+// An ignored query param is a new URL to the cache and the same object to
+// Firebase.
+function _docFreshUrl(url) {
+  if (!url) return url;
+  return url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cb=' + Date.now();
 }
 
 // Fetching the bytes ourselves is the only method that reliably produces a
@@ -4700,7 +4737,7 @@ async function docGrab(orderId, key) {
   }
 
   const a = document.createElement('a');
-  a.href = fl.url;
+  a.href = forced ? _docFreshUrl(fl.url) : fl.url;
   a.download = fl.name || 'download';
   a.rel = 'noopener';
   if (!forced) {
@@ -4738,10 +4775,14 @@ async function docDiagnose() {
   }
   if (any.path && firebase.storage) {
     try {
-      await firebase.storage(firebase.apps[0]).ref(any.path).updateMetadata({
-        contentDisposition: _docDisposition(any.name)
-      });
-      L.push('Metadata update: OK — old files can be repaired on download');
+      const r2 = firebase.storage(firebase.apps[0]).ref(any.path);
+      await r2.updateMetadata({ contentDisposition: _docDisposition(any.name) });
+      // Report what is actually stored, not what we asked for.
+      const m2 = await r2.getMetadata();
+      L.push('Stored Content-Disposition: ' + (m2.contentDisposition || '(none)'));
+      L.push(/^attachment/i.test(String(m2.contentDisposition || ''))
+        ? 'Metadata update: OK — this file will download, not open'
+        : 'Metadata update: WROTE BUT DID NOT STICK — the file will open in a tab');
     } catch (e) {
       L.push('Metadata update: REFUSED — ' + (e.code || e.message));
       L.push('  → Storage rules reject metadata-only writes. Add to docs/{...}:');
@@ -4769,13 +4810,16 @@ async function docGrabAll(orderId) {
   // render it, and the PDF quietly opened into a blocked tab instead. Getting
   // all the headers right first means every file is a plain download.
   const unfixed = keys.filter(k => files[k].disp !== true);
+  let notForced = 0;
   if (unfixed.length) {
     toast('파일 준비 중…', 'info');
-    await Promise.all(unfixed.map(async k => {
-      try { await _docFixDisposition(orderId, k, files[k]); }
-      catch (e) { console.warn('[DOC] disposition fix failed:', k, e.code || e.message); }
+    const results = await Promise.all(unfixed.map(async k => {
+      try { return await _docFixDisposition(orderId, k, files[k]); }
+      catch (e) { console.warn('[DOC] disposition fix failed:', k, e.code || e.message); return false; }
     }));
+    notForced = results.filter(r => !r).length;
   }
+  if (notForced) toast(notForced + '개 파일은 브라우저에서 열릴 수 있습니다 — 🔧 진단 확인', 'error');
 
   toast(keys.length + '개 파일 다운로드 중', 'success');
   let failed = 0;
@@ -4784,7 +4828,7 @@ async function docGrabAll(orderId) {
     if (!fl || !fl.url) { failed++; continue; }
     docMarkRead(orderId, k);
     const a = document.createElement('a');
-    a.href = fl.url;
+    a.href = _docFreshUrl(fl.url);
     a.download = fl.name || 'download';
     a.rel = 'noopener';
     // Never a new tab here: a blocked popup is silent, and in a batch the user
@@ -6559,13 +6603,26 @@ function setSubPerson(name) {
 // which name owns which colour, and fix one when two read as similar.
 function renderSubbieColourBar() {
   const el = document.getElementById('sub-person-tabs');
-  if (!el || document.getElementById('sub-colour-bar')) return;
+  if (!el) return;
   const map = _subbieAssign();
-  const names = Object.keys(map).filter(n => !n.startsWith('SK_') || true).sort();
+  const names = Object.keys(map).sort();
   if (!names.length) return;
-  const bar = document.createElement('div');
-  bar.id = 'sub-colour-bar';
-  bar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px';
+
+  // Reuse the element. Removing and re-appending it on every render made the
+  // whole block flash on each poll, which looked like the page reloading.
+  let bar = document.getElementById('sub-colour-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'sub-colour-bar';
+    bar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px';
+    el.parentElement.appendChild(bar);
+  }
+  // Only touch innerHTML when it would actually change — rewriting it closes
+  // any colour picker the user has open.
+  const sig = names.map(n => n + ':' + map[n].border).join('|');
+  if (bar._sig === sig) return;
+  bar._sig = sig;
+
   bar.innerHTML =
     '<span style="font-size:10.5px;font-weight:800;color:var(--text3);letter-spacing:.4px">ROW COLOUR</span>' +
     names.map(nm => {
@@ -6581,15 +6638,12 @@ function renderSubbieColourBar() {
     }).join('') +
     '<button onclick="subbieResetColours()" style="border:1px solid var(--border);background:var(--surface);' +
     'border-radius:20px;padding:3px 10px;font-size:11px;color:var(--text3);cursor:pointer;font-family:inherit">Reset</button>';
-  el.parentElement.appendChild(bar);
 }
 
 function renderSubPersonTabs() {
   const el = document.getElementById('sub-person-tabs');
   if (!el) return;
-  const _cb = document.getElementById('sub-colour-bar');
-  if (_cb) _cb.remove();
-  setTimeout(renderSubbieColourBar, 0);
+  renderSubbieColourBar();
   const orders = DB.orders.filter(o => o.subbies && !o.subbies.startsWith('SK_') && o.status !== 'cancelled');
   const allNames = [...new Set([...TRACKED_SUBBIES, ...orders.map(o=>o.subbies).filter(Boolean)])];
   const tabs = ['All', ...allNames];
