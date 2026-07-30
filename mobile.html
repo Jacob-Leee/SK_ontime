@@ -2273,11 +2273,6 @@ const SEED_VERSION = '15';
 // ============================================================
 // Staff picker UI state — declared up here so nothing can touch it in the TDZ.
 let _skEditing = false;
-const _SK_DEFAULT_COLOURS = {
-  SK_Jacob: '#007AFF', SK_Mo: '#AF52DE', SK_June: '#FF6B35', SK_Jay: '#34C759',
-  'Jake Lee': '#0D9488', 'Chris Choi': '#CA8A04', 'Sean Park': '#DB2777',
-};
-
 function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 
@@ -2293,7 +2288,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-03-a';
+const APP_BUILD     = '2026-08-03-c';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7704,16 +7699,49 @@ function mobDashboard() {
 // Same handful of names, re-hashed for every card on every render. Cached.
 // NB: _subbieColorCache was already taken by the row-style helper above.
 const _subbieHueCache = new Map();
-function _subbieColor(name) {
-  if (!name) return null;
-  let c = _subbieHueCache.get(name);
-  if (c) return c;
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
-  c = `hsl(${Math.abs(h) % 360},60%,45%)`;
-  _subbieHueCache.set(name, c);
-  return c;
+// Same colours as the desktop row tints, same assignment rule.
+//
+// Mobile used to hash the name into an HSL value, so the same person appeared
+// in one colour on the phone and another on the desktop — and two people could
+// still collide. These are the desktop's own border colours at full strength,
+// handed out by position in the sorted name list so nobody shares one until the
+// palette is exhausted.
+const _NAME_FIXED = { 'SK_Mo': '#3B82F6', 'SK_Jacob': '#16A34A', 'SK_June': '#EA580C', 'SK_Jay': '#9333EA', 'Jake Lee': '#0D9488', 'Sean Park': '#DB2777', 'Chris Choi': '#CA8A04' };
+const _NAME_PALETTE = ['#3B82F6', '#16A34A', '#EA580C', '#9333EA', '#CA8A04', '#DB2777', '#0D9488', '#DC2626', '#4F46E5', '#14B8A6', '#E11D48', '#65A30D', '#6366F1', '#C026D3'];
+
+let _nameColourCache = null, _nameColourSig = '';
+
+function _nameColourMap() {
+  const pool = [];
+  try { (DB.orders || []).forEach(o => { if (o && o.subbies) pool.push(String(o.subbies).trim()); }); } catch (e) {}
+  try { (_skNames() || []).forEach(n => pool.push(String(n).trim())); } catch (e) {}
+  try { (DB.subbies || []).forEach(n => pool.push(String(n).trim())); } catch (e) {}
+  const names = [...new Set(pool.filter(Boolean))].sort();
+
+  const sig = names.join('|');
+  if (_nameColourCache && _nameColourSig === sig) return _nameColourCache;
+
+  const used = new Set(), out = {};
+  names.forEach(n => { if (_NAME_FIXED[n]) { out[n] = _NAME_FIXED[n]; used.add(_NAME_FIXED[n]); } });
+  let next = 0;
+  names.forEach(n => {
+    if (out[n]) return;
+    let guard = 0;
+    while (used.has(_NAME_PALETTE[next % _NAME_PALETTE.length]) && guard++ < _NAME_PALETTE.length) next++;
+    const c = _NAME_PALETTE[next % _NAME_PALETTE.length];
+    out[n] = c; used.add(c); next++;
+  });
+  _nameColourCache = out; _nameColourSig = sig;
+  return out;
 }
+
+function nameColour(name) {
+  const k = String(name || '').trim();
+  if (!k) return '#8E8E93';
+  return _nameColourMap()[k] || _NAME_FIXED[k] || _NAME_PALETTE[0];
+}
+
+function _subbieColor(name) { return nameColour(name); }
 
 let _mobLastPage = null;
 function mobRefresh() {
@@ -8934,7 +8962,9 @@ function _skColours() {
   try { return JSON.parse(lsGet('hom_sk_colours') || '{}'); } catch (e) { return {}; }
 }
 function _skColour(name) {
-  return _skColours()[name] || _SK_DEFAULT_COLOURS[name] || '#8E8E93';
+  // Hand-picked first, then the shared assignment so the phone and the desktop
+  // agree on who is which colour.
+  return _skColours()[name] || nameColour(name);
 }
 function _skSetColour(name, hex) {
   const m = _skColours();
