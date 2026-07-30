@@ -2053,7 +2053,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-02-a';
+const APP_BUILD = '2026-08-02-c';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4444,8 +4444,17 @@ function _docMeName() {
                              : ((AUTH.entry && AUTH.entry.name) || NOTIF.me || 'SK');
 }
 function _docSeenByMe(f) {
-  if (!f || !f.readBy) return false;
-  return !!f.readBy[_docNameKey(_docMeName())];
+  if (!f) return false;
+  // You cannot receive your own upload. Marking the uploader's file as NEW made
+  // the badge meaningless for whoever does most of the uploading — KH LEE saw
+  // four NEW files that were all his own.
+  const me = _docNameKey(_docMeName());
+  if (f.by && _docNameKey(f.by) === me) return true;
+  // Once anyone has picked it up the file has landed, so it stops being NEW for
+  // everyone. Per-person tracking was more precise but left NEW sitting on
+  // files the team had already dealt with, which trains people to ignore it.
+  // Who actually took it is still recorded and shown in the ✓ label.
+  return Object.keys(f.readBy || {}).length > 0;
 }
 
 // ── Files on the order row ─────────────────────────────────────

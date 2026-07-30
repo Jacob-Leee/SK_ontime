@@ -448,7 +448,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-08-02-a';
+const APP_BUILD = '2026-08-02-c';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -988,8 +988,17 @@ function _docMeName() {
   return (typeof _user !== 'undefined' && _user) || window._SUBBIE_NAME || 'Subcontractor';
 }
 function _docSeenByMe(f) {
-  if (!f || !f.readBy) return false;
-  return !!f.readBy[_docNameKey(_docMeName())];
+  if (!f) return false;
+  // You cannot receive your own upload. Marking the uploader's file as NEW made
+  // the badge meaningless for whoever does most of the uploading — KH LEE saw
+  // four NEW files that were all his own.
+  const me = _docNameKey(_docMeName());
+  if (f.by && _docNameKey(f.by) === me) return true;
+  // Once anyone has picked it up the file has landed, so it stops being NEW for
+  // everyone. Per-person tracking was more precise but left NEW sitting on
+  // files the team had already dealt with, which trains people to ignore it.
+  // Who actually took it is still recorded and shown in the ✓ label.
+  return Object.keys(f.readBy || {}).length > 0;
 }
 
 // Small badge for an order card: how many files, how many still untouched.

@@ -2293,7 +2293,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-02-a';
+const APP_BUILD     = '2026-08-02-c';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7833,8 +7833,17 @@ function _docMeName() {
   return (typeof NOTIF !== 'undefined' && NOTIF.me) || window._SK_USER || window._SELECTED_SUBBIE || 'SK';
 }
 function _docSeenByMe(f) {
-  if (!f || !f.readBy) return false;
-  return !!f.readBy[_docNameKey(_docMeName())];
+  if (!f) return false;
+  // You cannot receive your own upload. Marking the uploader's file as NEW made
+  // the badge meaningless for whoever does most of the uploading — KH LEE saw
+  // four NEW files that were all his own.
+  const me = _docNameKey(_docMeName());
+  if (f.by && _docNameKey(f.by) === me) return true;
+  // Once anyone has picked it up the file has landed, so it stops being NEW for
+  // everyone. Per-person tracking was more precise but left NEW sitting on
+  // files the team had already dealt with, which trains people to ignore it.
+  // Who actually took it is still recorded and shown in the ✓ label.
+  return Object.keys(f.readBy || {}).length > 0;
 }
 
 // Small badge for an order card: how many files, how many still untouched.
