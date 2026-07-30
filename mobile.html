@@ -2293,7 +2293,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-01-l';
+const APP_BUILD     = '2026-08-01-t';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7057,6 +7057,12 @@ function initApp() {
     startCalendarWatch();
     try { _rtdbWatchIssueReports(); } catch (e) { console.error('[BOOT] issue watcher failed:', e); }
     try { _rtdbWatchFieldReports(); } catch (e) { console.error('[BOOT] field reports failed:', e); }
+    try {
+      watchNotices(function () {
+        try { mobCountNotices(); } catch (e) {}
+        try { if (_mobPage === 'notices') mobNoticesPage(); } catch (e) {}
+      });
+    } catch (e) { console.error('[BOOT] notices watcher failed:', e); }
     Promise.resolve().then(() => _rtdbAutoMirror('startup')).catch(e => console.error('[BOOT] mirror failed:', e));
     setTimeout(() => { try { _syncHealthCheck(); } catch (e) {} }, 1500);
     if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
@@ -7833,9 +7839,17 @@ function _noticeDb() {
   return null;
 }
 
+// Nothing on mobile ever called this, so _notices stayed empty and the area
+// chips had nothing to show — the feature looked implemented and was not.
+// Started at boot now, with a retry because RTDB may not be up on first call.
+let _noticeWatchTries = 0;
 function watchNotices(onChange) {
+  if (_noticeWatch) return;
   const db = _noticeDb();
-  if (!db || _noticeWatch) return;
+  if (!db) {
+    if (_noticeWatchTries++ < 20) setTimeout(() => watchNotices(onChange), 500);
+    return;
+  }
   _noticeWatch = true;
   db.ref('/notices').on('value', snap => {
     _notices = snap.val() || {};
