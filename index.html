@@ -2058,7 +2058,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-l';
+const APP_BUILD = '2026-08-01-m';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4762,7 +4762,8 @@ function renderAreaNotices() {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:${all.length?'8px':'0'}">
       <span style="font-size:11.5px;font-weight:800;color:#4338CA;letter-spacing:.4px">&#128227; AREA NOTICES</span>
       <span style="font-size:11px;color:#6366F1;flex:1">Everyone sees these — office and subcontractors</span>
-      ${readOnly ? '' : `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="noticeAdd()">+ Add</button>`}
+      ${readOnly ? '' : `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="noticeAdd()">+ Add</button>
+      <button class="icon-btn" title="Why is this not working?" style="font-size:12px" onclick="noticeDiagnose()">&#128295;</button>`}
     </div>
     ${all.map(n => `<div style="display:flex;gap:9px;align-items:flex-start;padding:6px 0;border-top:1px solid #DDE3FF">
       <span style="flex-shrink:0;font-weight:800;color:#4338CA;font-size:12px;min-width:38px">${esc(n.area)}</span>
@@ -4773,20 +4774,107 @@ function renderAreaNotices() {
   </div>`;
 }
 
-async function noticeAdd() {
-  const area = (prompt('Which area?\n\n' + NOTICE_AREAS.join(' · '), '') || '').trim().toUpperCase();
-  if (!area) return;
-  if (!NOTICE_AREAS.includes(area)) return toast('Unknown area: ' + area, 'error');
-  const text = (prompt(`Notice for ${area}\n\ne.g. "Rear lane access only — front gate locked"`, '') || '').trim();
-  if (!text) return;
+// Two chained prompt() calls was the wrong shape for this.
+//
+// Browsers show a "prevent this page from creating additional dialogs" tick on
+// the first dialog, and once it is ticked the SECOND prompt returns null with
+// no error at all — so the area was accepted and the notice silently never
+// arrived. A single modal has one dialog, a real dropdown for the area (no
+// typing an area code that then fails validation), and somewhere to put an
+// error message when the write is refused.
+function _noticeAreas() {
+  const live = (typeof DB !== 'undefined' && DB.orders)
+    ? DB.orders.map(o => o && o.area).filter(Boolean) : [];
+  return [...new Set(NOTICE_AREAS.concat(live))].sort((a, b) => {
+    const na = parseInt(String(a).replace(/\D/g, ''), 10), nb = parseInt(String(b).replace(/\D/g, ''), 10);
+    return (isNaN(na) || isNaN(nb)) ? String(a).localeCompare(String(b)) : na - nb;
+  });
+}
+
+function noticeClose() {
+  const el = document.getElementById('notice-modal');
+  if (el) el.remove();
+  document.removeEventListener('keydown', _noticeKey, true);
+}
+function _noticeKey(e) { if (e.key === 'Escape') noticeClose(); }
+
+function noticeAdd(presetArea) {
+  noticeClose();
+  const wrap = document.createElement('div');
+  wrap.id = 'notice-modal';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:20px';
+  wrap.onclick = (e) => { if (e.target === wrap) noticeClose(); };
+  wrap.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
+      box-shadow:0 18px 50px rgba(0,0,0,.25);width:100%;max-width:440px;overflow:hidden">
+    <div style="padding:13px 16px;background:#EEF2FF;border-bottom:1px solid #C7D2FE">
+      <b style="font-size:13.5px;color:#3730A3">&#128227; New area notice</b>
+      <div style="font-size:11.5px;color:#6366F1;margin-top:2px">Everyone sees this — office, mobile and subcontractors</div>
+    </div>
+    <div style="padding:15px 16px">
+      <label style="display:block;font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Area</label>
+      <select id="notice-area" class="form-control" style="width:100%;margin-bottom:13px">
+        ${_noticeAreas().map(a => `<option value="${escAttr(a)}"${a === presetArea ? ' selected' : ''}>${esc(a)}</option>`).join('')}
+      </select>
+      <label style="display:block;font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Notice</label>
+      <textarea id="notice-text" class="form-control" rows="4" style="width:100%;resize:vertical"
+        placeholder="e.g. Rear lane access only — front gate locked"></textarea>
+      <div id="notice-err" style="display:none;margin-top:10px;font-size:12px;line-height:1.5;color:#B91C1C;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:9px 11px"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border);background:var(--cream2)">
+      <button class="btn btn-sm btn-secondary" onclick="noticeClose()">Cancel</button>
+      <button id="notice-post" class="btn btn-sm btn-primary" onclick="noticeSubmit()">Post notice</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+  document.addEventListener('keydown', _noticeKey, true);
+  setTimeout(() => { const t = document.getElementById('notice-text'); if (t) t.focus(); }, 30);
+}
+
+function _noticeError(msg) {
+  const el = document.getElementById('notice-err');
+  if (!el) return toast(msg, 'error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+// A refused write and a broken connection look identical to the person at the
+// desk, so say which one it is. "Failed: PERMISSION_DENIED" sent nobody to the
+// rules page, which is where the fix actually is.
+function _noticeReason(e) {
+  const code = String((e && (e.code || e.message)) || '').toUpperCase();
+  if (code.includes('PERMISSION') || code.includes('DENIED')) {
+    return 'Firebase refused the write. The Realtime Database rules do not include /notices yet — ' +
+           'publish database.rules.json in the Firebase console, then try again.';
+  }
+  if (code.includes('NETWORK') || code.includes('UNAVAILABLE') || code.includes('OFFLINE')) {
+    return 'No connection to Firebase. Check the network and try again.';
+  }
+  return 'Could not post the notice: ' + ((e && (e.message || e.code)) || 'unknown error');
+}
+
+async function noticeSubmit() {
+  const area = (document.getElementById('notice-area') || {}).value || '';
+  const text = ((document.getElementById('notice-text') || {}).value || '').trim();
+  if (!area) return _noticeError('Pick an area.');
+  if (!text) return _noticeError('Type the notice first.');
+
   const db = _noticeDb();
-  if (!db) return toast('Not connected', 'error');
+  if (!db) return _noticeError('Not connected to Firebase — reload the page and try again.');
+
+  const btn = document.getElementById('notice-post');
+  if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
   try {
     await db.ref('/notices/' + area).push({
-      text, by: (AUTH.entry && AUTH.entry.name) || NOTIF.me || 'SK', at: Date.now()
+      text, by: _docMeName(), at: Date.now()
     });
+    noticeClose();
     toast('Notice posted for ' + area, 'success');
-  } catch (e) { toast('Failed: ' + (e.message || e), 'error'); }
+    renderAreaNotices();
+  } catch (e) {
+    console.error('[NOTICE] post failed:', e);
+    _noticeError(_noticeReason(e));
+    if (btn) { btn.disabled = false; btn.textContent = 'Post notice'; }
+  }
 }
 
 async function noticeDelete(area, key) {
@@ -4796,7 +4884,35 @@ async function noticeDelete(area, key) {
   try {
     await _noticeDb().ref('/notices/' + area + '/' + key).remove();
     toast('Removed', 'success');
-  } catch (e) { toast('Failed: ' + (e.message || e), 'error'); }
+    renderAreaNotices();
+  } catch (e) {
+    console.error('[NOTICE] delete failed:', e);
+    toast(_noticeReason(e), 'error');
+  }
+}
+
+// Answers "is it me, the rules, or the network" without reading a stack trace.
+async function noticeDiagnose() {
+  const L = [];
+  const db = _noticeDb();
+  L.push('RTDB handle: ' + (db ? 'ok' : 'MISSING'));
+  L.push('Signed in as: ' + _docMeName());
+  L.push('Subbie view: ' + (window._SUBBIE_VIEW ? 'yes (read-only)' : 'no'));
+  L.push('Notices loaded: ' + Object.keys(_notices || {}).length + ' area(s)');
+  if (db) {
+    try {
+      const ref = await db.ref('/notices/__test').push({ text: 'diagnostic', at: Date.now() });
+      L.push('Write test: OK');
+      try { await ref.remove(); L.push('Delete test: OK'); }
+      catch (e) { L.push('Delete test: FAILED — ' + (e.code || e.message)); }
+    } catch (e) {
+      L.push('Write test: FAILED — ' + (e.code || e.message));
+      L.push('→ ' + _noticeReason(e));
+    }
+  }
+  const out = L.join('\n');
+  console.log('[NOTICE DIAG]\n' + out);
+  alert(out);
 }
 
 function renderFilesPage() {
