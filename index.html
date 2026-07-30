@@ -926,6 +926,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
           </span>
         </div>
         <div id="files-note" style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6"></div>
+        <div id="area-notices"></div>
         <div id="files-list"></div>
       </div>
 
@@ -2057,7 +2058,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-g';
+const APP_BUILD = '2026-08-01-h';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4529,11 +4530,125 @@ function _subbieColour(name) {
   return c;
 }
 
+// ── Area notices ───────────────────────────────────────────────
+// Shared standing information about a patch: access quirks, a council rule,
+// a Homes NSW contact change. It lives against the AREA rather than an order
+// because it applies to every job there, and repeating it per order is how it
+// ends up out of date in half of them.
+let _notices = {}, _noticeWatch = false;
+
+function _noticeDb() {
+  if (typeof _rtdbDb === 'function') { const d = _rtdbDb(); if (d) return d; }
+  if (typeof _rtdbDB !== 'undefined' && _rtdbDB) return _rtdbDB;
+  if (typeof _rtdbInit === 'function') { _rtdbInit(); return (typeof _rtdbDB !== 'undefined') ? _rtdbDB : null; }
+  return null;
+}
+
+function watchNotices(onChange) {
+  const db = _noticeDb();
+  if (!db || _noticeWatch) return;
+  _noticeWatch = true;
+  db.ref('/notices').on('value', snap => {
+    _notices = snap.val() || {};
+    if (onChange) { try { onChange(); } catch (e) {} }
+  });
+}
+
+function noticesFor(area) {
+  const a = (area || '').trim();
+  if (!a) return [];
+  const m = _notices[a] || {};
+  return Object.keys(m).map(k => Object.assign({ _key: k }, m[k]))
+    .filter(n => n && n.text)
+    .sort((a2, b2) => (b2.at || 0) - (a2.at || 0));
+}
+
+function noticeChip(area) {
+  const n = noticesFor(area);
+  if (!n.length) return '';
+  return `<span title="${escAttr(n[0].text)}" style="display:inline-flex;align-items:center;gap:4px;
+    font-size:10.5px;font-weight:700;background:#EEF2FF;color:#4338CA;border-radius:20px;padding:2px 8px">
+    &#128227; ${esc(area)}${n.length > 1 ? ' ' + n.length : ''}</span>`;
+}
+
+function noticeBlock(areas) {
+  const list = [];
+  [...new Set((areas || []).filter(Boolean))].forEach(a =>
+    noticesFor(a).forEach(n => list.push(Object.assign({ area: a }, n))));
+  if (!list.length) return '';
+  list.sort((a, b) => (b.at || 0) - (a.at || 0));
+  return `<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:12px;padding:11px 13px;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:800;color:#4338CA;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">&#128227; Area notices</div>
+    ${list.slice(0, 8).map(n => `<div style="display:flex;gap:8px;padding:5px 0;font-size:12.5px;line-height:1.5">
+      <span style="flex-shrink:0;font-weight:800;color:#4338CA;min-width:34px">${esc(n.area)}</span>
+      <span style="flex:1;min-width:0;color:var(--text2,#3C3C43);white-space:pre-wrap">${esc(n.text)}</span>
+      <span style="flex-shrink:0;font-size:10.5px;color:var(--text3)">${esc(n.by || '')}</span>
+    </div>`).join('')}
+  </div>`;
+}
+
+// Notices are visible to everyone, including subcontractors. Only staff write
+// them — a standing instruction that anyone can quietly change is not a
+// standing instruction.
+const NOTICE_AREAS = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
+
+function renderAreaNotices() {
+  const host = document.getElementById('area-notices');
+  if (!host) return;
+  watchNotices(renderAreaNotices);
+
+  const all = [];
+  NOTICE_AREAS.forEach(a => noticesFor(a).forEach(n => all.push(Object.assign({ area: a }, n))));
+  all.sort((x, y) => (y.at || 0) - (x.at || 0));
+  const readOnly = !!window._SUBBIE_VIEW;
+
+  host.innerHTML = `<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:11px;padding:11px 13px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:${all.length?'8px':'0'}">
+      <span style="font-size:11.5px;font-weight:800;color:#4338CA;letter-spacing:.4px">&#128227; AREA NOTICES</span>
+      <span style="font-size:11px;color:#6366F1;flex:1">Everyone sees these — office and subcontractors</span>
+      ${readOnly ? '' : `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="noticeAdd()">+ Add</button>`}
+    </div>
+    ${all.map(n => `<div style="display:flex;gap:9px;align-items:flex-start;padding:6px 0;border-top:1px solid #DDE3FF">
+      <span style="flex-shrink:0;font-weight:800;color:#4338CA;font-size:12px;min-width:38px">${esc(n.area)}</span>
+      <span style="flex:1;min-width:0;font-size:12.5px;line-height:1.55;white-space:pre-wrap">${esc(n.text)}</span>
+      <span style="flex-shrink:0;font-size:11px;color:var(--text3)">${esc(n.by || '')}${n.at ? ' · ' + new Date(n.at).toLocaleDateString('en-AU',{day:'2-digit',month:'short'}) : ''}</span>
+      ${readOnly ? '' : `<button class="icon-btn" title="Delete" onclick="noticeDelete('${escAttr(n.area)}','${escAttr(n._key)}')">&#128465;</button>`}
+    </div>`).join('')}
+  </div>`;
+}
+
+async function noticeAdd() {
+  const area = (prompt('Which area?\n\n' + NOTICE_AREAS.join(' · '), '') || '').trim().toUpperCase();
+  if (!area) return;
+  if (!NOTICE_AREAS.includes(area)) return toast('Unknown area: ' + area, 'error');
+  const text = (prompt(`Notice for ${area}\n\ne.g. "Rear lane access only — front gate locked"`, '') || '').trim();
+  if (!text) return;
+  const db = _noticeDb();
+  if (!db) return toast('Not connected', 'error');
+  try {
+    await db.ref('/notices/' + area).push({
+      text, by: (AUTH.entry && AUTH.entry.name) || NOTIF.me || 'SK', at: Date.now()
+    });
+    toast('Notice posted for ' + area, 'success');
+  } catch (e) { toast('Failed: ' + (e.message || e), 'error'); }
+}
+
+async function noticeDelete(area, key) {
+  const n = noticesFor(area).find(x => x._key === key);
+  if (!n) return;
+  if (!confirm(`Remove this notice?\n\n${area} — ${n.text}`)) return;
+  try {
+    await _noticeDb().ref('/notices/' + area + '/' + key).remove();
+    toast('Removed', 'success');
+  } catch (e) { toast('Failed: ' + (e.message || e), 'error'); }
+}
+
 function renderFilesPage() {
   const list = document.getElementById('files-list');
   if (!list) return;
   watchDocs();
   watchSubbieMirror();
+  renderAreaNotices();
 
   const q    = (document.getElementById('files-search')?.value || '').toLowerCase();
   const mode = document.getElementById('files-filter')?.value || 'all';
@@ -4609,7 +4724,11 @@ function renderFilesPage() {
         ${o.area ? `<span class="area-tag">${esc(o.area)}</span>` : ''}
         ${o.prn ? `<span style="font-size:11.5px;color:var(--text3)">PRN ${esc(o.prn)}</span>` : ''}
         <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          ${keys.length ? `<span style="font-size:11.5px;color:var(--text3)">${keys.length} file${keys.length>1?'s':''}</span>` : ''}
+          ${keys.length ? (() => {
+            const unread = keys.filter(k => !Object.keys(files[k].readBy || {}).length).length;
+            return `<span style="font-size:11.5px;color:var(--text3)">${keys.length} file${keys.length>1?'s':''}</span>` +
+              (unread ? `<span title="${unread} not downloaded yet" style="margin-left:6px;font-size:10px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:20px;padding:1px 7px">${unread} NEW</span>` : '');
+          })() : ''}
           <button class="btn btn-sm btn-secondary" style="font-size:11.5px" onclick="docPick('${o.id}')">&#8593; Upload</button>
         </span>
       </div>
@@ -4621,7 +4740,10 @@ function renderFilesPage() {
           <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${docSize(f.size)}</span>
           <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${esc(f.by || '')}</span>
           <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${f.at ? new Date(f.at).toLocaleDateString('en-AU',{day:'2-digit',month:'short'}) : ''}</span>
-          <a href="${esc(f.url)}" download="${escAttr(f.name)}" target="_blank" rel="noopener" class="btn btn-sm btn-secondary" style="font-size:11px;text-decoration:none">&#8595;</a>
+          ${docReadLabel(f)}
+          <a href="${esc(f.url)}" download="${escAttr(f.name)}" target="_blank" rel="noopener"
+             onclick="docMarkRead('${o.id}','${escAttr(k)}')"
+             class="btn btn-sm btn-secondary" style="font-size:11px;text-decoration:none">&#8595;</a>
           <button class="icon-btn" title="Delete" onclick="docDelete('${o.id}','${escAttr(k)}')">&#128465;</button>
         </div>`;
       }).join('')}
@@ -4711,6 +4833,38 @@ function docUsage() {
   let n = 0, bytes = 0;
   Object.keys(_docs).forEach(oid => Object.values(_docs[oid] || {}).forEach(f => { n++; bytes += (f.size || 0); }));
   return { n, bytes };
+}
+
+// Who has picked a file up.
+//
+// "Did they get the scope?" was a phone call. The upload side was visible but
+// the receiving side was not, so nobody could tell a delivered document from
+// one still sitting there.
+function docMarkRead(orderId, key) {
+  const db = _docsDb();
+  if (!db) return;
+  const who = window._SUBBIE_VIEW ? (window._SUBBIE_NAME || 'Subcontractor')
+                                  : ((AUTH.entry && AUTH.entry.name) || NOTIF.me || 'SK');
+  // Recorded per person, so a second download by the same person does not
+  // overwrite the fact that someone else already had it.
+  db.ref('/docs/' + orderId + '/' + key + '/readBy/' + _docNameKey(who))
+    .set({ name: who, at: Date.now() })
+    .catch(e => console.warn('[DOC] read mark failed:', e.message));
+}
+
+// Firebase keys cannot contain . # $ [ ] /
+function _docNameKey(n) {
+  return String(n || 'unknown').replace(/[.#$[\]/]/g, '_').slice(0, 60);
+}
+
+function docReadLabel(f) {
+  const rb = f.readBy || {};
+  const names = Object.values(rb).map(r => r && r.name).filter(Boolean);
+  if (!names.length) {
+    return `<span title="Nobody has downloaded this yet" style="font-size:10px;font-weight:700;color:#B45309;background:#FEF3C7;border-radius:20px;padding:1px 7px;white-space:nowrap">NEW</span>`;
+  }
+  const label = names.length === 1 ? names[0] : names.length + ' people';
+  return `<span title="Downloaded by ${escAttr(names.join(', '))}" style="font-size:10px;font-weight:700;color:#15803D;background:#DCFCE7;border-radius:20px;padding:1px 7px;white-space:nowrap">&#10003; ${esc(label)}</span>`;
 }
 
 function docPick(orderId) {

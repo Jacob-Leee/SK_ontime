@@ -30,6 +30,10 @@
     "docs": {
       ".read": true,
       ".write": true
+    },
+    "notices": {
+      ".read": true,
+      ".write": true
     }
   }
 }

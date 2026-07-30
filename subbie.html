@@ -445,7 +445,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-08-01-g';
+const APP_BUILD = '2026-08-01-h';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -674,6 +674,8 @@ function sbLogin(name, auto) {
 
     sbLoadOrders();
     sbWatchReports();
+    watchOrderDocs(function(){ try { sbRender(); } catch(e){} });
+    watchNotices(function(){ try { sbRender(); } catch(e){} });
     sbFcmSetup();
   }, 30);
 
@@ -868,6 +870,153 @@ function sbCopyFallback(text, done) {
   prompt('Copy this:', text);
 }
 
+// ── Order documents, read-only on a phone ─────────────────────
+// Uploading a 100 MB scope from a phone is not the job; knowing whether one
+// arrived, and being able to open it on site, is.
+let _pDocs = {}, _pDocsWatch = false;
+
+function _pDocsDb() {
+  if (typeof _rtdbDb === 'function') { const d = _rtdbDb(); if (d) return d; }
+  return (typeof _rtdbDB !== 'undefined' && _rtdbDB) ? _rtdbDB : null;
+}
+
+function watchOrderDocs(onChange) {
+  const db = _pDocsDb();
+  if (!db || _pDocsWatch) return;
+  _pDocsWatch = true;
+  db.ref('/docs').on('value', snap => {
+    _pDocs = snap.val() || {};
+    if (onChange) { try { onChange(); } catch (e) {} }
+  });
+}
+
+function docsFor(orderId) {
+  const m = _pDocs[orderId] || {};
+  return Object.keys(m).map(k => Object.assign({ _key: k }, m[k]))
+    .sort((a, b) => (b.at || 0) - (a.at || 0));
+}
+
+function _docNameKey(n) {
+  return String(n || 'unknown').replace(/[.#$[\]/]/g, '_').slice(0, 60);
+}
+
+function _pDocSize(b) {
+  if (!b) return '';
+  return b < 1048576 ? Math.round(b / 1024) + ' KB' : (b / 1048576).toFixed(1) + ' MB';
+}
+
+function _pDocIcon(name) {
+  const e = (String(name || '').split('.').pop() || '').toLowerCase();
+  if (e === 'pdf') return '\u{1F4C4}';
+  if (['xls','xlsx','xlsm','csv'].includes(e)) return '\u{1F4CA}';
+  if (['doc','docx'].includes(e)) return '\u{1F4DD}';
+  if (['jpg','jpeg','png','heic','webp','gif'].includes(e)) return '\u{1F5BC}';
+  return '\u{1F4CE}';
+}
+
+// Records who opened it, so the office can see the document landed.
+function docOpen(orderId, key, url, who) {
+  const db = _pDocsDb();
+  if (db) {
+    db.ref('/docs/' + orderId + '/' + key + '/readBy/' + _docNameKey(who))
+      .set({ name: who, at: Date.now() })
+      .catch(e => console.warn('[DOC] read mark failed:', e.message));
+  }
+  window.open(url, '_blank', 'noopener');
+}
+
+// Small badge for an order card: how many files, how many still untouched.
+function docBadge(orderId) {
+  const fs = docsFor(orderId);
+  if (!fs.length) return '';
+  const unread = fs.filter(f => !Object.keys(f.readBy || {}).length).length;
+  return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;
+    background:${unread ? '#FEF3C7' : 'rgba(0,0,0,.05)'};color:${unread ? '#B45309' : 'var(--text3)'};
+    border-radius:20px;padding:2px 8px">\u{1F4CE} ${fs.length}${unread ? ' · ' + unread + ' new' : ''}</span>`;
+}
+
+// Full list for an order detail view.
+function docListHtml(orderId, who) {
+  const fs = docsFor(orderId);
+  if (!fs.length) return '';
+  return `<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+    <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Documents</div>
+    ${fs.map(f => {
+      const read = Object.values(f.readBy || {}).map(r => r && r.name).filter(Boolean);
+      return `<div onclick="docOpen('${orderId}','${esc(f._key)}','${esc(f.url)}','${esc(who)}')"
+        style="display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        <span style="font-size:17px;flex-shrink:0">${_pDocIcon(f.name)}</span>
+        <span style="flex:1;min-width:0">
+          <span style="display:block;font-size:13px;color:var(--text1,var(--text));overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name || '')}</span>
+          <span style="display:block;font-size:11px;color:var(--text3);margin-top:1px">${_pDocSize(f.size)} · ${esc(f.by || '')}${
+            f.at ? ' · ' + new Date(f.at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) : ''}</span>
+        </span>
+        ${read.length
+          ? `<span title="Opened by ${esc(read.join(', '))}" style="font-size:10px;font-weight:700;color:#15803D;background:#DCFCE7;border-radius:20px;padding:2px 7px;flex-shrink:0">&#10003;</span>`
+          : `<span style="font-size:10px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:20px;padding:2px 7px;flex-shrink:0">NEW</span>`}
+        <span style="color:var(--text3);font-size:15px;flex-shrink:0">&#8595;</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ── Area notices ───────────────────────────────────────────────
+// Shared standing information about a patch: access quirks, a council rule,
+// a Homes NSW contact change. It lives against the AREA rather than an order
+// because it applies to every job there, and repeating it per order is how it
+// ends up out of date in half of them.
+let _notices = {}, _noticeWatch = false;
+
+function _noticeDb() {
+  if (typeof _rtdbDb === 'function') { const d = _rtdbDb(); if (d) return d; }
+  if (typeof _rtdbDB !== 'undefined' && _rtdbDB) return _rtdbDB;
+  if (typeof _rtdbInit === 'function') { _rtdbInit(); return (typeof _rtdbDB !== 'undefined') ? _rtdbDB : null; }
+  return null;
+}
+
+function watchNotices(onChange) {
+  const db = _noticeDb();
+  if (!db || _noticeWatch) return;
+  _noticeWatch = true;
+  db.ref('/notices').on('value', snap => {
+    _notices = snap.val() || {};
+    if (onChange) { try { onChange(); } catch (e) {} }
+  });
+}
+
+function noticesFor(area) {
+  const a = (area || '').trim();
+  if (!a) return [];
+  const m = _notices[a] || {};
+  return Object.keys(m).map(k => Object.assign({ _key: k }, m[k]))
+    .filter(n => n && n.text)
+    .sort((a2, b2) => (b2.at || 0) - (a2.at || 0));
+}
+
+function noticeChip(area) {
+  const n = noticesFor(area);
+  if (!n.length) return '';
+  return `<span title="${esc(n[0].text)}" style="display:inline-flex;align-items:center;gap:4px;
+    font-size:10.5px;font-weight:700;background:#EEF2FF;color:#4338CA;border-radius:20px;padding:2px 8px">
+    &#128227; ${esc(area)}${n.length > 1 ? ' ' + n.length : ''}</span>`;
+}
+
+function noticeBlock(areas) {
+  const list = [];
+  [...new Set((areas || []).filter(Boolean))].forEach(a =>
+    noticesFor(a).forEach(n => list.push(Object.assign({ area: a }, n))));
+  if (!list.length) return '';
+  list.sort((a, b) => (b.at || 0) - (a.at || 0));
+  return `<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:12px;padding:11px 13px;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:800;color:#4338CA;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">&#128227; Area notices</div>
+    ${list.slice(0, 8).map(n => `<div style="display:flex;gap:8px;padding:5px 0;font-size:12.5px;line-height:1.5">
+      <span style="flex-shrink:0;font-weight:800;color:#4338CA;min-width:34px">${esc(n.area)}</span>
+      <span style="flex:1;min-width:0;color:var(--text2,#3C3C43);white-space:pre-wrap">${esc(n.text)}</span>
+      <span style="flex-shrink:0;font-size:10.5px;color:var(--text3)">${esc(n.by || '')}</span>
+    </div>`).join('')}
+  </div>`;
+}
+
 function sbCardActions(o) {
   if ((o.status || 'active') !== 'active') return '';
   const pending = sbPendingFor(o.id);
@@ -962,7 +1111,8 @@ function sbRender() {
     return;
   }
 
-  list.innerHTML = orders.map(o => {
+  const noticeHtml = noticeBlock([...new Set(_allOrders.map(o => (o.area || '').trim()))]);
+  list.innerHTML = noticeHtml + orders.map(o => {
     const st = o.status || 'active';
     const col = SB_ST_COL[st] || '#007AFF';
     const lbl = SB_ST_LBL[st] || (st.charAt(0).toUpperCase() + st.slice(1));
@@ -977,6 +1127,8 @@ function sbRender() {
       '<div class="order-addr">' + esc(o.address || 'No address') + '</div>' +
       (meta ? '<div class="order-meta">' + esc(meta) + '</div>' : '') +
       (o.comments ? '<div class="oc-comment">&#128172; ' + esc(o.comments) + '</div>' : '') +
+      ((docBadge(o.id) || noticeChip(o.area))
+        ? '<div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap">' + noticeChip(o.area) + docBadge(o.id) + '</div>' : '') +
       sbCardActions(o) +
     '</div>';
   }).join('');
@@ -1050,7 +1202,8 @@ function sbOpenOrder(id) {
   // those four are not even fields on an order ('description' and 'scope' never
   // existed — the real names are 'detail' and 'comments'), so in practice the
   // sheet was blank. Render from the actual schema instead.
-  document.getElementById('dm-fields').innerHTML = sbDetailFields(o);
+  document.getElementById('dm-fields').innerHTML =
+    sbDetailFields(o) + docListHtml(o.id, _user || 'Subcontractor');
 
   // Reset upload UI
   sbClearPhotos();
