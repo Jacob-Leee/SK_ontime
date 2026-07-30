@@ -2056,7 +2056,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-02-r';
+const APP_BUILD = '2026-08-02-u';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2531,19 +2531,91 @@ const _SUBBIE_PALETTES = [
   { bg: 'rgba(251,207,232,0.42)', border: 'rgba(219,39,119,0.28)' },
   { bg: 'rgba(153,246,228,0.42)', border: 'rgba(13,148,136,0.28)' },
   { bg: 'rgba(254,202,202,0.42)', border: 'rgba(220,38,38,0.28)' },
+  { bg: 'rgba(199,210,254,0.42)', border: 'rgba(79,70,229,0.28)' },
+  { bg: 'rgba(204,251,241,0.42)', border: 'rgba(20,184,166,0.28)' },
+  { bg: 'rgba(255,228,230,0.42)', border: 'rgba(225,29,72,0.28)' },
+  { bg: 'rgba(217,249,157,0.42)', border: 'rgba(101,163,13,0.28)' },
+  { bg: 'rgba(224,231,255,0.42)', border: 'rgba(99,102,241,0.28)' },
+  { bg: 'rgba(250,232,255,0.42)', border: 'rgba(192,38,211,0.28)' },
 ];
-const _subbieColorCache = {};
+let _subbieColorCache = {};
+
+// Colours were picked by hashing the name, which collides — SK_Jacob and
+// KH LEE both landed on green, so two different people's rows looked like one
+// person's. A hash cannot promise uniqueness; assigning by position can.
+//
+// Order of preference:
+//   1. a colour the office picked by hand   (hom_subbie_colours)
+//   2. the long-standing fixed colours       (_SUBBIE_FIXED)
+//   3. the next unused palette slot, assigned in name order so it is stable
+//      across reloads and the same on every desk
+function _subbieColourMap() {
+  try { return JSON.parse(lsGet('hom_subbie_colours') || '{}'); } catch (e) { return {}; }
+}
+
+function _subbieAssign() {
+  const manual = _subbieColourMap();
+  const names = [...new Set(
+    (typeof DB !== 'undefined' && DB.orders ? DB.orders.map(o => o && o.subbies) : [])
+      .concat(typeof TRACKED_SUBBIES !== 'undefined' ? TRACKED_SUBBIES : [])
+      .concat(Object.keys(manual))
+      .map(n => (n || '').trim()).filter(Boolean)
+  )].sort();
+
+  const used = new Set();
+  const out = {};
+  // Hand-picked and long-standing colours are claimed first so nothing else
+  // can take them.
+  names.forEach(n => {
+    const p = manual[n] || _SUBBIE_FIXED[n];
+    if (p) { out[n] = p; used.add(p.border); }
+  });
+  let next = 0;
+  names.forEach(n => {
+    if (out[n]) return;
+    let guard = 0;
+    while (used.has(_SUBBIE_PALETTES[next % _SUBBIE_PALETTES.length].border) && guard++ < _SUBBIE_PALETTES.length) next++;
+    const p = _SUBBIE_PALETTES[next % _SUBBIE_PALETTES.length];
+    out[n] = p; used.add(p.border); next++;
+  });
+  return out;
+}
+
 function getSubbieStyle(name) {
   if (!name) return '';
-  if (_subbieColorCache[name] === undefined) {
-    const p = _SUBBIE_FIXED[name] || (() => {
-      let hash = 0;
-      for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-      return _SUBBIE_PALETTES[hash % _SUBBIE_PALETTES.length];
-    })();
-    _subbieColorCache[name] = `background:${p.bg};border-left:3px solid ${p.border};`;
+  const key = String(name).trim();
+  if (_subbieColorCache[key] === undefined) {
+    const p = _subbieAssign()[key] || _SUBBIE_PALETTES[0];
+    _subbieColorCache[key] = `background:${p.bg};border-left:3px solid ${p.border};`;
   }
-  return _subbieColorCache[name];
+  return _subbieColorCache[key];
+}
+
+// A new name changes the assignment, so the cache has to go with it.
+function subbieColoursChanged() {
+  _subbieColorCache = {};
+  try { if (typeof renderAll === 'function' && currentPage) showPage(currentPage); } catch (e) {}
+}
+
+// Manual pick. Stored per browser — the row tint is a reading aid for whoever
+// is at the desk, not shared data.
+function subbieSetColour(name, hex) {
+  const m = _subbieColourMap();
+  const rgb = (h => {
+    const v = h.replace('#', '');
+    return [parseInt(v.slice(0,2),16), parseInt(v.slice(2,4),16), parseInt(v.slice(4,6),16)];
+  })(hex);
+  m[String(name).trim()] = {
+    bg: `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.30)`,
+    border: `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.75)`
+  };
+  try { lsSet('hom_subbie_colours', JSON.stringify(m)); } catch (e) {}
+  subbieColoursChanged();
+}
+
+function subbieResetColours() {
+  try { lsSet('hom_subbie_colours', '{}'); } catch (e) {}
+  subbieColoursChanged();
 }
 
 async function cloudForcePush() {
@@ -4688,11 +4760,42 @@ async function docGrabAll(orderId) {
   const keys = Object.keys(files).filter(k => files[k]);
   if (!keys.length) return;
   docChipClose();
-  toast(keys.length + '개 파일 다운로드 중', 'success');
-  for (const k of keys) {
-    await docGrab(orderId, k);
-    await new Promise(r => setTimeout(r, 500));
+
+  // Fix every file's Content-Disposition BEFORE downloading any of them.
+  //
+  // Doing it inside the loop meant a file whose metadata had not been patched
+  // yet fell back to target=_blank — and a popup opened second or third is
+  // killed by the blocker. The spreadsheet arrived because the browser cannot
+  // render it, and the PDF quietly opened into a blocked tab instead. Getting
+  // all the headers right first means every file is a plain download.
+  const unfixed = keys.filter(k => files[k].disp !== true);
+  if (unfixed.length) {
+    toast('파일 준비 중…', 'info');
+    await Promise.all(unfixed.map(async k => {
+      try { await _docFixDisposition(orderId, k, files[k]); }
+      catch (e) { console.warn('[DOC] disposition fix failed:', k, e.code || e.message); }
+    }));
   }
+
+  toast(keys.length + '개 파일 다운로드 중', 'success');
+  let failed = 0;
+  for (const k of keys) {
+    const fl = (_docs[orderId] || {})[k] || files[k];
+    if (!fl || !fl.url) { failed++; continue; }
+    docMarkRead(orderId, k);
+    const a = document.createElement('a');
+    a.href = fl.url;
+    a.download = fl.name || 'download';
+    a.rel = 'noopener';
+    // Never a new tab here: a blocked popup is silent, and in a batch the user
+    // has no way to tell which file went missing.
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    await new Promise(r => setTimeout(r, 700));
+  }
+  if (failed) toast(failed + '개 파일을 받지 못했습니다', 'error');
+  _docRepaint();
 }
 
 // The chip lives in every order table, so a file change has to repaint whatever
@@ -6452,9 +6555,41 @@ function setSubPerson(name) {
   renderSubbiesPage();
 }
 
+// Row-tint legend and picker. The tints only mean something if you can see
+// which name owns which colour, and fix one when two read as similar.
+function renderSubbieColourBar() {
+  const el = document.getElementById('sub-person-tabs');
+  if (!el || document.getElementById('sub-colour-bar')) return;
+  const map = _subbieAssign();
+  const names = Object.keys(map).filter(n => !n.startsWith('SK_') || true).sort();
+  if (!names.length) return;
+  const bar = document.createElement('div');
+  bar.id = 'sub-colour-bar';
+  bar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px';
+  bar.innerHTML =
+    '<span style="font-size:10.5px;font-weight:800;color:var(--text3);letter-spacing:.4px">ROW COLOUR</span>' +
+    names.map(nm => {
+      const p = map[nm];
+      const hex = (p.border.match(/\d+/g) || []).slice(0, 3)
+        .map(v => (+v).toString(16).padStart(2, '0')).join('');
+      return '<label title="Click the swatch to change ' + escAttr(nm) + '" ' +
+        'style="display:inline-flex;align-items:center;gap:6px;padding:2px 9px 2px 3px;border:1px solid var(--border);' +
+        'border-radius:20px;background:' + p.bg + ';font-size:11.5px;font-weight:700;cursor:pointer">' +
+        '<input type="color" value="#' + hex + '" onchange="subbieSetColour(\'' + escAttr(nm) + '\',this.value)" ' +
+        'style="width:20px;height:20px;border:none;background:none;padding:0;cursor:pointer">' +
+        esc(nm) + '</label>';
+    }).join('') +
+    '<button onclick="subbieResetColours()" style="border:1px solid var(--border);background:var(--surface);' +
+    'border-radius:20px;padding:3px 10px;font-size:11px;color:var(--text3);cursor:pointer;font-family:inherit">Reset</button>';
+  el.parentElement.appendChild(bar);
+}
+
 function renderSubPersonTabs() {
   const el = document.getElementById('sub-person-tabs');
   if (!el) return;
+  const _cb = document.getElementById('sub-colour-bar');
+  if (_cb) _cb.remove();
+  setTimeout(renderSubbieColourBar, 0);
   const orders = DB.orders.filter(o => o.subbies && !o.subbies.startsWith('SK_') && o.status !== 'cancelled');
   const allNames = [...new Set([...TRACKED_SUBBIES, ...orders.map(o=>o.subbies).filter(Boolean)])];
   const tabs = ['All', ...allNames];

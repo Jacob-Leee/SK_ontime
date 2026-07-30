@@ -448,7 +448,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-08-02-r';
+const APP_BUILD = '2026-08-02-u';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -1400,8 +1400,11 @@ function sbRender() {
     return;
   }
 
-  const noticeHtml = noticeBlock([...new Set(_allOrders.map(o => (o.area || '').trim()))]);
-  list.innerHTML = noticeHtml + orders.map(o => {
+  // The notices block used to sit above the order list. It has its own tab now,
+  // and a long reference sheet pushed the actual jobs below the fold — the one
+  // thing this screen exists to show. The per-order area chip still flags that
+  // a notice applies.
+  list.innerHTML = orders.map(o => {
     const st = o.status || 'active';
     const col = SB_ST_COL[st] || '#007AFF';
     const lbl = SB_ST_LBL[st] || (st.charAt(0).toUpperCase() + st.slice(1));
