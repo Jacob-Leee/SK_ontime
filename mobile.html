@@ -2293,7 +2293,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-01-x';
+const APP_BUILD     = '2026-08-01-y';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7282,23 +7282,53 @@ function mobSearch(v) {
 // coming from.
 // ============================================================
 
+// Same four periods as the desktop, with the same comparison rules — a number
+// that means one thing on the laptop and another on the phone is worse than no
+// number. Day and week step back 364 days rather than 365 so the comparison
+// lands on the same weekday: a Monday against a Sunday is not a comparison.
+//
+// Yearly is the Australian financial year (1 Jul – 30 Jun), matching the
+// desktop's "Yearly (FY)".
+function _mobFY(d) { return d.getMonth() >= 6 ? d.getFullYear() + 1 : d.getFullYear(); }
+
 function _mobPeriodBounds(mode, ref) {
   const y = ref.getFullYear(), m = ref.getMonth();
+  const shift = (dt, days) => { const x = new Date(dt); x.setDate(x.getDate() + days); return x; };
+
+  if (mode === 'day') {
+    const lbl = ref.toLocaleDateString('en-AU', { day: '2-digit', month: 'short' });
+    return { from: ref, to: ref,
+             prevFrom: shift(ref, -1), prevTo: shift(ref, -1),
+             lastYearFrom: shift(ref, -364), lastYearTo: shift(ref, -364),
+             label: ref.toLocaleDateString('en-AU', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
+             prevLabel: 'prev day',
+             lyLabel: shift(ref, -364).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }),
+             shortLabel: lbl };
+  }
+
+  if (mode === 'week') {
+    const mon = new Date(ref); mon.setDate(ref.getDate() - ((ref.getDay() + 6) % 7));
+    const sun = shift(mon, 6);
+    const lyMon = shift(mon, -364);
+    return { from: mon, to: sun,
+             prevFrom: shift(mon, -7), prevTo: shift(mon, -1),
+             lastYearFrom: lyMon, lastYearTo: shift(lyMon, 6),
+             label: 'Week of ' + mon.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }),
+             prevLabel: 'prev week',
+             lyLabel: lyMon.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' }),
+             shortLabel: mon.toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) };
+  }
+
   if (mode === 'year') {
-    return { from: new Date(y, 0, 1), to: new Date(y, 11, 31),
-             prevFrom: new Date(y - 1, 0, 1), prevTo: new Date(y - 1, 11, 31),
-             lastYearFrom: new Date(y - 1, 0, 1), lastYearTo: new Date(y - 1, 11, 31),
-             label: String(y), prevLabel: 'prev year', lyLabel: String(y - 1),
-             shortLabel: String(y) };
+    const fy = _mobFY(ref);
+    const lbl = f => 'FY' + String(f - 1).slice(2) + '/' + String(f).slice(2);
+    return { from: new Date(fy - 1, 6, 1), to: new Date(fy, 5, 30),
+             prevFrom: new Date(fy - 2, 6, 1), prevTo: new Date(fy - 1, 5, 30),
+             lastYearFrom: new Date(fy - 2, 6, 1), lastYearTo: new Date(fy - 1, 5, 30),
+             label: lbl(fy), prevLabel: 'prev FY', lyLabel: lbl(fy - 1),
+             shortLabel: lbl(fy) };
   }
-  if (mode === 'quarter') {
-    const q = Math.floor(m / 3);
-    return { from: new Date(y, q * 3, 1), to: new Date(y, q * 3 + 3, 0),
-             prevFrom: new Date(y, q * 3 - 3, 1), prevTo: new Date(y, q * 3, 0),
-             lastYearFrom: new Date(y - 1, q * 3, 1), lastYearTo: new Date(y - 1, q * 3 + 3, 0),
-             label: 'Q' + (q + 1) + ' ' + y, prevLabel: 'prev quarter', lyLabel: 'Q' + (q + 1) + ' ' + (y - 1),
-             shortLabel: 'Q' + (q + 1) + (q === 0 ? ' ' + String(y).slice(2) : '') };
-  }
+
   return { from: new Date(y, m, 1), to: new Date(y, m + 1, 0),
            prevFrom: new Date(y, m - 1, 1), prevTo: new Date(y, m, 0),
            lastYearFrom: new Date(y - 1, m, 1), lastYearTo: new Date(y - 1, m + 1, 0),
@@ -7337,7 +7367,7 @@ function _mobDelta(now, then, money) {
            colour: up ? '#16A34A' : '#DC2626' };
 }
 
-let _mobDashMode = 'month';     // 'month' | 'quarter'
+let _mobDashMode = 'month';     // 'day' | 'week' | 'month' | 'year' (FY) — matches the desktop
 function mobDashMode(m) { _mobDashMode = m; _mobDashBack = 0; mobDashboard(); }
 
 // Which period the cards are showing. 0 = current, 1 = one back, and so on.
@@ -7347,8 +7377,9 @@ let _mobDashBack = 0;
 
 function _mobShiftRef(mode, back) {
   const d = new Date();
-  if (mode === 'year') d.setFullYear(d.getFullYear() - back);
-  else if (mode === 'quarter') d.setMonth(d.getMonth() - back * 3);
+  if (mode === 'day') d.setDate(d.getDate() - back);
+  else if (mode === 'week') d.setDate(d.getDate() - back * 7);
+  else if (mode === 'year') d.setFullYear(d.getFullYear() - back);
   else d.setMonth(d.getMonth() - back);
   return d;
 }
@@ -7370,7 +7401,7 @@ function mobPickPeriod(back) { _mobDashBack = back; mobDashboard(); }
 
 function _mobTrendCard() {
   const mode = _mobDashMode;
-  const count = mode === 'year' ? 5 : mode === 'quarter' ? 8 : 12;
+  const count = mode === 'year' ? 5 : mode === 'day' ? 30 : mode === 'week' ? 12 : 12;
   const series = _mobSeries(mode, count);
   const money = _mobTrendMetric === 'revenue';
   const val = p => money ? p.amt : p.n;
@@ -7384,12 +7415,14 @@ function _mobTrendCard() {
   return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:12.5px;font-weight:800;flex:1">${
-        mode === 'year' ? 'Last 5 years' : mode === 'quarter' ? 'Last 8 quarters' : 'Last 12 months'}</span>
+        mode === 'year' ? 'Last 5 financial years'
+        : mode === 'day' ? 'Last 30 days'
+        : mode === 'week' ? 'Last 12 weeks' : 'Last 12 months'}</span>
       <span style="display:flex;gap:2px;background:var(--bg2);border-radius:8px;padding:2px">
         ${btn('orders','Orders')}${btn('revenue','$')}
       </span>
     </div>
-    <div style="display:flex;align-items:flex-end;gap:${mode==='year'?'10px':mode==='quarter'?'7px':'4px'};height:96px">
+    <div style="display:flex;align-items:flex-end;gap:${mode==='year'?'10px':mode==='day'?'2px':'4px'};height:96px">
       ${series.map(p => {
         const on = p.back === _mobDashBack;
         const h = Math.max(2, Math.round(val(p) / max * 74));
@@ -7434,8 +7467,8 @@ function _mobCompareCard() {
   return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <span style="font-size:12.5px;font-weight:800;flex:1">${esc(b.label)}</span>
-      <span style="display:flex;gap:2px;background:var(--bg2);border-radius:9px;padding:2px;width:172px">
-        ${btn('month','Month')}${btn('quarter','Qtr')}${btn('year','Year')}
+      <span style="display:flex;gap:2px;background:var(--bg2);border-radius:9px;padding:2px;width:196px">
+        ${btn('day','Day')}${btn('week','Wk')}${btn('month','Month')}${btn('year','FY')}
       </span>
     </div>
     <div style="display:flex;gap:8px">
