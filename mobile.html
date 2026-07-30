@@ -2293,7 +2293,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-01-t';
+const APP_BUILD     = '2026-08-01-u';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7730,10 +7730,7 @@ function mobRefresh() {
 // arrived, and being able to open it on site, is.
 let _pDocs = {}, _pDocsWatch = false;
 
-function _pDocsDb() {
-  if (typeof _rtdbDb === 'function') { const d = _rtdbDb(); if (d) return d; }
-  return (typeof _rtdbDB !== 'undefined' && _rtdbDB) ? _rtdbDB : null;
-}
+function _pDocsDb() { return _sharedDb(); }
 
 function watchOrderDocs(onChange) {
   const db = _pDocsDb();
@@ -7832,12 +7829,34 @@ function docListHtml(orderId, who) {
 // ends up out of date in half of them.
 let _notices = {}, _noticeWatch = false;
 
-function _noticeDb() {
-  if (typeof _rtdbDb === 'function') { const d = _rtdbDb(); if (d) return d; }
-  if (typeof _rtdbDB !== 'undefined' && _rtdbDB) return _rtdbDB;
-  if (typeof _rtdbInit === 'function') { _rtdbInit(); return (typeof _rtdbDB !== 'undefined') ? _rtdbDB : null; }
+// Resolve the database the same way the rest of this file does.
+//
+// This used to look only for _rtdbDB / _rtdbDb — names that belong to the
+// desktop app. In subbie.html the handle is _db and in mobile it is set up
+// late, so this returned null every time and the watcher never attached.
+// Notices and documents were silently dead here, not broken: never started.
+function _sharedDb() {
+  try {
+    if (typeof _db !== 'undefined' && _db) return _db;
+  } catch (e) {}
+  try {
+    if (typeof _rtdbDB !== 'undefined' && _rtdbDB) return _rtdbDB;
+  } catch (e) {}
+  try {
+    if (typeof _rtdbInit === 'function') {
+      _rtdbInit();
+      if (typeof _rtdbDB !== 'undefined' && _rtdbDB) return _rtdbDB;
+    }
+  } catch (e) {}
+  try {
+    if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length) {
+      return firebase.database(firebase.apps[0]);
+    }
+  } catch (e) {}
   return null;
 }
+
+function _noticeDb() { return _sharedDb(); }
 
 // Nothing on mobile ever called this, so _notices stayed empty and the area
 // chips had nothing to show — the feature looked implemented and was not.

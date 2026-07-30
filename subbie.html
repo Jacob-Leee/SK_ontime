@@ -448,7 +448,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-08-01-t';
+const APP_BUILD = '2026-08-01-u';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -930,14 +930,16 @@ function sbCopyFallback(text, done) {
 // arrived, and being able to open it on site, is.
 let _pDocs = {}, _pDocsWatch = false;
 
-function _pDocsDb() {
-  if (typeof _rtdbDb === 'function') { const d = _rtdbDb(); if (d) return d; }
-  return (typeof _rtdbDB !== 'undefined' && _rtdbDB) ? _rtdbDB : null;
-}
+function _pDocsDb() { return _sharedDb(); }
 
+let _pDocsWatchTries = 0;
 function watchOrderDocs(onChange) {
+  if (_pDocsWatch) return;
   const db = _pDocsDb();
-  if (!db || _pDocsWatch) return;
+  if (!db) {
+    if (_pDocsWatchTries++ < 20) setTimeout(() => watchOrderDocs(onChange), 500);
+    return;
+  }
   _pDocsWatch = true;
   db.ref('/docs').on('value', snap => {
     _pDocs = snap.val() || {};
@@ -1032,16 +1034,43 @@ function docListHtml(orderId, who) {
 // ends up out of date in half of them.
 let _notices = {}, _noticeWatch = false;
 
-function _noticeDb() {
-  if (typeof _rtdbDb === 'function') { const d = _rtdbDb(); if (d) return d; }
-  if (typeof _rtdbDB !== 'undefined' && _rtdbDB) return _rtdbDB;
-  if (typeof _rtdbInit === 'function') { _rtdbInit(); return (typeof _rtdbDB !== 'undefined') ? _rtdbDB : null; }
+// Resolve the database the same way the rest of this file does.
+//
+// This used to look only for _rtdbDB / _rtdbDb — names that belong to the
+// desktop app. In subbie.html the handle is _db and in mobile it is set up
+// late, so this returned null every time and the watcher never attached.
+// Notices and documents were silently dead here, not broken: never started.
+function _sharedDb() {
+  try {
+    if (typeof _db !== 'undefined' && _db) return _db;
+  } catch (e) {}
+  try {
+    if (typeof _rtdbDB !== 'undefined' && _rtdbDB) return _rtdbDB;
+  } catch (e) {}
+  try {
+    if (typeof _rtdbInit === 'function') {
+      _rtdbInit();
+      if (typeof _rtdbDB !== 'undefined' && _rtdbDB) return _rtdbDB;
+    }
+  } catch (e) {}
+  try {
+    if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length) {
+      return firebase.database(firebase.apps[0]);
+    }
+  } catch (e) {}
   return null;
 }
 
+function _noticeDb() { return _sharedDb(); }
+
+let _noticeWatchTries = 0;
 function watchNotices(onChange) {
+  if (_noticeWatch) return;
   const db = _noticeDb();
-  if (!db || _noticeWatch) return;
+  if (!db) {
+    if (_noticeWatchTries++ < 20) setTimeout(() => watchNotices(onChange), 500);
+    return;
+  }
   _noticeWatch = true;
   db.ref('/notices').on('value', snap => {
     _notices = snap.val() || {};
