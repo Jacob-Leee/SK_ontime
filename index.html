@@ -2058,7 +2058,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-n';
+const APP_BUILD = '2026-08-01-o';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4589,9 +4589,22 @@ function _docsDb() {
   return _rtdbDB;
 }
 
+// This used to be called only from renderFilesPage(), which is why the download
+// chip on VAC was invisible until you had opened Documents at least once and
+// come back — _docs was simply still empty. The file index is app-wide state,
+// so it is attached at startup, not by a page that happens to need it.
+//
+// Retries because RTDB may not have finished initialising on the first call;
+// without it a slow connection permanently leaves the app with no file index.
+let _docsWatchTries = 0;
 function watchDocs() {
+  if (_docsWatch) return;
   const db = _docsDb();
-  if (!db || _docsWatch) return;
+  if (!db) {
+    if (_docsWatchTries++ < 20) setTimeout(watchDocs, 500);
+    else console.warn('[DOC] gave up waiting for RTDB');
+    return;
+  }
   _docsWatch = true;
   db.ref('/docs').on('value', snap => {
     _docs = snap.val() || {};
@@ -6714,6 +6727,7 @@ function updateMonthFilterFor(page, monthId) {
 }
 
 function renderVAC() {
+  watchDocs();
   updateAreaFilterFor('vac','filter-vac-area');
   updateMonthFilterFor('vac','filter-vac-month');
   const q = (document.getElementById('search-vac')?.value||'').toLowerCase();
@@ -6733,6 +6747,7 @@ function renderVAC() {
 }
 
 function renderMPW() {
+  watchDocs();
   updateAreaFilterFor('mpw','filter-mpw-area');
   updateMonthFilterFor('mpw','filter-mpw-month');
   const q = (document.getElementById('search-mpw')?.value||'').toLowerCase();
@@ -10945,6 +10960,9 @@ try { startCalendarWatch(); } catch (e) {}
 // Subbie issue reports land here rather than being noticed by accident.
 try { _rtdbWatchIssueReports(); } catch (e) { console.error('[BOOT] issue watcher failed:', e); }
 try { _rtdbWatchFieldReports(); } catch (e) { console.error('[BOOT] field reports failed:', e); }
+// The file index feeds the download chip on VAC/MPW, not just the Documents
+// page — it has to be live from the first render.
+try { watchDocs(); } catch (e) { console.error('[BOOT] doc watcher failed:', e); }
 Promise.resolve().then(() => _rtdbAutoMirror('startup')).catch(e => console.error('[BOOT] mirror failed:', e));
 if (NOTIF.enabled && NOTIF.me && !NOTIF.seeded) seedNotifBaseline();
 
