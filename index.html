@@ -436,6 +436,26 @@ body.dash-dark #header select { color: #E6D6AE; border-color: rgba(255,215,114,.
 #page-dashboard .dash-widget b { color: #FFD772; }
 #page-dashboard table th { color: #F0C44E !important; border-bottom-color: rgba(255,215,114,.28) !important; }
 #page-dashboard table td { border-bottom-color: rgba(255,215,114,.12) !important; }
+/* Upcoming Events.
+   Each row is tinted with its category colour at ~12% and the title is drawn
+   in the page text colour. On cream that reads fine; on black the tint went to
+   near-black and the title with it — the whole widget was empty-looking.
+   Lift the row a little off the background and force the title light. */
+#page-dashboard #dash-w-calendar [onclick*="showPage('calendar')"] {
+  background: rgba(255,248,232,.07) !important;
+  border: 1px solid rgba(255,215,114,.12);
+  border-left-width: 3px !important;
+}
+#page-dashboard #dash-w-calendar [onclick*="showPage('calendar')"] > span,
+#page-dashboard #dash-w-calendar [onclick*="showPage('calendar')"] div { color: #FFF8E8 !important; }
+/* The category pill keeps its own colour — that is the one thing here that
+   should stay colour-coded — but needs a dark plate to sit on. */
+#page-dashboard #dash-w-calendar span[style*="border-radius:10px"] {
+  background: rgba(0,0,0,.45) !important;
+  filter: brightness(1.5) saturate(1.1);
+}
+#page-dashboard #dash-w-calendar [onclick*="showPage('calendar')"] span[style*="font-size:11px"] { color: #B8A47A !important; }
+
 #page-dashboard .filter-input,
 #page-dashboard select,
 #page-dashboard input {
@@ -2142,7 +2162,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-03-e';
+const APP_BUILD = '2026-08-03-f';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
