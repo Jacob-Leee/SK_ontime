@@ -2283,7 +2283,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-01-f';
+const APP_BUILD     = '2026-08-01-g';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7579,7 +7579,8 @@ function mobRefresh() {
   const withReports = (_mobPage === 'orders');
   const sig = _mobPage + '|' + (window._SELECTED_SUBBIE || '') + '|' + list.map(o =>
     [o.id, o.status, o.orderNumber, o.address, o.area, o.subbies, o.amount, o.prn, o.comments,
-     withReports ? frPendingFor(o.id).length : ''].join('~')
+     withReports ? frPendingFor(o.id).length : '',
+     withReports ? ((frLatestFor(o.id) || {}).reviewedAt || '') : ''].join('~')
   ).join(';');
   if (el._sig === sig) { mobSummaryShow(list); return; }
 
@@ -7640,6 +7641,21 @@ function mobCardActions(o) {
       background:${isIssue ? '#FEF3C7' : '#DCFCE7'};color:${isIssue ? '#B45309' : '#15803D'};
       border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700">
       ${isIssue ? '&#9888; Issue sent' : '&#10003; Done sent'}${who ? ' &middot; ' + esc(who) : ''}</div>`;
+  }
+
+  // Reviewed by the office. The report is closed off, so this is the outcome —
+  // not an invitation to send it again. Re-reporting is still possible, but it
+  // is a deliberate tap rather than the default state.
+  const last = frLatestFor(o.id);
+  if (last && last.reviewedAt) {
+    const isIssue = last.type === 'issue';
+    return `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;gap:5px;background:#E7EEFB;color:#1D4ED8;
+        border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700">
+        &#10003; Office confirmed${isIssue ? ' &middot; issue' : ''}${last.reviewedBy ? ' &middot; ' + esc(last.reviewedBy) : ''}</span>
+      <button onclick="event.stopPropagation();srOpen('${o.id}')"
+        style="background:none;border:none;padding:0;font-size:11px;color:var(--text3);text-decoration:underline;cursor:pointer;font-family:inherit">report again</button>
+    </div>`;
   }
 
   return `<div style="margin-top:8px;display:flex;gap:6px" onclick="event.stopPropagation()">
@@ -10553,6 +10569,7 @@ function _rtdbWatchFieldReports() {
     _FR.list = out;
     _FR.loaded = true;
     _frIndex = null;          // rebuilt lazily on next read
+    _frLatestIndex = null;
     _frRepaint();
   };
 
@@ -10669,6 +10686,25 @@ function _frBuildIndex() {
     _frIndex.get(r.orderId).push(r);
   });
 }
+// The most recent report for an order, reviewed or not.
+//
+// frPendingFor() only returns unreviewed ones, so the moment the office marked
+// something Reviewed the card fell back to showing [Complete] [Issue] again —
+// as if nothing had ever been sent. From the phone that reads as "my report
+// was lost", and the obvious response is to send it a second time.
+let _frLatestIndex = null;
+function _frBuildLatest() {
+  _frLatestIndex = new Map();
+  (_FR.list || []).forEach(r => {
+    const cur = _frLatestIndex.get(r.orderId);
+    if (!cur || (r.ts || 0) > (cur.ts || 0)) _frLatestIndex.set(r.orderId, r);
+  });
+}
+function frLatestFor(orderId) {
+  if (!_frLatestIndex) _frBuildLatest();
+  return _frLatestIndex.get(orderId) || null;
+}
+
 function frPendingFor(orderId) {
   if (!_frIndex) _frBuildIndex();
   return _frIndex.get(orderId) || [];

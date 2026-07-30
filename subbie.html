@@ -445,7 +445,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-08-01-f';
+const APP_BUILD = '2026-08-01-g';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -790,7 +790,8 @@ const SB_ST_LBL = { active:'Active', issue:'Issue', completed:'Completed',
 // Reports this subbie has filed that the office has not reviewed yet. Keyed by
 // order so the card can show "already sent" instead of offering the buttons
 // again — the most common way to end up with three duplicate reports.
-let _sbReports = {};
+let _sbReports = {};       // orderId -> reports the office has not cleared
+let _sbLatest  = {};       // orderId -> newest report, reviewed or not
 let _sbReportsRef = null, _sbReportsCb = null;
 function sbWatchReports() {
   if (!_db) return;
@@ -804,16 +805,22 @@ function sbWatchReports() {
   _sbReportsRef = _db.ref('/issues');
   _sbReportsCb = _sbReportsRef.on('value', snap => {
     const byOrder = snap.val() || {};
-    const map = {};
+    const map = {}, latest = {};
     Object.keys(byOrder).forEach(oid => {
       Object.keys(byOrder[oid] || {}).forEach(ts => {
         const r = byOrder[oid][ts] || {};
         if (r.type !== 'issue' && r.type !== 'done') return;
+        const at = Number(ts) || r.at || 0;
+        // Track the newest report either way. A reviewed one is an outcome, not
+        // an absence — without this the card reset to [Complete] [Issue] the
+        // moment the office cleared it, which reads as "my report was lost".
+        if (!latest[oid] || at > (latest[oid]._at || 0)) latest[oid] = Object.assign({ _at: at }, r);
         if (r.reviewedAt) return;
         (map[oid] = map[oid] || []).push(r);
       });
     });
     _sbReports = map;
+    _sbLatest = latest;
     sbRender();
   });
 }
@@ -869,6 +876,14 @@ function sbCardActions(o) {
     return '<div class="oc-chip" style="background:' + (isIssue ? '#FEF3C7' : '#DCFCE7') +
       ';color:' + (isIssue ? '#B45309' : '#15803D') + '">' +
       (isIssue ? '&#9888; Issue sent' : '&#10003; Done sent') + '</div>';
+  }
+
+  // Cleared by the office. That is the outcome — showing the two buttons again
+  // would read as "nothing was ever sent" and invite a duplicate report.
+  const last = _sbLatest[o.id];
+  if (last && last.reviewedAt) {
+    return '<div class="oc-chip" style="background:#E7EEFB;color:#1D4ED8">&#10003; Office confirmed' +
+      (last.type === 'issue' ? ' &middot; issue' : '') + '</div>';
   }
   return '<div class="oc-acts" onclick="event.stopPropagation()">' +
     '<button class="oc-btn oc-done" onclick="sbQuickDone(\'' + o.id + '\')">&#10003; Complete</button>' +
