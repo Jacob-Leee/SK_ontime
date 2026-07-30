@@ -2058,7 +2058,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-p';
+const APP_BUILD = '2026-08-01-q';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4553,19 +4553,52 @@ async function _docFixDisposition(orderId, key, fl) {
   return true;
 }
 
-// Why this is not just `a.click()` with target=_blank any more:
+// Fetching the bytes ourselves is the only method that reliably produces a
+// download instead of a browser tab.
 //
-//  1. `download` does nothing cross-origin, so the filename came from Firebase.
-//  2. target=_blank makes each file a popup, and the popup blocker kills every
-//     one after the first — which is why "Download all" produced a single file.
+// A blob: URL is same-origin, so the `download` attribute is honoured — that is
+// what fixes both the "PDF just opens in the browser" problem and the wrong
+// filename. It needs CORS on the Storage bucket; if that is not configured the
+// fetch throws and we fall back, so this is safe to always attempt.
+async function _docBlobDownload(fl) {
+  const res = await fetch(fl.url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const blob = await res.blob();
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = u;
+  a.download = fl.name || 'download';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 60000);
+  return true;
+}
+
+let _docInlineWarned = false;
+
+// Three attempts, best first:
 //
-// With Content-Disposition set, a plain same-tab anchor downloads without
-// navigating, and several in a row are just several downloads.
+//  1. Blob fetch — correct name, real download, no navigation. Needs bucket CORS.
+//  2. Content-Disposition on the object — also a real download, but the header
+//     is set by the upload and old files need updateMetadata, which the Storage
+//     rules may refuse (a metadata update carries no request.resource.size, so
+//     a size-guarded `allow write` rejects it).
+//  3. A new tab. Last resort: a PDF will render instead of downloading, which
+//     is exactly the complaint, so say so rather than letting it look normal.
 async function docGrab(orderId, key) {
   const fl = (_docs[orderId] || {})[key];
   if (!fl || !fl.url) return toast('파일을 찾을 수 없습니다', 'error');
   docMarkRead(orderId, key);
   docChipClose();
+
+  try {
+    await _docBlobDownload(fl);
+    _docRepaint();
+    return;
+  } catch (e) {
+    console.warn('[DOC] blob download unavailable (bucket CORS not set?):', e.message);
+  }
 
   let forced = fl.disp === true;
   if (!forced) {
@@ -4577,13 +4610,54 @@ async function docGrab(orderId, key) {
   a.href = fl.url;
   a.download = fl.name || 'download';
   a.rel = 'noopener';
-  // Only fall back to a new tab when the file may still render inline —
-  // otherwise a PDF would replace the app in the current tab.
-  if (!forced) a.target = '_blank';
+  if (!forced) {
+    a.target = '_blank';
+    if (!_docInlineWarned) {
+      _docInlineWarned = true;
+      toast('브라우저에서 열립니다 — 바로 저장하려면 Storage CORS 설정이 필요합니다 (🔧 진단 참고)', 'error');
+    }
+  }
   document.body.appendChild(a);
   a.click();
   a.remove();
   _docRepaint();
+}
+
+// Says which of the three download paths is actually available, so the fix is
+// not a guessing game between bucket CORS and Storage rules.
+async function docDiagnose() {
+  const L = [];
+  const any = Object.values(_docs || {}).map(m => Object.values(m || {})[0]).filter(Boolean)[0];
+  L.push('Files indexed: ' + Object.keys(_docs || {}).length + ' order(s)');
+  if (!any) { alert(L.join('\n') + '\n\nUpload a file first.'); return; }
+  L.push('Test file: ' + (any.name || '?'));
+  L.push('Content-Disposition set at upload: ' + (any.disp === true ? 'yes' : 'no (older file)'));
+  try {
+    const r = await fetch(any.url, { method: 'GET' });
+    L.push('Blob fetch (needs bucket CORS): OK — downloads will be correct');
+    L.push('  Content-Type: ' + (r.headers.get('content-type') || '?'));
+    L.push('  Content-Disposition: ' + (r.headers.get('content-disposition') || 'none'));
+  } catch (e) {
+    L.push('Blob fetch: BLOCKED — ' + e.message);
+    L.push('  → Bucket CORS is not configured. This is the real fix:');
+    L.push('     Google Cloud Console → Cloud Shell, then');
+    L.push('     gsutil cors set cors.json gs://<your-bucket>');
+  }
+  if (any.path && firebase.storage) {
+    try {
+      await firebase.storage(firebase.apps[0]).ref(any.path).updateMetadata({
+        contentDisposition: _docDisposition(any.name)
+      });
+      L.push('Metadata update: OK — old files can be repaired on download');
+    } catch (e) {
+      L.push('Metadata update: REFUSED — ' + (e.code || e.message));
+      L.push('  → Storage rules reject metadata-only writes. Add to docs/{...}:');
+      L.push('     allow update: if request.auth != null;');
+    }
+  }
+  const out = L.join('\n');
+  console.log('[DOC DIAG]\n' + out);
+  alert(out);
 }
 
 // Sequential, not simultaneous. Chrome asks once about multiple downloads and
@@ -5161,6 +5235,7 @@ function renderFilesPage() {
               (unread ? `<span title="${unread} not downloaded by you yet" style="margin-left:6px;font-size:10px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:20px;padding:1px 7px">${unread} NEW</span>` : '');
           })() : ''}
           <button class="btn btn-sm btn-secondary" style="font-size:11.5px" onclick="docPick('${o.id}')">&#8593; Upload</button>
+          <button class="icon-btn" title="Download not working?" style="font-size:12px" onclick="docDiagnose()">&#128295;</button>
         </span>
       </div>
       ${keys.map(k => {
