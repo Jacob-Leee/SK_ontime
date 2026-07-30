@@ -2056,7 +2056,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-02-p';
+const APP_BUILD = '2026-08-02-r';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4866,31 +4866,34 @@ function watchNotices(onChange) {
 function noticeHighlight(escaped) {
   let t = String(escaped == null ? '' : escaped);
 
-  // One treatment for everything: bold.
+  // Colour AND bold. Colour says what kind of thing it is; bold makes it carry
+  // at arm's length on a phone in daylight.
   //
-  // The previous version used a gold chip for codes, red for mandatory, blue
-  // for measurements and indigo for areas. Four colours meant the reader had to
-  // work out what each one signified, and any code the pattern missed looked
-  // deliberately downgraded rather than simply unmatched. Bold says "this is
-  // the bit you were scanning for" and says nothing else.
-  const B = '<b>$1</b>';
+  // Runs on the ALREADY-ESCAPED string, so it can never introduce markup from
+  // user input — the only tags added are the ones written here.
 
   // SoR codes. The rule, exactly:
   //   a letter, then 1-3 more letters/digits,
   //   then 1-3 groups of 2-4 letters/digits after hyphens,
   //   then a final hyphen and 1-4 digits.
-  // Letters-and-digits mid-code is deliberate (BAS-WM3-RPL-113), and 1 trailing
-  // digit counts (LLH-DLL-SER-3) — requiring two skipped half the reference.
-  t = t.replace(/\b([A-Z][A-Z0-9]{1,3}(?:-[A-Z0-9]{2,4}){1,3}-\d{1,4})\b/g, B);
+  // Letters-and-digits mid-code is deliberate (BAS-WM3-RPL-113), and a single
+  // trailing digit counts (LLH-DLL-SER-3) — requiring two skipped half the
+  // reference table while highlighting the codes right beside them.
+  t = t.replace(/\b([A-Z][A-Z0-9]{1,3}(?:-[A-Z0-9]{2,4}){1,3}-\d{1,4})\b/g,
+    '<b style="font-family:ui-monospace,Menlo,monospace;font-size:.94em;font-weight:800;color:#7C4A03;' +
+    'background:#FEF3C7;border:1px solid #FDE68A;border-radius:5px;padding:0 4px">$1</b>');
 
   // Words that decide whether a job is compliant.
-  t = t.replace(/\b(Mandatory|MANDATORY|mandatory|Prohibited|PROHIBITED|prohibited|Do not|DO NOT|do not|Must not|must not|Never|never)\b/g, B);
+  t = t.replace(/\b(Mandatory|MANDATORY|mandatory|Prohibited|PROHIBITED|prohibited|Do not|DO NOT|do not|Must not|must not|Never|never)\b/g,
+    '<b style="color:#B91C1C">$1</b>');
 
   // Measurements and thresholds. esc() has already turned > into &gt;.
-  t = t.replace(/(&gt;\s*\d+\s*%|\b\d+(?:\/\d+)*\s?mm\b|\b\d+\s?m\b(?!m)|\b\d+\s?%)/g, B);
+  t = t.replace(/(&gt;\s*\d+\s*%|\b\d+(?:\/\d+)*\s?mm\b|\b\d+\s?m\b(?!m)|\b\d+\s?%)/g,
+    '<b style="color:#1D4ED8">$1</b>');
 
-  // Area codes, so an exception for one patch is visible.
-  t = t.replace(/\b(CA\d{1,2})\b/g, B);
+  // Area codes, so an exception for one patch is visible at a glance.
+  t = t.replace(/\b(CA\d{1,2})\b/g,
+    '<b style="color:#4338CA">$1</b>');
 
   return t;
 }
@@ -5230,8 +5233,8 @@ function noticeAdd(presetArea, presetText) {
       <textarea id="notice-text" class="form-control" rows="8" style="width:100%;resize:vertical;font-size:13px;line-height:1.6"
         placeholder="e.g. Rear lane access only — front gate locked">${esc(presetText || '')}</textarea>
       <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6">
-        Bolded automatically — SoR codes (ABC-DEF-GHI-123), CA numbers,
-        measurements (100mm, 2m, &gt;70%), and mandatory / prohibited / do not / must not.</div>
+        Highlighted automatically — <b>SoR codes</b>, <b>CA numbers</b>,
+        <b>measurements</b> (100mm, 2m, &gt;70%), and <b>mandatory / prohibited / do not / must not</b>.</div>
       <div id="notice-err" style="display:none;margin-top:10px;font-size:12px;line-height:1.5;color:#B91C1C;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:9px 11px"></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border);background:var(--cream2)">
