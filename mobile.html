@@ -2293,7 +2293,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-01-y';
+const APP_BUILD     = '2026-08-02-a';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7367,7 +7367,10 @@ function _mobDelta(now, then, money) {
            colour: up ? '#16A34A' : '#DC2626' };
 }
 
-let _mobDashMode = 'month';     // 'day' | 'week' | 'month' | 'year' (FY) — matches the desktop
+// Day exists in _mobPeriodBounds and matches the desktop, but it is not offered
+// on the phone: a single day is too small a sample to read on a small screen,
+// and it pushed the useful periods off the toggle.
+let _mobDashMode = 'month';     // 'week' | 'month' | 'year' (FY)
 function mobDashMode(m) { _mobDashMode = m; _mobDashBack = 0; mobDashboard(); }
 
 // Which period the cards are showing. 0 = current, 1 = one back, and so on.
@@ -7467,8 +7470,8 @@ function _mobCompareCard() {
   return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <span style="font-size:12.5px;font-weight:800;flex:1">${esc(b.label)}</span>
-      <span style="display:flex;gap:2px;background:var(--bg2);border-radius:9px;padding:2px;width:196px">
-        ${btn('day','Day')}${btn('week','Wk')}${btn('month','Month')}${btn('year','FY')}
+      <span style="display:flex;gap:2px;background:var(--bg2);border-radius:9px;padding:2px;width:180px">
+        ${btn('week','Week')}${btn('month','Month')}${btn('year','FY')}
       </span>
     </div>
     <div style="display:flex;gap:8px">
@@ -7487,9 +7490,14 @@ function _mobAreaCard() {
 
   const tally = list => {
     const m = {};
-    list.forEach(o => { const a = (o.area || '').trim() || '—'; m[a] = (m[a] || 0) + 1; });
+    list.forEach(o => {
+      const a = (o.area || '').trim() || '—';
+      if (!m[a]) m[a] = { n: 0, amt: 0 };
+      m[a].n++; m[a].amt += _amtM(o);
+    });
     return m;
   };
+  const money = v => '$' + Math.round(v).toLocaleString('en-AU');
   const A = tally(cur), B = tally(ly);
   // Fixed order, not sorted by size. When the order changes every month the eye
   // has to re-read the whole list instead of going straight to its area.
@@ -7502,14 +7510,23 @@ function _mobAreaCard() {
       <span style="font-size:12.5px;font-weight:800;flex:1">By area</span>
       <span style="font-size:10px;color:var(--text3)">vs ${esc(b.lyLabel)}</span>
     </div>
+    <div style="display:flex;align-items:center;gap:6px;padding-bottom:4px;border-bottom:1px solid var(--border);font-size:9.5px;font-weight:800;color:var(--text3);letter-spacing:.3px">
+      <span style="width:40px;flex-shrink:0">AREA</span>
+      <span style="flex:1;text-align:right">ORDERS</span>
+      <span style="width:30px;text-align:right">LY</span>
+      <span style="flex:1.3;text-align:right">REVENUE</span>
+      <span style="width:56px;text-align:right">LY</span>
+    </div>
     ${areas.map(a => {
-      const n = A[a] || 0, p = B[a] || 0;
-      const tone = !p ? 'var(--text)' : (n > p ? '#16A34A' : n < p ? '#DC2626' : 'var(--text)');
-      return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span style="width:46px;flex-shrink:0;font-size:12px;font-weight:800;color:var(--text2)">${esc(a)}</span>
-        <span style="flex:1"></span>
-        <span style="width:46px;text-align:right;font-size:16px;font-weight:800;color:${tone};font-variant-numeric:tabular-nums">${n}</span>
-        <span style="width:46px;text-align:right;font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums">${p || '—'}</span>
+      const c = A[a] || { n: 0, amt: 0 }, p = B[a] || { n: 0, amt: 0 };
+      const tn = !p.n   ? 'var(--text)' : (c.n   > p.n   ? '#16A34A' : c.n   < p.n   ? '#DC2626' : 'var(--text)');
+      const tm = !p.amt ? 'var(--text)' : (c.amt > p.amt ? '#16A34A' : c.amt < p.amt ? '#DC2626' : 'var(--text)');
+      return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="width:40px;flex-shrink:0;font-size:12px;font-weight:800;color:var(--text2)">${esc(a)}</span>
+        <span style="flex:1;text-align:right;font-size:15px;font-weight:800;color:${tn};font-variant-numeric:tabular-nums">${c.n}</span>
+        <span style="width:30px;text-align:right;font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums">${p.n || '—'}</span>
+        <span style="flex:1.3;text-align:right;font-size:13.5px;font-weight:800;color:${tm};font-variant-numeric:tabular-nums">${money(c.amt)}</span>
+        <span style="width:56px;text-align:right;font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums">${p.amt ? money(p.amt) : '—'}</span>
       </div>`;
     }).join('')}
   </div>`;
@@ -7613,8 +7630,8 @@ function mobDashboard() {
     // Notices moved out of the dashboard — they have their own tab now, and
     // repeating them above the numbers pushed the actual figures off-screen.
     _mobCompareCard() +
-    _mobTrendCard() +
     _mobAreaCard() +
+    _mobTrendCard() +
     `<div style="background:var(--surface);border-radius:12px;padding:14px 16px;margin-top:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
       <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">📅 Upcoming Events</div>
       ${evtHtml}

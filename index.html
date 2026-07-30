@@ -1055,11 +1055,6 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
             <select class="filter-input" id="dash-window" onchange="renderDashboard()" title="Select specific week / month / financial year"></select>
           </div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-size:11px;color:var(--text3);font-weight:600">Monthly Target:</span>
-            <input id="dash-target-input" type="number" min="1" max="9999"
-              style="width:68px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--cream2);color:var(--text);font-size:12px;font-weight:700;text-align:center"
-              onchange="saveDashTarget(this.value)" title="Set monthly order target">
-            <span style="font-size:11px;color:var(--text3)">orders/mo</span>
             <button onclick="resetDashLayout()" title="Reset widget layout"
               style="margin-left:6px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--cream2);color:var(--text3);font-size:11px;cursor:pointer"
               onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='var(--cream2)'">&#8635; Reset Layout</button>
@@ -2058,7 +2053,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-y';
+const APP_BUILD = '2026-08-02-a';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -7550,12 +7545,15 @@ function pctDelta(cur, prev) {
 //
 // Percentages are gone on purpose. "▼98.2%" reads as a catastrophe; "1, was 55"
 // reads as a fact you can act on.
+// Default order and sizes match the arrangement actually in use — a new desk
+// should open on the layout the office already settled on, not on one that has
+// to be dragged into shape first.
 const DASH_WIDGETS_DEF = [
-  { id:'cmporders', label:'Orders',            defaultSize:'half' },
-  { id:'cmprev',    label:'Revenue',           defaultSize:'half' },
-  { id:'area',      label:'By area',           defaultSize:'full' },
-  { id:'trend',     label:'Trend',             defaultSize:'full' },
+  { id:'area',      label:'By area',           defaultSize:'half' },
   { id:'calendar',  label:'Upcoming Events',   defaultSize:'half' },
+  { id:'trend',     label:'Trend',             defaultSize:'half' },
+  { id:'cmporders', label:'Orders',            defaultSize:'small' },
+  { id:'cmprev',    label:'Revenue',           defaultSize:'small' },
 ];
 
 function loadDashLayout() {
@@ -7584,7 +7582,7 @@ function renderDashWidgets() {
   const layout = loadDashLayout();
   const container = document.getElementById('dash-widgets');
   if (!container) return;
-  const tInput = document.getElementById('dash-target-input');
+
   // restore collapsed state after render
   requestAnimationFrame(() => {
     const layout = loadDashLayout();
@@ -7598,7 +7596,6 @@ function renderDashWidgets() {
       });
     }
   });
-  if (tInput) tInput.value = loadDashTarget();
 
   container.innerHTML = layout.order.map(id => {
     const def = DASH_WIDGETS_DEF.find(w=>w.id===id);
@@ -7620,9 +7617,9 @@ function renderDashWidgets() {
       draggable="true"
       ondragstart="dashDragStart(event,this)" ondragover="dashDragOver(event,this)"
       ondrop="dashDragDrop(event,this)"       ondragend="dashDragEnd(event)">
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border);background:var(--cream2);cursor:grab;user-select:none" title="Drag to reorder">
+      <div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--gold-border);background:var(--gold-bg);cursor:grab;user-select:none" title="Drag to reorder">
         <span style="font-size:15px;color:var(--text3)">&#8942;</span>
-        <span style="font-size:12px;font-weight:700;color:var(--text);flex:1">${def.label}</span>
+        <span style="font-size:14.5px;font-weight:800;color:var(--gold-dark);flex:1;letter-spacing:.2px">${def.label}</span>
         <button onclick="toggleWidgetSize('${id}')" title="Cycle size: full → half → small"
           style="background:none;border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--text3);padding:2px 7px;border-radius:4px"
           onmouseover="this.style.background='var(--cream)'" onmouseout="this.style.background='none'">
@@ -7952,12 +7949,17 @@ function buildUpcomingCalWidget() {
 // One number, last year's number under it, and the plain difference. No
 // percentage: a change from 0 to 20 has no meaningful percentage, and a drop
 // from 55 to 1 reads as "98.2%" which tells you nothing you can act on.
+// More than last year is green, full stop — including when last year was zero.
+// Grey-for-zero was tried and read as "this doesn't count"; 20 against 0 is
+// still 20 more orders than the same month last year.
+//
+// The only grey left is a period with no records at all to compare against,
+// where colouring anything would be a claim we cannot support.
 function _dashTone(cur, prev, hasPrevData) {
   if (!hasPrevData) return { col: 'var(--text3)', arrow: '', note: 'no data for last year' };
-  if (!prev)        return { col: 'var(--text3)', arrow: '', note: 'new — none last year' };
   if (cur === prev) return { col: 'var(--text2)', arrow: '', note: 'same as last year' };
   return cur > prev
-    ? { col: 'var(--green)', arrow: '&#9650;', note: '' }
+    ? { col: 'var(--green)', arrow: '&#9650;', note: prev ? '' : 'none last year' }
     : { col: 'var(--red)',   arrow: '&#9660;', note: '' };
 }
 
@@ -7986,12 +7988,12 @@ function buildBigNumber(elId, cur, prev, w, money) {
   const word = money ? (cur > prev ? 'more' : 'less') : (cur > prev ? 'more' : 'fewer');
 
   el.innerHTML = `
-    <div style="font-size:11px;font-weight:800;color:var(--text3);letter-spacing:.5px">${esc(String(w.label || '').toUpperCase())}</div>
-    <div style="font-size:42px;font-weight:800;line-height:1.1;letter-spacing:-1.4px;color:${t.col}">${fmt(cur)}</div>
-    <div style="display:flex;align-items:baseline;gap:9px;margin-top:11px;padding-top:10px;border-top:1px dashed var(--border)">
-      <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.4px">${esc(String(w.prevLabel || 'LAST YEAR').toUpperCase())}</span>
-      <span style="font-size:20px;font-weight:700;color:var(--text3)">${has ? fmt(prev) : '—'}</span>
-      <span style="margin-left:auto;font-size:12px;font-weight:700;color:${t.col}">
+    <div style="font-size:12.5px;font-weight:800;color:var(--text3);letter-spacing:.6px">${esc(String(w.label || '').toUpperCase())}</div>
+    <div style="font-size:54px;font-weight:800;line-height:1.05;letter-spacing:-1.8px;color:${t.col};font-variant-numeric:tabular-nums">${fmt(cur)}</div>
+    <div style="display:flex;align-items:baseline;gap:10px;margin-top:13px;padding-top:12px;border-top:1px dashed var(--border);flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:var(--text3);letter-spacing:.4px">${esc(String(w.prevLabel || 'LAST YEAR').toUpperCase())}</span>
+      <span style="font-size:25px;font-weight:800;color:var(--text2);font-variant-numeric:tabular-nums">${has ? fmt(prev) : '—'}</span>
+      <span style="margin-left:auto;font-size:14px;font-weight:800;color:${t.col}">
         ${t.note ? esc(t.note) : t.arrow + ' ' + fmt(diff) + ' ' + word}</span>
     </div>`;
 }
@@ -8032,15 +8034,15 @@ function buildAreaTableWidget(base, w) {
   const cell = (c, p, money) => {
     const t = _dashTone(c, p, has);
     const fmt = money ? _dashMoney : _dashInt;
-    return `<td style="text-align:right;font-size:14px;font-weight:800;color:${t.col};font-variant-numeric:tabular-nums">${fmt(c)}</td>` +
-           `<td style="text-align:right;font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums">${has ? fmt(p) : '—'}</td>`;
+    return `<td style="text-align:right;font-size:18px;font-weight:800;color:${t.col};font-variant-numeric:tabular-nums;padding:9px 14px">${fmt(c)}</td>` +
+           `<td style="text-align:right;font-size:14.5px;font-weight:600;color:var(--text3);font-variant-numeric:tabular-nums;padding:9px 14px">${has ? fmt(p) : '—'}</td>`;
   };
 
   const rows = areas.map(a => {
     const c = C[a] || { n: 0, rev: 0 }, p = P[a] || { n: 0, rev: 0 };
     if (!c.n && !p.n) return '';
     return `<tr>
-      <td style="font-weight:800;font-size:12px;padding:6px 12px">${esc(a)}</td>
+      <td style="font-weight:800;font-size:15px;padding:9px 14px;letter-spacing:.2px">${esc(a)}</td>
       ${cell(c.n, p.n, false)}
       ${cell(c.rev, p.rev, true)}
     </tr>`;
@@ -8053,20 +8055,20 @@ function buildAreaTableWidget(base, w) {
 
   el.innerHTML = `<table style="width:100%;border-collapse:collapse">
     <tr>
-      <th style="text-align:left;font-size:10px;color:var(--text3);letter-spacing:.5px;padding:5px 12px;border-bottom:1px solid var(--border)">AREA</th>
-      <th style="text-align:right;font-size:10px;color:var(--text3);letter-spacing:.5px;padding:5px 12px;border-bottom:1px solid var(--border)">ORDERS</th>
-      <th style="text-align:right;font-size:10px;color:var(--text3);letter-spacing:.5px;padding:5px 12px;border-bottom:1px solid var(--border)">LAST YR</th>
-      <th style="text-align:right;font-size:10px;color:var(--text3);letter-spacing:.5px;padding:5px 12px;border-bottom:1px solid var(--border)">REVENUE</th>
-      <th style="text-align:right;font-size:10px;color:var(--text3);letter-spacing:.5px;padding:5px 12px;border-bottom:1px solid var(--border)">LAST YR</th>
+      <th style="text-align:left;font-size:11.5px;font-weight:800;color:var(--text3);letter-spacing:.7px;padding:8px 14px;border-bottom:1.5px solid var(--border)">AREA</th>
+      <th style="text-align:right;font-size:11.5px;font-weight:800;color:var(--text3);letter-spacing:.7px;padding:8px 14px;border-bottom:1.5px solid var(--border)">ORDERS</th>
+      <th style="text-align:right;font-size:11.5px;font-weight:800;color:var(--text3);letter-spacing:.7px;padding:8px 14px;border-bottom:1.5px solid var(--border)">LAST YR</th>
+      <th style="text-align:right;font-size:11.5px;font-weight:800;color:var(--text3);letter-spacing:.7px;padding:8px 14px;border-bottom:1.5px solid var(--border)">REVENUE</th>
+      <th style="text-align:right;font-size:11.5px;font-weight:800;color:var(--text3);letter-spacing:.7px;padding:8px 14px;border-bottom:1.5px solid var(--border)">LAST YR</th>
     </tr>
-    ${rows || '<tr><td colspan="5" style="padding:18px;text-align:center;color:var(--text3);font-size:12.5px">No orders in this period</td></tr>'}
+    ${rows || '<tr><td colspan="5" style="padding:22px;text-align:center;color:var(--text3);font-size:14px">No orders in this period</td></tr>'}
     <tr style="background:var(--cream2)">
-      <td style="font-weight:800;font-size:12px;padding:7px 12px;border-top:1.5px solid var(--border)">Total</td>
+      <td style="font-weight:800;font-size:15px;padding:10px 14px;border-top:2px solid var(--border)">Total</td>
       ${cell(tot.n, tot.pn, false).replace(/<td /g, '<td style="border-top:1.5px solid var(--border)" ').replace(/style="border-top:1.5px solid var\(--border\)" style=/g, 'style=')}
       ${cell(tot.rev, tot.prev, true)}
     </tr>
   </table>
-  <div style="font-size:11px;color:var(--text3);padding:7px 12px 2px">Green above last year · red below · grey where there is nothing to compare. Cancelled orders excluded.</div>
+  <div style="font-size:12px;color:var(--text3);padding:9px 14px 3px">Green above last year · red below · grey where there is nothing to compare. Cancelled orders excluded.</div>
   ${undated ? `<div style="font-size:11.5px;color:#B45309;background:#FEF3C7;border-top:1px solid #FDE68A;padding:7px 12px">
     &#9888; ${undated} order${undated > 1 ? 's have' : ' has'} no order date and cannot appear in any period — these are missing from every figure above.</div>` : ''}`;
 }
@@ -8121,7 +8123,8 @@ function buildTrendChart(base) {
     data: {
       labels: pts.map(p => p.label),
       datasets: [{ label: money ? 'Revenue' : 'Orders', data,
-        backgroundColor: '#C9A84C', borderRadius: 3, maxBarThickness: 46 }]
+        backgroundColor: '#E0AC28', hoverBackgroundColor: '#F0C44E',
+        borderRadius: 4, maxBarThickness: 52 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -8130,8 +8133,12 @@ function buildTrendChart(base) {
         tooltip: { callbacks: { label: c => money ? _dashMoney(c.parsed.y) : _dashInt(c.parsed.y) + ' orders' } }
       },
       scales: {
-        y: { beginAtZero: true, ticks: { callback: v => money ? _dashMoney(v) : _dashInt(v) } },
-        x: { grid: { display: false } }
+        y: { beginAtZero: true,
+             ticks: { callback: v => money ? _dashMoney(v) : _dashInt(v),
+                      font: { size: 12.5, weight: '600' }, color: '#8A7C5E' },
+             grid: { color: 'rgba(138,124,94,.13)' } },
+        x: { grid: { display: false },
+             ticks: { font: { size: 12.5, weight: '700' }, color: '#6B5744' } }
       }
     }
   });
