@@ -2058,7 +2058,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-v';
+const APP_BUILD = '2026-08-01-x';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -7517,9 +7517,17 @@ function periodWindow() {
   };
 }
 
+// Amounts arrive from the Apps Script sheet and the email import, and a sheet
+// happily hands back "1500" as text. `0 + '1500'` is '01500', so one string in
+// the column silently turned revenue into nonsense rather than throwing.
+function _amt(o) {
+  const n = Number(o && o.amount);
+  return isFinite(n) ? n : 0;
+}
+
 function periodStats(base, start, end) {
   const orders = base.filter(o => o.orderDate && o.orderDate >= start && o.orderDate <= end);
-  const rev = orders.reduce((s, o) => s + (o.amount || 0), 0);
+  const rev = orders.reduce((s, o) => s + _amt(o), 0);
   const byArea = {};
   orders.forEach(o => { const a = o.area || '—'; byArea[a] = (byArea[a] || 0) + 1; });
   return { count: orders.length, rev, byArea };
@@ -7545,7 +7553,6 @@ function pctDelta(cur, prev) {
 const DASH_WIDGETS_DEF = [
   { id:'cmporders', label:'Orders',            defaultSize:'half' },
   { id:'cmprev',    label:'Revenue',           defaultSize:'half' },
-  { id:'target',    label:'Monthly Progress',  defaultSize:'small' },
   { id:'area',      label:'By area',           defaultSize:'full' },
   { id:'trend',     label:'Trend',             defaultSize:'full' },
   { id:'calendar',  label:'Upcoming Events',   defaultSize:'half' },
@@ -8007,11 +8014,14 @@ function buildAreaTableWidget(base, w) {
     rows.forEach(o => {
       const a = o.area || '—';
       if (!m[a]) m[a] = { n: 0, rev: 0 };
-      m[a].n++; m[a].rev += (o.amount || 0);
+      m[a].n++; m[a].rev += _amt(o);
     });
     return m;
   };
   const C = agg(cur), P = agg(prev);
+  // An order with no date belongs to no period, so it vanishes from every
+  // total. Silently is the wrong way for that to happen.
+  const undated = base.filter(o => !o.orderDate).length;
 
   // Fixed list first, then anything unexpected that actually has orders — an
   // area typo should be visible, not silently dropped from the totals.
@@ -8037,8 +8047,8 @@ function buildAreaTableWidget(base, w) {
   }).join('');
 
   const tot = {
-    n: cur.length, rev: cur.reduce((s, o) => s + (o.amount || 0), 0),
-    pn: prev.length, prev: prev.reduce((s, o) => s + (o.amount || 0), 0)
+    n: cur.length, rev: cur.reduce((s, o) => s + _amt(o), 0),
+    pn: prev.length, prev: prev.reduce((s, o) => s + _amt(o), 0)
   };
 
   el.innerHTML = `<table style="width:100%;border-collapse:collapse">
@@ -8056,7 +8066,9 @@ function buildAreaTableWidget(base, w) {
       ${cell(tot.rev, tot.prev, true)}
     </tr>
   </table>
-  <div style="font-size:11px;color:var(--text3);padding:7px 12px 2px">Green above last year · red below · grey where there is nothing to compare. Cancelled orders excluded.</div>`;
+  <div style="font-size:11px;color:var(--text3);padding:7px 12px 2px">Green above last year · red below · grey where there is nothing to compare. Cancelled orders excluded.</div>
+  ${undated ? `<div style="font-size:11.5px;color:#B45309;background:#FEF3C7;border-top:1px solid #FDE68A;padding:7px 12px">
+    &#9888; ${undated} order${undated > 1 ? 's have' : ' has'} no order date and cannot appear in any period — these are missing from every figure above.</div>` : ''}`;
 }
 
 // The trend follows the period selector — showing 12 months under a "Today"
@@ -8070,7 +8082,7 @@ function buildTrendChart(base) {
   const pts = [];
   const push = (label, start, end) => {
     const rows = base.filter(o => o.orderDate && o.orderDate >= start && o.orderDate <= end);
-    pts.push({ label, n: rows.length, rev: rows.reduce((s, o) => s + (o.amount || 0), 0) });
+    pts.push({ label, n: rows.length, rev: rows.reduce((s, o) => s + _amt(o), 0) });
   };
 
   if (dashPeriod === 'day') {
@@ -8142,17 +8154,12 @@ function renderDashboard() {
 
   renderDashWidgets();           // build widget shells (idempotent via innerHTML)
 
-  buildMonthlyTarget(base);
   buildBigNumber('dash-cmp-orders', cur.count, prev.count, w, false);
   buildBigNumber('dash-cmp-rev',    cur.rev,   prev.rev,   w, true);
   buildAreaTableWidget(base, w);
   buildTrendChart(base);
   buildUpcomingCalWidget();
 
-  // Monthly Progress is a monthly target. Pro-rating it across a day or a
-  // financial year would be inventing a number nobody agreed to.
-  const tw = document.getElementById('dash-widget-target');
-  if (tw) tw.style.display = (dashPeriod === 'month') ? '' : 'none';
 }
 
 function buildSubbiesDashSection(orders) {

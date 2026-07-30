@@ -2293,7 +2293,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-01-v';
+const APP_BUILD     = '2026-08-01-x';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7315,17 +7315,26 @@ function _mobInRange(dateStr, from, to) {
 }
 
 // Cancelled orders are excluded everywhere: they are not work and not revenue.
+function _amtM(o) { const n = Number(o && o.amount); return isFinite(n) ? n : 0; }
+
 function _mobSlice(from, to) {
   const list = (DB.orders || []).filter(o =>
     o && o.status !== 'cancelled' && _mobInRange(o.orderDate, from, to));
-  return { n: list.length, amt: list.reduce((s, o) => s + (o.amount || 0), 0), list };
+  // The sheet hands back amounts as text often enough that `0 + '1500'` was
+  // producing '01500'. Coerce, don't trust.
+  return { n: list.length, amt: list.reduce((s, o) => s + _amtM(o), 0), list };
 }
 
-function _mobDelta(now, then) {
-  if (!then) return { txt: '—', colour: 'var(--text3)' };
-  const pct = Math.round((now - then) / then * 100);
-  return { txt: (pct > 0 ? '▲' : pct < 0 ? '▼' : '') + Math.abs(pct) + '%',
-           colour: pct > 0 ? '#16A34A' : pct < 0 ? '#DC2626' : 'var(--text3)' };
+// Percentages are gone: "▼98%" reads as a catastrophe where "1, was 55" reads
+// as a fact. A zero baseline gets no colour at all — going 0 → 20 is not a win,
+// it usually means that area simply was not worked last year.
+function _mobDelta(now, then, money) {
+  const f = v => money ? '$' + Math.round(v).toLocaleString('en-AU') : String(Math.round(v));
+  if (!then) return { txt: '', colour: 'var(--text3)' };
+  if (now === then) return { txt: 'same', colour: 'var(--text3)' };
+  const up = now > then;
+  return { txt: (up ? '▲' : '▼') + ' ' + f(Math.abs(now - then)),
+           colour: up ? '#16A34A' : '#DC2626' };
 }
 
 let _mobDashMode = 'month';     // 'month' | 'quarter'
@@ -7406,16 +7415,14 @@ function _mobCompareCard() {
 
   const tile = (title, nowV, prevV, lyV, isMoney) => {
     const f = v => isMoney ? fmt(v) : String(v);
-    const dP = _mobDelta(nowV, prevV), dY = _mobDelta(nowV, lyV);
+    const dY = _mobDelta(nowV, lyV, isMoney);
+    const tone = !lyV ? 'var(--text)' : (nowV > lyV ? '#16A34A' : nowV < lyV ? '#DC2626' : 'var(--text)');
     return `<div style="flex:1;min-width:0;background:var(--bg2);border-radius:11px;padding:11px 12px">
       <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">${title}</div>
-      <div style="display:flex;align-items:baseline;gap:6px;margin:3px 0 6px">
-        <span style="font-size:22px;font-weight:800;color:var(--text)">${f(nowV)}</span>
-        <span style="font-size:12px;font-weight:700;color:${dP.colour}">${dP.txt}</span>
-      </div>
-      <div style="font-size:10.5px;color:var(--text3);line-height:1.6">
-        ${b.prevLabel} ${f(prevV)}<br>
-        ${b.lyLabel} ${f(lyV)} <span style="color:${dY.colour};font-weight:700">${dY.txt}</span>
+      <div style="font-size:26px;font-weight:800;color:${tone};margin:2px 0 7px;letter-spacing:-.6px">${f(nowV)}</div>
+      <div style="font-size:10.5px;color:var(--text3);line-height:1.7;border-top:1px dashed var(--border);padding-top:6px">
+        ${b.lyLabel} ${lyV ? f(lyV) : '—'}
+        ${dY.txt ? `<span style="color:${dY.colour};font-weight:700"> ${dY.txt}</span>` : ''}
       </div>
     </div>`;
   };
@@ -7451,31 +7458,25 @@ function _mobAreaCard() {
     return m;
   };
   const A = tally(cur), B = tally(ly);
+  // Fixed order, not sorted by size. When the order changes every month the eye
+  // has to re-read the whole list instead of going straight to its area.
   const areas = [...new Set([...Object.keys(A), ...Object.keys(B)])]
-    .sort((x, y) => (A[y] || 0) - (A[x] || 0) || _areaOrderM(x) - _areaOrderM(y));
+    .sort((x, y) => _areaOrderM(x) - _areaOrderM(y) || String(x).localeCompare(String(y)));
   if (!areas.length) return '';
-
-  const max = Math.max(...areas.map(a => Math.max(A[a] || 0, B[a] || 0)), 1);
 
   return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <span style="font-size:12.5px;font-weight:800;flex:1">By area</span>
-      <span style="font-size:10px;color:var(--text3)">
-        <b style="color:var(--accent)">■</b> now &nbsp; <b style="color:var(--text3)">■</b> ${esc(b.lyLabel)}
-      </span>
+      <span style="font-size:10px;color:var(--text3)">vs ${esc(b.lyLabel)}</span>
     </div>
     ${areas.map(a => {
       const n = A[a] || 0, p = B[a] || 0;
-      const d = _mobDelta(n, p);
-      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0">
-        <span style="width:42px;flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--text2)">${esc(a)}</span>
-        <span style="flex:1;min-width:0">
-          <span style="display:block;height:7px;border-radius:4px;background:linear-gradient(90deg,#E0AC28,#F5D682);width:${Math.round(n/max*100)}%;min-width:${n?'3px':'0'}"></span>
-          <span style="display:block;height:4px;border-radius:3px;background:var(--border2);width:${Math.round(p/max*100)}%;min-width:${p?'3px':'0'};margin-top:2px"></span>
-        </span>
-        <span style="width:52px;flex-shrink:0;text-align:right;font-size:11.5px">
-          <b>${n}</b> <span style="color:${d.colour};font-size:10px;font-weight:700">${d.txt}</span>
-        </span>
+      const tone = !p ? 'var(--text)' : (n > p ? '#16A34A' : n < p ? '#DC2626' : 'var(--text)');
+      return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="width:46px;flex-shrink:0;font-size:12px;font-weight:800;color:var(--text2)">${esc(a)}</span>
+        <span style="flex:1"></span>
+        <span style="width:46px;text-align:right;font-size:16px;font-weight:800;color:${tone};font-variant-numeric:tabular-nums">${n}</span>
+        <span style="width:46px;text-align:right;font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums">${p || '—'}</span>
       </div>`;
     }).join('')}
   </div>`;
@@ -7576,9 +7577,8 @@ function mobDashboard() {
   }).join('') : '<div style="font-size:13px;color:var(--text3);padding:8px 0">No upcoming events in the next 21 days</div>';
 
   el.innerHTML =
-    noticeBlock([...new Set((DB.orders || [])
-      .filter(o => o && o.status !== 'cancelled' && !['closed','paid'].includes(o.status || ''))
-      .map(o => (o.area || '').trim()))]) +
+    // Notices moved out of the dashboard — they have their own tab now, and
+    // repeating them above the numbers pushed the actual figures off-screen.
     _mobCompareCard() +
     _mobTrendCard() +
     _mobAreaCard() +
