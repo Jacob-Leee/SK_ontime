@@ -2293,7 +2293,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-02-k';
+const APP_BUILD     = '2026-08-02-m';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7139,12 +7139,19 @@ function _mobMyAreas() {
 var _noticeTab = '';
 function noticeTab(g) { _noticeTab = g; mobNoticesPage(); }
 
+// These lists did not exist here, so every group fell through to a plain
+// alphabetical sort — CA10 landed before CA2 and the teams scattered. The tab
+// order has to be identical to the desktop or the same board reads differently
+// depending on which screen you are holding.
+const NOTICE_AREAS = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
+const NOTICE_TEAMS = ['General (All sites)', 'High Cost Team & MPW', 'Relocation Team'];
+
 function _noticeTabOrder(list) {
-  const AREAS = (typeof NOTICE_AREAS !== 'undefined') ? NOTICE_AREAS : [];
   const rank = (g) => {
     if (/^general/i.test(g)) return -1;
-    const i = AREAS.indexOf(g);
-    return i >= 0 ? i : 500;
+    const i = NOTICE_AREAS.indexOf(g); if (i >= 0) return i;
+    const j = NOTICE_TEAMS.indexOf(g); if (j >= 0) return 100 + j;
+    return 500;
   };
   return list.slice().sort((x, y) => rank(x) - rank(y) || String(x).localeCompare(String(y)));
 }
@@ -7187,8 +7194,10 @@ function mobNoticesPage() {
 
   const mine = _mobMyAreas();
   const all = Object.keys(_notices || {}).filter(function (a) { return noticesFor(a).length; });
-  const groups = _noticeTabOrder(all.filter(function (a) { return mine.includes(a); }))
-    .concat(_noticeTabOrder(all.filter(function (a) { return !mine.includes(a); })));
+  // One fixed order everywhere. Putting "my areas" first sounded helpful but
+  // meant the strip rearranged itself per person and per day, so nobody could
+  // learn where a group sits.
+  const groups = _noticeTabOrder(all);
 
   if (!groups.length) { el.innerHTML = '<div class="mob-empty">No notices</div>'; return; }
   if (!groups.includes(_noticeTab)) _noticeTab = groups[0];
@@ -9665,11 +9674,27 @@ async function _gisClientId() {
 // Until then Safari works — so say so plainly and hand them the link instead of
 // letting them tap a button that will keep failing.
 function _authShowSafariHelp() {
-  const box = document.getElementById('auth-error');
+  let box = document.getElementById('auth-error');
   const btn = document.getElementById('auth-signin-btn');
-  if (btn) btn.style.display = 'none';
-  if (!box) return;
-  box.style.display = '';
+
+  // The button used to be hidden here. If the message then failed to appear —
+  // because #auth-error was missing, or a stylesheet kept it hidden — the user
+  // tapped Sign in and the screen simply went blank, with no button to try
+  // again and nothing explaining why. Leave the button alone and make the
+  // message stand on its own.
+  if (btn) btn.style.display = '';
+
+  if (!box || !box.parentElement) {
+    box = document.createElement('div');
+    box.id = 'auth-error';
+    box.style.cssText = 'margin:18px auto 0;max-width:340px;padding:14px 16px;border-radius:12px;' +
+      'border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);' +
+      'color:rgba(255,255,255,0.85);font-size:12.5px;text-align:left';
+    const host = (btn && btn.parentElement) || document.body;
+    host.appendChild(box);
+  }
+  box.style.display = 'block';
+  box.style.visibility = 'visible';
   box.style.background = 'rgba(255,255,255,0.06)';
   box.style.borderColor = 'rgba(255,255,255,0.18)';
   box.style.color = 'rgba(255,255,255,0.85)';

@@ -448,7 +448,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-08-02-k';
+const APP_BUILD = '2026-08-02-m';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -792,12 +792,19 @@ function _sbMyAreas() {
 var _noticeTab = '';
 function noticeTab(g) { _noticeTab = g; sbRender(); }
 
+// These lists did not exist here, so every group fell through to a plain
+// alphabetical sort — CA10 landed before CA2 and the teams scattered. The tab
+// order has to be identical to the desktop or the same board reads differently
+// depending on which screen you are holding.
+const NOTICE_AREAS = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
+const NOTICE_TEAMS = ['General (All sites)', 'High Cost Team & MPW', 'Relocation Team'];
+
 function _noticeTabOrder(list) {
-  const AREAS = (typeof NOTICE_AREAS !== 'undefined') ? NOTICE_AREAS : [];
   const rank = (g) => {
     if (/^general/i.test(g)) return -1;
-    const i = AREAS.indexOf(g);
-    return i >= 0 ? i : 500;
+    const i = NOTICE_AREAS.indexOf(g); if (i >= 0) return i;
+    const j = NOTICE_TEAMS.indexOf(g); if (j >= 0) return 100 + j;
+    return 500;
   };
   return list.slice().sort((x, y) => rank(x) - rank(y) || String(x).localeCompare(String(y)));
 }
@@ -826,8 +833,10 @@ function sbNoticesPage() {
   const mine = _sbMyAreas();
   const all = Object.keys(_notices || {}).filter(function (a) { return noticesFor(a).length; });
   // Groups this subbie works in come first; the rest stay reachable behind them.
-  const groups = _noticeTabOrder(all.filter(function (a) { return mine.includes(a); }))
-    .concat(_noticeTabOrder(all.filter(function (a) { return !mine.includes(a); })));
+  // One fixed order everywhere. Putting "my areas" first sounded helpful but
+  // meant the strip rearranged itself per person and per day, so nobody could
+  // learn where a group sits.
+  const groups = _noticeTabOrder(all);
   if (!groups.length) {
     return '<div class="empty"><i class="ti ti-speakerphone"></i><p>No notices</p>' +
       '<small style="margin-top:6px;display:block">The office posts area instructions here.</small></div>';
