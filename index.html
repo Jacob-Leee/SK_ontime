@@ -571,7 +571,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
             <div style="height:1px;background:var(--border);margin:4px 0"></div>
 
             <div onclick="redo();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">&#8635; 다시 실행</div>
-            <div onclick="cloudForcePush();closeHeaderMenu()" style="padding:9px 14px;font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
+            <div id="menu-force-push" onclick="cloudForcePush();closeHeaderMenu()" style="display:none;padding:9px 14px;font-size:12.5px;color:var(--text);align-items:center;gap:9px;cursor:pointer;white-space:nowrap" onmouseover="this.style.background='var(--cream2)'" onmouseout="this.style.background='transparent'">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--orange)"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
               Force Push
             </div>
@@ -2058,7 +2058,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-q';
+const APP_BUILD = '2026-08-01-s';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2549,6 +2549,7 @@ function getSubbieStyle(name) {
 }
 
 async function cloudForcePush() {
+  if (!isOwner()) return toast('Force Push 는 ' + OWNER_EMAIL + ' 계정만 사용할 수 있습니다', 'error');
   if (!CLOUD.enabled || !CLOUD.url) { toast('Cloud Sync not enabled', 'error'); return; }
   const ok = confirm('Force Push: your current data will overwrite everyone else\'s copy.\n\nAll 4 users will receive your version on their next sync.\n\nProceed?');
   if (!ok) return;
@@ -3073,7 +3074,15 @@ function renderHeaderMenu() {
   }
 }
 
+// Shown only to the owner. display:flex (not block) because the row lays its
+// icon and label out as a flex line.
+function applyOwnerUI() {
+  const el = document.getElementById('menu-force-push');
+  if (el) el.style.display = isOwner() ? 'flex' : 'none';
+}
+
 function renderHeaderIdentity() {
+  applyOwnerUI();
   const av = document.getElementById('hdr-menu-avatar');
   const nm = document.getElementById('hdr-menu-name');
   if (!av || !nm) return;
@@ -4592,18 +4601,23 @@ async function docGrab(orderId, key) {
   docMarkRead(orderId, key);
   docChipClose();
 
-  try {
-    await _docBlobDownload(fl);
-    _docRepaint();
-    return;
-  } catch (e) {
-    console.warn('[DOC] blob download unavailable (bucket CORS not set?):', e.message);
-  }
-
+  // Content-Disposition already guarantees a real download, so when it is set
+  // there is nothing for the blob path to improve — and on a bucket without
+  // CORS that attempt is a failed request and a console error on every click.
   let forced = fl.disp === true;
   if (!forced) {
     try { forced = await _docFixDisposition(orderId, key, fl); }
     catch (e) { console.warn('[DOC] disposition fix failed:', e.code || e.message); }
+  }
+
+  if (!forced) {
+    try {
+      await _docBlobDownload(fl);
+      _docRepaint();
+      return;
+    } catch (e) {
+      console.warn('[DOC] blob download unavailable (bucket CORS not set?):', e.message);
+    }
   }
 
   const a = document.createElement('a');
@@ -9502,6 +9516,19 @@ function startCalendarWatch() {
 
 const AUTH = { user: null, entry: null, ready: false, auth: null, db: null, lastError: null };
 
+// Force Push rewrites every record's timestamp so this machine wins the merge —
+// it is the one action that can silently discard another desk's work. It stays
+// with the account that owns the data.
+//
+// This is a UI guard, not security: the Apps Script endpoint still accepts a
+// push from anyone signed in. It exists to stop the accident, which is the
+// failure that actually happens.
+const OWNER_EMAIL = 'lucklkh88@gmail.com';
+function isOwner() {
+  const e = ((AUTH.user && AUTH.user.email) || lsGet('hom_auth_email') || '').trim().toLowerCase();
+  return e === OWNER_EMAIL;
+}
+
 // Firebase keys cannot contain '.', so emails are stored with dots as commas.
 // The RTDB rules do the identical transform — the two MUST agree or every
 // allow-list lookup silently misses and nobody can get in.
@@ -10937,7 +10964,10 @@ function fmtNum(n) {
 function toast(msg, type = 'success') {
   const div = document.createElement('div');
   div.className = `toast toast-${type}`;
-  div.innerHTML = (type === 'success' ? '✅' : '❌') + ' ' + msg;
+  // 'success' or bust meant every other type rendered as a red cross — a
+  // "force pushing…" progress line looked like the push had failed.
+  const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : '⏳';
+  div.innerHTML = icon + ' ' + msg;
   document.getElementById('toast-container').appendChild(div);
   setTimeout(() => div.remove(), 3000);
 }
