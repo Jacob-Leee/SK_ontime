@@ -81,11 +81,14 @@ async function hardReload() {
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --gold:        #E0AC28;
-  --gold-light:  #F5D682;
-  --gold-dark:   #96690A;
-  --gold-bg:     #FEFAEF;
-  --gold-border: rgba(224,172,40,0.42);
+  /* The old #E0AC28 sat on the mustard side of gold and went muddy against the
+     cream background. Lifted towards amber and given a lighter tint, which is
+     what reads as "gold" rather than "dark yellow". */
+  --gold:        #EFB93A;
+  --gold-light:  #FBE08C;
+  --gold-dark:   #A67908;
+  --gold-bg:     #FFFBF0;
+  --gold-border: rgba(239,185,58,0.45);
   --black:       #111111;
   --cream:       #FAF8F4;
   --cream2:      #F2EDE4;
@@ -2053,7 +2056,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-02-i';
+const APP_BUILD = '2026-08-02-k';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4919,16 +4922,23 @@ function noticeFormat(raw) {
     // spacer for them would open the notice with a gap.
     if (!t) { if (started) { inSection = false; out.push('<div style="height:9px"></div>'); } continue; }
 
-    // Title — the first line of the notice.
-    if (!started) {
+    // Numbered section — checked BEFORE the title rule.
+    //
+    // A notice that opens straight into "1. Mandatory Site Comments" had its
+    // first line swallowed as a title: section 1 lost its badge while every
+    // other section kept one, and the lines under it never became bullets
+    // because the section was never opened.
+    const sec = /^(\d+)[.)]\s+(.*)$/.exec(t);
+
+    // Title — the first line, but only when it is not already a section.
+    if (!started && !sec) {
       started = true;
       out.push('<div style="font-size:15px;font-weight:800;letter-spacing:-.2px;margin:0 0 8px;color:var(--text,#1C1C1E)">' + H(t) + '</div>');
       continue;
     }
 
-    // Numbered section.
-    const sec = /^(\d+)[.)]\s+(.*)$/.exec(t);
     if (sec) {
+      started = true;
       inSection = true;
       out.push('<div style="display:flex;gap:8px;align-items:baseline;margin:13px 0 6px;padding-top:9px;border-top:1px solid #E0E7FF">' +
         '<span style="flex-shrink:0;min-width:20px;height:20px;border-radius:6px;background:#4338CA;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">' + esc(sec[1]) + '</span>' +
@@ -8283,13 +8293,24 @@ function buildTrendChart(base) {
 
   const money = !!window._trendMoney;
   const data  = pts.map(p => money ? p.rev : p.n);
+
+  // Only the period the board is actually showing is gold. Twelve identical
+  // gold bars told you nothing about where you were; one gold bar in a row of
+  // grey answers "which month am I looking at" before you read a label.
+  const activeVal = (document.getElementById('dash-window') || {}).value || '';
+  const activeIdx = activeVal
+    ? pts.findIndex(p => p.val === activeVal)
+    : pts.length - 1;                      // no explicit pick = the current period
+  const GOLD = '#EFB93A', GREY = '#DDD8CC';
+  const colours = pts.map((p, i) => i === activeIdx ? GOLD : GREY);
   if (_trendChart) { try { _trendChart.destroy(); } catch (e) {} }
   _trendChart = new Chart(cv.getContext('2d'), {
     type: 'bar',
     data: {
       labels: pts.map(p => p.label),
       datasets: [{ label: money ? 'Revenue' : 'Orders', data,
-        backgroundColor: '#E0AC28', hoverBackgroundColor: '#F0C44E',
+        backgroundColor: colours,
+        hoverBackgroundColor: pts.map((p, i) => i === activeIdx ? '#FBCB58' : '#C9C3B4'),
         borderRadius: 4, maxBarThickness: 52 }]
     },
     options: {

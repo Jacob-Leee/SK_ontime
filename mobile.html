@@ -2293,7 +2293,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-02-i';
+const APP_BUILD     = '2026-08-02-k';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8047,16 +8047,23 @@ function noticeFormat(raw) {
     // spacer for them would open the notice with a gap.
     if (!t) { if (started) { inSection = false; out.push('<div style="height:9px"></div>'); } continue; }
 
-    // Title — the first line of the notice.
-    if (!started) {
+    // Numbered section — checked BEFORE the title rule.
+    //
+    // A notice that opens straight into "1. Mandatory Site Comments" had its
+    // first line swallowed as a title: section 1 lost its badge while every
+    // other section kept one, and the lines under it never became bullets
+    // because the section was never opened.
+    const sec = /^(\d+)[.)]\s+(.*)$/.exec(t);
+
+    // Title — the first line, but only when it is not already a section.
+    if (!started && !sec) {
       started = true;
       out.push('<div style="font-size:15px;font-weight:800;letter-spacing:-.2px;margin:0 0 8px;color:var(--text,#1C1C1E)">' + H(t) + '</div>');
       continue;
     }
 
-    // Numbered section.
-    const sec = /^(\d+)[.)]\s+(.*)$/.exec(t);
     if (sec) {
+      started = true;
       inSection = true;
       out.push('<div style="display:flex;gap:8px;align-items:baseline;margin:13px 0 6px;padding-top:9px;border-top:1px solid #E0E7FF">' +
         '<span style="flex-shrink:0;min-width:20px;height:20px;border-radius:6px;background:#4338CA;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">' + esc(sec[1]) + '</span>' +
