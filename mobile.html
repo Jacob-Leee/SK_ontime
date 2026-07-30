@@ -2268,6 +2268,13 @@ const SEED_VERSION = '15';
 // ============================================================
 // DATA STORE
 // ============================================================
+// Staff picker UI state — declared up here so nothing can touch it in the TDZ.
+let _skEditing = false;
+const _SK_DEFAULT_COLOURS = {
+  SK_Jacob: '#007AFF', SK_Mo: '#AF52DE', SK_June: '#FF6B35', SK_Jay: '#34C759',
+  'Jake Lee': '#0D9488', 'Chris Choi': '#CA8A04', 'Sean Park': '#DB2777',
+};
+
 function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 
@@ -2283,7 +2290,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-01-h';
+const APP_BUILD     = '2026-08-01-l';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7206,6 +7213,13 @@ function mobSearch(v) {
 
 function _mobPeriodBounds(mode, ref) {
   const y = ref.getFullYear(), m = ref.getMonth();
+  if (mode === 'year') {
+    return { from: new Date(y, 0, 1), to: new Date(y, 11, 31),
+             prevFrom: new Date(y - 1, 0, 1), prevTo: new Date(y - 1, 11, 31),
+             lastYearFrom: new Date(y - 1, 0, 1), lastYearTo: new Date(y - 1, 11, 31),
+             label: String(y), prevLabel: 'prev year', lyLabel: String(y - 1),
+             shortLabel: String(y) };
+  }
   if (mode === 'quarter') {
     const q = Math.floor(m / 3);
     return { from: new Date(y, q * 3, 1), to: new Date(y, q * 3 + 3, 0),
@@ -7253,7 +7267,8 @@ let _mobDashBack = 0;
 
 function _mobShiftRef(mode, back) {
   const d = new Date();
-  if (mode === 'quarter') d.setMonth(d.getMonth() - back * 3);
+  if (mode === 'year') d.setFullYear(d.getFullYear() - back);
+  else if (mode === 'quarter') d.setMonth(d.getMonth() - back * 3);
   else d.setMonth(d.getMonth() - back);
   return d;
 }
@@ -7275,7 +7290,7 @@ function mobPickPeriod(back) { _mobDashBack = back; mobDashboard(); }
 
 function _mobTrendCard() {
   const mode = _mobDashMode;
-  const count = mode === 'quarter' ? 8 : 12;
+  const count = mode === 'year' ? 5 : mode === 'quarter' ? 8 : 12;
   const series = _mobSeries(mode, count);
   const money = _mobTrendMetric === 'revenue';
   const val = p => money ? p.amt : p.n;
@@ -7288,12 +7303,13 @@ function _mobTrendCard() {
 
   return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <span style="font-size:12.5px;font-weight:800;flex:1">${mode === 'quarter' ? 'Last 8 quarters' : 'Last 12 months'}</span>
+      <span style="font-size:12.5px;font-weight:800;flex:1">${
+        mode === 'year' ? 'Last 5 years' : mode === 'quarter' ? 'Last 8 quarters' : 'Last 12 months'}</span>
       <span style="display:flex;gap:2px;background:var(--bg2);border-radius:8px;padding:2px">
         ${btn('orders','Orders')}${btn('revenue','$')}
       </span>
     </div>
-    <div style="display:flex;align-items:flex-end;gap:${mode==='quarter'?'7px':'4px'};height:96px">
+    <div style="display:flex;align-items:flex-end;gap:${mode==='year'?'10px':mode==='quarter'?'7px':'4px'};height:96px">
       ${series.map(p => {
         const on = p.back === _mobDashBack;
         const h = Math.max(2, Math.round(val(p) / max * 74));
@@ -7334,14 +7350,14 @@ function _mobCompareCard() {
   };
 
   const btn = (m, label) => `<button onclick="mobDashMode('${m}')"
-    style="flex:1;padding:7px;border:none;border-radius:8px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;
+    style="flex:1;padding:7px 4px;border:none;border-radius:8px;font-size:11.5px;font-weight:700;font-family:inherit;cursor:pointer;
     background:${_mobDashMode===m?'linear-gradient(180deg,#F0C44E,#D99F1C)':'transparent'};color:${_mobDashMode===m?'#3D2E00':'var(--text3)'}">${label}</button>`;
 
   return `<div style="background:var(--surface);border-radius:12px;padding:13px 14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <span style="font-size:12.5px;font-weight:800;flex:1">${esc(b.label)}</span>
-      <span style="display:flex;gap:3px;background:var(--bg2);border-radius:9px;padding:2px;width:132px">
-        ${btn('month','Month')}${btn('quarter','Quarter')}
+      <span style="display:flex;gap:2px;background:var(--bg2);border-radius:9px;padding:2px;width:172px">
+        ${btn('month','Month')}${btn('quarter','Qtr')}${btn('year','Year')}
       </span>
     </div>
     <div style="display:flex;gap:8px">
@@ -7690,11 +7706,21 @@ function docOpen(orderId, key, url, who) {
   window.open(url, '_blank', 'noopener');
 }
 
+// "NEW" means new to ME. With a global flag, one person's download cleared the
+// badge for everybody — including people who had never opened the file.
+function _docMeName() {
+  return (typeof NOTIF !== 'undefined' && NOTIF.me) || window._SK_USER || window._SELECTED_SUBBIE || 'SK';
+}
+function _docSeenByMe(f) {
+  if (!f || !f.readBy) return false;
+  return !!f.readBy[_docNameKey(_docMeName())];
+}
+
 // Small badge for an order card: how many files, how many still untouched.
 function docBadge(orderId) {
   const fs = docsFor(orderId);
   if (!fs.length) return '';
-  const unread = fs.filter(f => !Object.keys(f.readBy || {}).length).length;
+  const unread = fs.filter(f => !_docSeenByMe(f)).length;
   return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;
     background:${unread ? '#FEF3C7' : 'rgba(0,0,0,.05)'};color:${unread ? '#B45309' : 'var(--text3)'};
     border-radius:20px;padding:2px 8px">\u{1F4CE} ${fs.length}${unread ? ' · ' + unread + ' new' : ''}</span>`;
@@ -7716,7 +7742,7 @@ function docListHtml(orderId, who) {
           <span style="display:block;font-size:11px;color:var(--text3);margin-top:1px">${_pDocSize(f.size)} · ${esc(f.by || '')}${
             f.at ? ' · ' + new Date(f.at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) : ''}</span>
         </span>
-        ${read.length
+        ${_docSeenByMe(f)
           ? `<span title="Opened by ${escAttr(read.join(', '))}" style="font-size:10px;font-weight:700;color:#15803D;background:#DCFCE7;border-radius:20px;padding:2px 7px;flex-shrink:0">&#10003;</span>`
           : `<span style="font-size:10px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:20px;padding:2px 7px;flex-shrink:0">NEW</span>`}
         <span style="color:var(--text3);font-size:15px;flex-shrink:0">&#8595;</span>
@@ -8523,6 +8549,59 @@ function _cacheStaffNames(all) {
   return uniq;
 }
 
+// ── Staff picker: order, colour, last used ─────────────────────
+
+
+function _skLast() { try { return lsGet('hom_sk_last') || ''; } catch (e) { return ''; } }
+function _skSetLast(n) { try { lsSet('hom_sk_last', n || ''); } catch (e) {} }
+
+function _skColours() {
+  try { return JSON.parse(lsGet('hom_sk_colours') || '{}'); } catch (e) { return {}; }
+}
+function _skColour(name) {
+  return _skColours()[name] || _SK_DEFAULT_COLOURS[name] || '#8E8E93';
+}
+function _skSetColour(name, hex) {
+  const m = _skColours();
+  m[name] = hex;
+  try { lsSet('hom_sk_colours', JSON.stringify(m)); } catch (e) {}
+  mobShowSkPicker();
+}
+
+function _skOrderPref() {
+  try { return JSON.parse(lsGet('hom_sk_order') || '[]'); } catch (e) { return []; }
+}
+function _skSetOrderPref(arr) {
+  try { lsSet('hom_sk_order', JSON.stringify(arr)); } catch (e) {}
+}
+
+// Last used first, then the saved order, then anything new alphabetically.
+// Names that disappear from the allow-list drop out on their own because this
+// starts from the live list rather than from the saved order.
+function _skOrdered() {
+  const live = _skNames();
+  const pref = _skOrderPref().filter(n => live.includes(n));
+  const rest = live.filter(n => !pref.includes(n)).sort();
+  let out = pref.concat(rest);
+  const last = _skLast();
+  if (last && out.includes(last)) out = [last].concat(out.filter(n => n !== last));
+  return out;
+}
+
+function _skMove(name, dir) {
+  // Reorder the full list, not the displayed one — the "last used" name is
+  // pinned on top for display only, and moving relative to it would jump.
+  const live = _skNames();
+  let order = _skOrderPref().filter(n => live.includes(n));
+  live.forEach(n => { if (!order.includes(n)) order.push(n); });
+  const i = order.indexOf(name);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  order.splice(j, 0, order.splice(i, 1)[0]);
+  _skSetOrderPref(order);
+  mobShowSkPicker();
+}
+
 function mobShowSkPicker() {
   document.getElementById('mob-pin-entry').style.display = 'none';
   const listEl = document.getElementById('mob-sk-list');
@@ -8542,26 +8621,79 @@ function mobShowSkPicker() {
     adminRow.appendChild(adminLbl);
     listEl.appendChild(adminRow);
 
-    _skNames().forEach(function(name) {
-      const bare = name.replace(/^SK_/,'');
+    // Order: whoever used this device last, then any custom order, then the
+    // rest alphabetically. A phone is usually one person's, so making them
+    // scroll past four colleagues every morning is the wrong default.
+    _skOrdered().forEach(function(name) {
+      const bare = name.replace(/^SK_/, '');
       const parts = bare.split(' ');
-      const initials = parts.length > 1 ? (parts[0][0]+parts[parts.length-1][0]).toUpperCase() : bare.slice(0,2).toUpperCase();
-      const colors = {SK_Jacob:'#007AFF',SK_Mo:'#AF52DE',SK_June:'#FF6B35',SK_Jay:'#34C759','Jake Lee':'#0D9488','Chris Choi':'#CA8A04','Sean Park':'#DB2777'};
-      const color = colors[name] || '#8E8E93';
+      const initials = parts.length > 1 ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase() : bare.slice(0, 2).toUpperCase();
+      const color = _skColour(name);
+      const isMe = name === _skLast();
+
       const row = document.createElement('div');
       row.setAttribute('data-skname', name);
-      row.style.cssText = 'display:flex;align-items:center;gap:14px;padding:14px 16px;background:#fff;border:1.5px solid #E5E5E0;border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0.05);user-select:none;';
+      row.style.cssText = 'display:flex;align-items:center;gap:14px;padding:14px 16px;background:#fff;border:1.5px solid ' +
+        (isMe ? color : '#E5E5E0') + ';border-radius:14px;cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,0.05);user-select:none;' +
+        (isMe ? 'box-shadow:0 2px 10px ' + color + '33;' : '');
+
       const av = document.createElement('div');
-      av.style.cssText = 'width:42px;height:42px;border-radius:50%;background:'+color+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0;pointer-events:none';
+      av.style.cssText = 'width:42px;height:42px;border-radius:50%;background:' + color +
+        ';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0;pointer-events:none';
       av.textContent = initials;
+
       const lbl = document.createElement('div');
-      lbl.style.cssText = 'font-size:16px;font-weight:700;color:#1C1C1E;pointer-events:none';
-      lbl.textContent = name;
+      lbl.style.cssText = 'flex:1;min-width:0;pointer-events:none';
+      lbl.innerHTML = '<div style="font-size:16px;font-weight:700;color:#1C1C1E">' + esc(name) + '</div>' +
+        (isMe ? '<div style="font-size:11px;color:' + color + ';font-weight:700;margin-top:1px">Last used on this device</div>' : '');
+
       row.appendChild(av);
       row.appendChild(lbl);
+
+      // Edit controls sit outside the row's own tap target so reordering or
+      // recolouring never signs anybody in by accident.
+      if (_skEditing) {
+        const tools = document.createElement('div');
+        tools.style.cssText = 'display:flex;align-items:center;gap:4px;flex-shrink:0';
+        tools.setAttribute('data-noskpick', '1');
+        tools.onclick = function (e) { e.stopPropagation(); };
+
+        const swatch = document.createElement('input');
+        swatch.type = 'color';
+        swatch.value = color;
+        swatch.title = 'Colour';
+        swatch.style.cssText = 'width:30px;height:30px;border:none;background:none;padding:0;cursor:pointer';
+        swatch.onchange = function () { _skSetColour(name, swatch.value); };
+        swatch.onclick = function (e) { e.stopPropagation(); };
+
+        const up = document.createElement('button');
+        up.innerHTML = '&#9650;';
+        up.style.cssText = 'width:28px;height:28px;border:1px solid #E5E5E0;background:#fff;border-radius:7px;cursor:pointer;font-size:10px;color:#8A8A8E';
+        up.onclick = function (e) { e.stopPropagation(); _skMove(name, -1); };
+
+        const dn = document.createElement('button');
+        dn.innerHTML = '&#9660;';
+        dn.style.cssText = up.style.cssText;
+        dn.onclick = function (e) { e.stopPropagation(); _skMove(name, 1); };
+
+        tools.appendChild(swatch); tools.appendChild(up); tools.appendChild(dn);
+        row.appendChild(tools);
+      }
+
       listEl.appendChild(row);
     });
+
+    // Edit toggle
+    const edit = document.createElement('button');
+    edit.textContent = _skEditing ? 'Done' : 'Edit order & colours';
+    edit.style.cssText = 'margin-top:14px;background:none;border:none;color:' +
+      (_skEditing ? '#1C1C1E' : '#8A8A8E') + ';font-size:12.5px;font-weight:' +
+      (_skEditing ? '700' : '600') + ';text-decoration:underline;cursor:pointer;font-family:inherit;align-self:center';
+    edit.setAttribute('data-noskpick', '1');
+    edit.onclick = function (e) { e.stopPropagation(); _skEditing = !_skEditing; mobShowSkPicker(); };
+    listEl.appendChild(edit);
     listEl.ontouchend = function(e) {
+      if (e.target && e.target.closest && e.target.closest('[data-noskpick]')) return;
       e.preventDefault();
       var el = e.target;
       while (el && el !== listEl) {
@@ -8571,6 +8703,7 @@ function mobShowSkPicker() {
       }
     };
     listEl.onclick = function(e) {
+      if (e.target && e.target.closest && e.target.closest('[data-noskpick]')) return;
       var el = e.target;
       while (el && el !== listEl) {
         var n = el.getAttribute('data-skname');
@@ -8583,6 +8716,7 @@ function mobShowSkPicker() {
 }
 
 function mobSkPick(name) {
+  if (name && name !== 'admin') _skSetLast(name);
   window._SK_USER = (name === 'admin') ? null : name;
   lsSet('mob_sk_user', name);
   document.getElementById('mob-pin-overlay').style.display = 'none';

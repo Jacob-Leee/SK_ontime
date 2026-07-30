@@ -2058,7 +2058,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-h';
+const APP_BUILD = '2026-08-01-l';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4429,6 +4429,161 @@ function docSize(bytes) {
 let _docs = {};            // orderId -> { key: {name,size,url,by,at,path} }
 let _docsWatch = false;
 
+// "NEW" has to mean "new to ME", not "new to anyone".
+//
+// The office uploads a scope, then opens it once to check it went up properly —
+// and with a global unread flag that single click cleared the NEW badge for the
+// subcontractor who had never seen the file. Per-viewer is the only version of
+// this that answers the question people are actually asking.
+function _docMeName() {
+  return window._SUBBIE_VIEW ? (window._SUBBIE_NAME || 'Subcontractor')
+                             : ((AUTH.entry && AUTH.entry.name) || NOTIF.me || 'SK');
+}
+function _docSeenByMe(f) {
+  if (!f || !f.readBy) return false;
+  return !!f.readBy[_docNameKey(_docMeName())];
+}
+
+// ── Files on the order row ─────────────────────────────────────
+//
+// Documents already lists everything, but the question people actually have is
+// "does THIS order have paperwork" — asked while looking at the order row, not
+// while looking at the file page. A chip next to the order number answers it
+// without a page change, and downloading from here counts as a download, so
+// the NEW badge on Documents clears at the same time.
+function docChip(o) {
+  if (!o || !o.id) return '';
+  const files = _docs[o.id] || {};
+  // A single malformed record must not take the whole table down with it —
+  // this renders inside every VAC/MPW row.
+  const keys = Object.keys(files).filter(k => files[k]);
+  if (!keys.length) return '';
+  const unread = keys.filter(k => !_docSeenByMe(files[k])).length;
+  const style = unread
+    ? 'color:#B45309;background:#FEF3C7;border:1px solid #FDE68A'
+    : 'color:#15803D;background:#DCFCE7;border:1px solid #BBF7D0';
+  const title = unread
+    ? unread + ' of ' + keys.length + ' not downloaded by you yet'
+    : keys.length + ' file' + (keys.length > 1 ? 's' : '') + ' — you have them all';
+  return `<button onclick="event.stopPropagation();docChipOpen('${escAttr(o.id)}',this)"
+    title="${escAttr(title)}"
+    style="margin-left:6px;${style};border-radius:20px;padding:1px 7px;font-size:10px;font-weight:800;
+           cursor:pointer;white-space:nowrap;vertical-align:middle;line-height:1.6;font-family:inherit">
+    &#8595; ${keys.length}${unread ? ' <span style="opacity:.75">NEW</span>' : ''}</button>`;
+}
+
+let _docPopEl = null;
+
+function docChipClose() {
+  if (_docPopEl) { _docPopEl.remove(); _docPopEl = null; }
+  document.removeEventListener('mousedown', _docPopAway, true);
+  window.removeEventListener('scroll', docChipClose, true);
+}
+function _docPopAway(e) {
+  if (_docPopEl && !_docPopEl.contains(e.target)) docChipClose();
+}
+
+// One file downloads straight away — a menu with a single item is a pointless
+// extra click. Two or more need the choice.
+function docChipOpen(orderId, btn) {
+  const files = _docs[orderId] || {};
+  const keys = Object.keys(files).filter(k => files[k])
+    .sort((a, b) => (files[b].at || 0) - (files[a].at || 0));
+  if (!keys.length) return toast('이 오더에 파일이 없습니다', 'error');
+  if (keys.length === 1) return docGrab(orderId, keys[0]);
+
+  docChipClose();
+  const r = btn.getBoundingClientRect();
+  const pop = document.createElement('div');
+  _docPopEl = pop;
+  pop.style.cssText = 'position:fixed;z-index:9999;min-width:290px;max-width:440px;background:var(--surface);' +
+    'border:1px solid var(--border);border-radius:11px;box-shadow:0 12px 34px rgba(0,0,0,.18);overflow:hidden;font-size:12.5px';
+  pop.innerHTML =
+    `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--cream2);border-bottom:1px solid var(--border)">
+       <b style="font-size:12px">${keys.length} files</b>
+       <button onclick="docGrabAll('${escAttr(orderId)}')" class="btn btn-sm btn-secondary"
+         style="margin-left:auto;font-size:11px">&#8595; Download all</button>
+     </div>` +
+    keys.map(k => {
+      const fl = files[k], kind = docKind(fl.name || '');
+      const read = _docSeenByMe(fl);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border2)">
+        <span style="font-size:14px">${kind.icon}</span>
+        <span title="${escAttr(fl.name)}" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(fl.name)}</span>
+        <span style="color:var(--text3);font-size:11px;white-space:nowrap">${docSize(fl.size)}</span>
+        ${read ? '' : '<span style="font-size:9.5px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:20px;padding:1px 6px">NEW</span>'}
+        <button class="btn btn-sm btn-secondary" style="font-size:11px"
+          onclick="docGrab('${escAttr(orderId)}','${escAttr(k)}')">&#8595;</button>
+      </div>`;
+    }).join('');
+  document.body.appendChild(pop);
+
+  // Keep it on screen — these rows sit near the bottom of a long table.
+  const h = pop.offsetHeight, wpx = pop.offsetWidth;
+  let top = r.bottom + 6, left = r.left;
+  if (top + h > innerHeight - 8) top = Math.max(8, r.top - h - 6);
+  if (left + wpx > innerWidth - 8) left = Math.max(8, innerWidth - wpx - 8);
+  pop.style.top = top + 'px';
+  pop.style.left = left + 'px';
+
+  setTimeout(() => {
+    document.addEventListener('mousedown', _docPopAway, true);
+    window.addEventListener('scroll', docChipClose, true);
+  }, 0);
+}
+
+// Marking read BEFORE the click is deliberate: the anchor navigates away from
+// this handler's control, so doing it after is not guaranteed to run.
+function docGrab(orderId, key) {
+  const fl = (_docs[orderId] || {})[key];
+  if (!fl || !fl.url) return toast('파일을 찾을 수 없습니다', 'error');
+  docMarkRead(orderId, key);
+  const a = document.createElement('a');
+  a.href = fl.url;
+  a.download = fl.name || 'download';
+  a.target = '_blank';
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  docChipClose();
+  _docRepaint();
+}
+
+// Browsers throttle simultaneous downloads and some prompt once for the batch,
+// so these are spaced rather than fired together.
+function docGrabAll(orderId) {
+  const files = _docs[orderId] || {};
+  const keys = Object.keys(files).filter(k => files[k]);
+  if (!keys.length) return;
+  docChipClose();
+  keys.forEach((k, i) => setTimeout(() => docGrab(orderId, k), i * 350));
+  toast(keys.length + '개 파일 다운로드 중', 'success');
+}
+
+// The chip lives in every order table, so a file change has to repaint whatever
+// is on screen — not just the Documents page.
+let _docRepaintT = null;
+function _docRepaint() {
+  clearTimeout(_docRepaintT);
+  _docRepaintT = setTimeout(() => {
+    // The popup is anchored to a button that is about to be replaced, and its
+    // file list is already stale — leaving it floating over a rebuilt table is
+    // worse than closing it.
+    docChipClose();
+    try {
+      if (typeof showPage !== 'function' || typeof currentPage === 'undefined') return;
+      // The chip only lives on VAC and MPW, so nothing else needs repainting
+      // when a file lands — and rebuilding Closed's 3,000 rows for a file
+      // change would be pure waste.
+      const R = { vac: renderVAC, mpw: renderMPW, files: renderFilesPage };
+      const fn = R[currentPage];
+      if (typeof fn === 'function') fn();
+    } catch (e) { console.warn('[DOC] repaint failed:', e.message); }
+  }, 180);
+}
+
+
 function _docsDb() {
   if (!_rtdbDB) { _rtdbInit(); }
   return _rtdbDB;
@@ -4440,7 +4595,8 @@ function watchDocs() {
   _docsWatch = true;
   db.ref('/docs').on('value', snap => {
     _docs = snap.val() || {};
-    if (currentPage === 'files') renderFilesPage();
+    _docRepaint();
+    docAutoPurge();
   });
 }
 
@@ -4666,8 +4822,8 @@ function renderFilesPage() {
   const note = document.getElementById('files-note');
   if (note) note.innerHTML = window._SUBBIE_VIEW
     ? `Documents for orders assigned to <b>${esc(window._SUBBIE_NAME || '')}</b>. ` +
-      `Upload PDFs, spreadsheets or photos — up to ${DOC_MAX_MB} MB per file.`
-    : `Shared with the assigned subcontractor. Up to ${DOC_MAX_MB} MB per file.`;
+      `Drag files onto an order, or use Upload — up to ${DOC_MAX_MB} MB per file.`
+    : `Shared with the assigned subcontractor. Drag files onto an order, or use Upload — up to ${DOC_MAX_MB} MB per file.`;
 
   const cnt = document.getElementById('files-count');
   if (cnt) cnt.textContent = orders.length + (orders.length === 1 ? ' order' : ' orders');
@@ -4716,8 +4872,11 @@ function renderFilesPage() {
 
   const card = (o) => {
     const files = _docs[o.id] || {};
-    const keys = Object.keys(files).sort((a, b) => (files[b].at || 0) - (files[a].at || 0));
-    return `<div style="border:1px solid var(--border);border-radius:11px;margin-bottom:8px;overflow:hidden;background:var(--surface)">
+    const keys = Object.keys(files).filter(k => files[k])
+      .sort((a, b) => (files[b].at || 0) - (files[a].at || 0));
+    return `<div data-drop="${o.id}"
+      ondragover="docDragOver(event,this)" ondragleave="docDragLeave(event,this)" ondrop="docDrop(event,this,'${o.id}')"
+      style="border:1px solid var(--border);border-radius:11px;margin-bottom:8px;overflow:hidden;background:var(--surface);transition:background .12s,border-color .12s">
       <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:${keys.length?'1px solid var(--border)':'none'};flex-wrap:wrap">
         <b style="font-family:monospace;font-size:12.5px;color:var(--gold-dark)">${esc(o.orderNumber || '')}</b>
         <span style="font-size:13px;color:var(--text)">${esc(o.address || '')}</span>
@@ -4725,16 +4884,18 @@ function renderFilesPage() {
         ${o.prn ? `<span style="font-size:11.5px;color:var(--text3)">PRN ${esc(o.prn)}</span>` : ''}
         <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
           ${keys.length ? (() => {
-            const unread = keys.filter(k => !Object.keys(files[k].readBy || {}).length).length;
+            const unread = keys.filter(k => !_docSeenByMe(files[k])).length;
             return `<span style="font-size:11.5px;color:var(--text3)">${keys.length} file${keys.length>1?'s':''}</span>` +
-              (unread ? `<span title="${unread} not downloaded yet" style="margin-left:6px;font-size:10px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:20px;padding:1px 7px">${unread} NEW</span>` : '');
+              (unread ? `<span title="${unread} not downloaded by you yet" style="margin-left:6px;font-size:10px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:20px;padding:1px 7px">${unread} NEW</span>` : '');
           })() : ''}
           <button class="btn btn-sm btn-secondary" style="font-size:11.5px" onclick="docPick('${o.id}')">&#8593; Upload</button>
         </span>
       </div>
       ${keys.map(k => {
         const f = files[k], kind = docKind(f.name || '');
-        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border2);font-size:12.5px">
+        return `<div draggable="true" ondragstart="docDragOut(event,'${escAttr(f.url)}','${escAttr(f.name)}')"
+          title="Drag to your desktop, or click the arrow to download"
+          style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border2);font-size:12.5px;cursor:grab">
           <span style="font-size:15px">${kind.icon}</span>
           <a href="${esc(f.url)}" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(f.name)}">${esc(f.name)}</a>
           <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${docSize(f.size)}</span>
@@ -4769,7 +4930,7 @@ function renderFilesPage() {
 
   list.innerHTML = names.map(name => {
     const rows = groups[name];
-    const nFiles = rows.reduce((n, o) => n + Object.keys(_docs[o.id] || {}).length, 0);
+    const nFiles = rows.reduce((n, o) => n + Object.keys(_docs[o.id] || {}).filter(k => _docs[o.id][k]).length, 0);
     const open = _docGroupOpen[name] !== false;
     return `<div style="margin-bottom:16px">
       <div onclick="docToggleGroup('${escAttr(name)}')"
@@ -4798,6 +4959,7 @@ async function docCleanup() {
   Object.keys(_docs).forEach(oid => {
     Object.keys(_docs[oid] || {}).forEach(k => {
       const f = _docs[oid][k];
+      if (!f) return;
       // No timestamp means we cannot say how old it is. `(f.at || 0) < cut`
       // treated that as "older than everything" and deleted it at any
       // threshold — including a file uploaded seconds ago whose timestamp
@@ -4828,10 +4990,96 @@ async function docCleanup() {
   renderFilesPage();
 }
 
+// ── Automatic expiry ───────────────────────────────────────────
+//
+// The rule the office actually works to: paperwork is live for a week from the
+// day the order lands, then it belongs in the permanent filing system, not in
+// a Firebase bucket that bills by the gigabyte. Doing that by hand means
+// remembering, and nobody remembers.
+//
+// Two guard rails, because an automatic delete has no undo:
+//
+//  1. A file is never removed inside its first 24 hours, whatever the order
+//     date says. Orders are often imported days after they were raised, so
+//     order-age alone would delete a scope uploaded five minutes ago.
+//  2. No order date and no upload date means unknown age — skipped, not
+//     deleted. A stray record costs a few bytes; a deleted invoice costs a job.
+const DOC_TTL_DAYS   = 7;
+const DOC_MIN_AGE_MS = 24 * 3600 * 1000;
+const DOC_PURGE_CAP  = 200;      // a runaway delete loop is worse than a full bucket
+
+function _docOrderDateMs(oid, f) {
+  const rec = (typeof DB !== 'undefined' && DB.orders) ? DB.orders.find(o => o.id === oid) : null;
+  const ds = (rec && rec.orderDate) || (f && f.orderDate) || '';
+  if (!ds) return null;
+  // 'YYYY-MM-DD' parsed as local midnight — new Date('2026-07-23') is UTC and
+  // reads as the previous day in Sydney.
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ds));
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime();
+  const t = Date.parse(ds);
+  return isNaN(t) ? null : t;
+}
+
+function docExpiredList() {
+  const now = Date.now();
+  const cut = now - DOC_TTL_DAYS * 86400000;
+  const out = [];
+  Object.keys(_docs || {}).forEach(oid => {
+    Object.keys(_docs[oid] || {}).forEach(k => {
+      const f = _docs[oid][k];
+      if (!f) return;
+      if (f.at && (now - f.at) < DOC_MIN_AGE_MS) return;   // guard 1
+      const basis = _docOrderDateMs(oid, f);
+      const age = basis != null ? basis : (f.at || null);
+      if (age == null) return;                             // guard 2
+      if (age < cut) out.push({ oid, k, f });
+    });
+  });
+  return out;
+}
+
+let _docPurging = false;
+
+// Runs off the /docs watcher, so it re-checks whenever anything changes, but
+// at most once every six hours per browser — several desks have this open and
+// they should not all race to delete the same records.
+async function docAutoPurge(force) {
+  if (_docPurging) return;
+  if (window._SUBBIE_VIEW) return;              // the office owns retention, not the contractor
+  if (!force) {
+    const last = parseInt(lsGet('hom_doc_purge_at') || '0', 10);
+    if (last && Date.now() - last < 6 * 3600 * 1000) return;
+  }
+  const victims = docExpiredList();
+  if (!victims.length) { lsSet('hom_doc_purge_at', String(Date.now())); return; }
+
+  _docPurging = true;
+  lsSet('hom_doc_purge_at', String(Date.now()));
+  const batch = victims.slice(0, DOC_PURGE_CAP);
+  console.log('[DOC] auto-expiry: removing', batch.length, 'file(s) older than', DOC_TTL_DAYS, 'days');
+
+  const db = _docsDb();
+  let done = 0;
+  for (const v of batch) {
+    try {
+      await db.ref('/docs/' + v.oid + '/' + v.k).remove();
+      try {
+        if (firebase.storage && v.f.path) await firebase.storage(firebase.apps[0]).ref(v.f.path).delete();
+      } catch (e) { /* record gone; a stray blob is the lesser problem */ }
+      done++;
+    } catch (e) { console.warn('[DOC] auto-expiry failed:', v.k, e.message); }
+  }
+  _docPurging = false;
+  if (done) {
+    toast(`${DOC_TTL_DAYS}일 지난 파일 ${done}개가 자동 삭제되었습니다`, 'success');
+    _docRepaint();
+  }
+}
+
 // Rough total, so the 5 GB free tier is never a surprise.
 function docUsage() {
   let n = 0, bytes = 0;
-  Object.keys(_docs).forEach(oid => Object.values(_docs[oid] || {}).forEach(f => { n++; bytes += (f.size || 0); }));
+  Object.keys(_docs).forEach(oid => Object.values(_docs[oid] || {}).forEach(f => { if (!f) return; n++; bytes += (f.size || 0); }));
   return { n, bytes };
 }
 
@@ -4843,8 +5091,7 @@ function docUsage() {
 function docMarkRead(orderId, key) {
   const db = _docsDb();
   if (!db) return;
-  const who = window._SUBBIE_VIEW ? (window._SUBBIE_NAME || 'Subcontractor')
-                                  : ((AUTH.entry && AUTH.entry.name) || NOTIF.me || 'SK');
+  const who = _docMeName();
   // Recorded per person, so a second download by the same person does not
   // overwrite the fact that someone else already had it.
   db.ref('/docs/' + orderId + '/' + key + '/readBy/' + _docNameKey(who))
@@ -4858,14 +5105,101 @@ function _docNameKey(n) {
 }
 
 function docReadLabel(f) {
-  const rb = f.readBy || {};
+  const rb = (f && f.readBy) || {};
   const names = Object.values(rb).map(r => r && r.name).filter(Boolean);
-  if (!names.length) {
-    return `<span title="Nobody has downloaded this yet" style="font-size:10px;font-weight:700;color:#B45309;background:#FEF3C7;border-radius:20px;padding:1px 7px;white-space:nowrap">NEW</span>`;
+  if (!_docSeenByMe(f)) {
+    const tip = names.length ? 'You have not downloaded this — ' + names.join(', ') + ' has'
+                             : 'Nobody has downloaded this yet';
+    return `<span title="${escAttr(tip)}" style="font-size:10px;font-weight:700;color:#B45309;background:#FEF3C7;border-radius:20px;padding:1px 7px;white-space:nowrap">NEW</span>`;
   }
   const label = names.length === 1 ? names[0] : names.length + ' people';
   return `<span title="Downloaded by ${escAttr(names.join(', '))}" style="font-size:10px;font-weight:700;color:#15803D;background:#DCFCE7;border-radius:20px;padding:1px 7px;white-space:nowrap">&#10003; ${esc(label)}</span>`;
 }
+
+// ── Drag and drop ──────────────────────────────────────────────
+// The Upload button opens a file dialog, which means finding the file again in
+// a tree you were just looking at. Dropping it on the order is the shorter path
+// and the one people try first.
+//
+// dragenter/dragleave fire for every child element, so a naive handler flickers
+// as the pointer crosses the icons inside the card. Counting entries fixes it.
+const _dropDepth = new WeakMap();
+
+// Dragging a file OUT to the desktop.
+//
+// DownloadURL is Chrome/Edge only — Firefox and Safari ignore it. Setting the
+// URL variants as well means the drop at least produces a link on those, which
+// is better than the drag doing nothing at all.
+function docDragOut(ev, url, name) {
+  if (!ev.dataTransfer) return;
+  const mime = _docMime(name);
+  try {
+    ev.dataTransfer.setData('DownloadURL', mime + ':' + name + ':' + url);
+  } catch (e) {}
+  ev.dataTransfer.setData('text/uri-list', url);
+  ev.dataTransfer.setData('text/plain', url);
+  ev.dataTransfer.effectAllowed = 'copyLink';
+}
+
+function _docMime(name) {
+  const e = (String(name || '').split('.').pop() || '').toLowerCase();
+  return ({
+    pdf:  'application/pdf',
+    xls:  'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+    csv:  'text/csv',
+    doc:  'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    jpg:  'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+    gif:  'image/gif',  webp: 'image/webp', heic: 'image/heic',
+  })[e] || 'application/octet-stream';
+}
+
+function docDragOver(ev, el) {
+  if (!ev.dataTransfer || !Array.from(ev.dataTransfer.types || []).includes('Files')) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'copy';
+  const d = (_dropDepth.get(el) || 0) + 1;
+  _dropDepth.set(el, d);
+  el.style.background = 'rgba(224,172,40,.10)';
+  el.style.borderColor = '#E0AC28';
+}
+
+function docDragLeave(ev, el) {
+  const d = Math.max(0, (_dropDepth.get(el) || 1) - 1);
+  _dropDepth.set(el, d);
+  if (d === 0) _docDropReset(el);
+}
+
+function _docDropReset(el) {
+  _dropDepth.set(el, 0);
+  el.style.background = 'var(--surface)';
+  el.style.borderColor = 'var(--border)';
+}
+
+function docDrop(ev, el, orderId) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  _docDropReset(el);
+  const dt = ev.dataTransfer;
+  if (!dt) return;
+  // Folders come through as entries with no file body — silently uploading a
+  // 0-byte "folder" would look like it worked.
+  const files = Array.from(dt.files || []).filter(f => f && f.size > 0);
+  const dropped = (dt.items ? dt.items.length : 0) || (dt.files ? dt.files.length : 0);
+  if (!files.length) {
+    return toast(dropped ? '폴더는 올릴 수 없습니다 — 파일을 선택해주세요' : '파일을 찾지 못했습니다', 'error');
+  }
+  docUpload(orderId, files);
+}
+
+// Dropping anywhere else must not make the browser navigate to the file.
+['dragover', 'drop'].forEach(evt =>
+  window.addEventListener(evt, e => {
+    if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files')
+        && !e.target.closest('[data-drop]')) e.preventDefault();
+  }, false));
 
 function docPick(orderId) {
   let inp = document.getElementById('doc-input');
@@ -4886,8 +5220,7 @@ async function docUpload(orderId, files) {
   if (!db) return toast('데이터베이스에 연결되지 않았습니다', 'error');
   if (!firebase.storage) return toast('Storage SDK 미로드 — 새로고침 후 다시 시도', 'error');
 
-  const who = window._SUBBIE_VIEW ? (window._SUBBIE_NAME || 'Subcontractor')
-                                  : ((AUTH.entry && AUTH.entry.name) || NOTIF.me || 'SK');
+  const who = _docMeName();
   const st = firebase.storage(firebase.apps[0]);
 
   for (const f of files) {
@@ -4926,7 +5259,8 @@ async function docUpload(orderId, files) {
       await db.ref('/docs/' + orderId + '/' + key).set({
         name: f.name || safe, size: f.size || 0, url, path, by: who, at: Date.now(),
         orderNumber: src.orderNumber || '', address: src.address || '',
-        area: src.area || '', prn: src.prn || '', subbies: src.subbies || ''
+        area: src.area || '', prn: src.prn || '', subbies: src.subbies || '',
+        orderDate: src.orderDate || ''
       });
       _docProgressDone(row, true);
     } catch (e) {
@@ -6331,7 +6665,7 @@ function renderOrdersTable(orders, tbodyId, emptyId, countId, moveTo) {
     const _subBg = o.subbies ? getSubbieStyle(o.subbies) : '';
     return `<tr class="${hasClaim2 ? 'claim-row' : ''}" ${o.subbies ? `data-sub="${o.subbies}"` : ''} style="${_subBg}">
       <td style="white-space:nowrap"><div style="display:flex;align-items:center">${ageIndicator(o)}${fmtDate(o.orderDate)}</div></td>
-      <td style="white-space:nowrap">${orderNumCell(o)}</td>
+      <td style="white-space:nowrap">${orderNumCell(o)}${docChip(o)}</td>
       <td>
         <div style="display:flex;align-items:center;gap:6px">
           <div class="addr-full">${esc(o.address)}</div>

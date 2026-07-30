@@ -445,7 +445,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-08-01-h';
+const APP_BUILD = '2026-08-01-l';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -925,11 +925,21 @@ function docOpen(orderId, key, url, who) {
   window.open(url, '_blank', 'noopener');
 }
 
+// "NEW" means new to ME. With a global flag, one person's download cleared the
+// badge for everybody — including people who had never opened the file.
+function _docMeName() {
+  return (typeof _user !== 'undefined' && _user) || window._SUBBIE_NAME || 'Subcontractor';
+}
+function _docSeenByMe(f) {
+  if (!f || !f.readBy) return false;
+  return !!f.readBy[_docNameKey(_docMeName())];
+}
+
 // Small badge for an order card: how many files, how many still untouched.
 function docBadge(orderId) {
   const fs = docsFor(orderId);
   if (!fs.length) return '';
-  const unread = fs.filter(f => !Object.keys(f.readBy || {}).length).length;
+  const unread = fs.filter(f => !_docSeenByMe(f)).length;
   return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;
     background:${unread ? '#FEF3C7' : 'rgba(0,0,0,.05)'};color:${unread ? '#B45309' : 'var(--text3)'};
     border-radius:20px;padding:2px 8px">\u{1F4CE} ${fs.length}${unread ? ' · ' + unread + ' new' : ''}</span>`;
@@ -951,7 +961,7 @@ function docListHtml(orderId, who) {
           <span style="display:block;font-size:11px;color:var(--text3);margin-top:1px">${_pDocSize(f.size)} · ${esc(f.by || '')}${
             f.at ? ' · ' + new Date(f.at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) : ''}</span>
         </span>
-        ${read.length
+        ${_docSeenByMe(f)
           ? `<span title="Opened by ${esc(read.join(', '))}" style="font-size:10px;font-weight:700;color:#15803D;background:#DCFCE7;border-radius:20px;padding:2px 7px;flex-shrink:0">&#10003;</span>`
           : `<span style="font-size:10px;font-weight:800;color:#B45309;background:#FEF3C7;border-radius:20px;padding:2px 7px;flex-shrink:0">NEW</span>`}
         <span style="color:var(--text3);font-size:15px;flex-shrink:0">&#8595;</span>
