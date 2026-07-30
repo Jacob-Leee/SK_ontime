@@ -2058,7 +2058,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-o';
+const APP_BUILD = '2026-08-01-p';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4532,33 +4532,72 @@ function docChipOpen(orderId, btn) {
   }, 0);
 }
 
-// Marking read BEFORE the click is deliberate: the anchor navigates away from
-// this handler's control, so doing it after is not guaranteed to run.
-function docGrab(orderId, key) {
+// RFC 5987: the plain filename for old clients, the UTF-8 one for everything
+// else, so Korean and other non-ASCII names survive the trip.
+function _docDisposition(name) {
+  const n = String(name || 'file');
+  const ascii = n.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
+  return 'attachment; filename="' + ascii + '"; filename*=UTF-8\'\'' + encodeURIComponent(n);
+}
+
+// Files uploaded before the metadata fix still open inline instead of
+// downloading. Patching the object metadata is a one-line Storage call and it
+// is permanent, so it happens on first download and never again.
+async function _docFixDisposition(orderId, key, fl) {
+  if (!fl.path || !firebase.storage) return false;
+  await firebase.storage(firebase.apps[0]).ref(fl.path).updateMetadata({
+    contentType: fl.type || _docMime(fl.name),
+    contentDisposition: _docDisposition(fl.name)
+  });
+  try { await _docsDb().ref('/docs/' + orderId + '/' + key + '/disp').set(true); } catch (e) {}
+  return true;
+}
+
+// Why this is not just `a.click()` with target=_blank any more:
+//
+//  1. `download` does nothing cross-origin, so the filename came from Firebase.
+//  2. target=_blank makes each file a popup, and the popup blocker kills every
+//     one after the first — which is why "Download all" produced a single file.
+//
+// With Content-Disposition set, a plain same-tab anchor downloads without
+// navigating, and several in a row are just several downloads.
+async function docGrab(orderId, key) {
   const fl = (_docs[orderId] || {})[key];
   if (!fl || !fl.url) return toast('파일을 찾을 수 없습니다', 'error');
   docMarkRead(orderId, key);
+  docChipClose();
+
+  let forced = fl.disp === true;
+  if (!forced) {
+    try { forced = await _docFixDisposition(orderId, key, fl); }
+    catch (e) { console.warn('[DOC] disposition fix failed:', e.code || e.message); }
+  }
+
   const a = document.createElement('a');
   a.href = fl.url;
   a.download = fl.name || 'download';
-  a.target = '_blank';
   a.rel = 'noopener';
+  // Only fall back to a new tab when the file may still render inline —
+  // otherwise a PDF would replace the app in the current tab.
+  if (!forced) a.target = '_blank';
   document.body.appendChild(a);
   a.click();
   a.remove();
-  docChipClose();
   _docRepaint();
 }
 
-// Browsers throttle simultaneous downloads and some prompt once for the batch,
-// so these are spaced rather than fired together.
-function docGrabAll(orderId) {
+// Sequential, not simultaneous. Chrome asks once about multiple downloads and
+// then allows them; firing them in the same tick gets them coalesced or lost.
+async function docGrabAll(orderId) {
   const files = _docs[orderId] || {};
   const keys = Object.keys(files).filter(k => files[k]);
   if (!keys.length) return;
   docChipClose();
-  keys.forEach((k, i) => setTimeout(() => docGrab(orderId, k), i * 350));
   toast(keys.length + '개 파일 다운로드 중', 'success');
+  for (const k of keys) {
+    await docGrab(orderId, k);
+    await new Promise(r => setTimeout(r, 500));
+  }
 }
 
 // The chip lives in every order table, so a file change has to repaint whatever
@@ -4761,6 +4800,65 @@ function noticeBlock(areas) {
 // standing instruction.
 const NOTICE_AREAS = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
 
+// Work does not only arrive by CA area — High Cost and Relocation are their own
+// streams with their own standing instructions. Names match the ones already
+// used for supervisors and the CC email map, so the same team is not spelled
+// two ways across the app.
+const NOTICE_TEAMS = ['High Cost Team & MPW', 'Relocation Team'];
+
+// More teams will appear. Rather than needing a code change each time, a group
+// exists as soon as it has a node under /notices — created either by posting a
+// notice or by "+ Team", which writes a _meta marker. That keeps the list
+// shared across every desk without a new database rule.
+function _noticeCustom() {
+  return Object.keys(_notices || {})
+    .filter(g => g && !NOTICE_AREAS.includes(g) && !NOTICE_TEAMS.includes(g))
+    .sort();
+}
+function _noticeGroups() {
+  return NOTICE_AREAS.concat(NOTICE_TEAMS, _noticeCustom());
+}
+function _noticeIsCustom(g) {
+  return !NOTICE_AREAS.includes(g) && !NOTICE_TEAMS.includes(g);
+}
+
+// RTDB keys cannot contain . # $ [ ] /
+function _noticeKeyOk(g) {
+  return !!g && !/[.#$[\]/]/.test(g) && g.length <= 60;
+}
+
+async function noticeAddGroup() {
+  const raw = (prompt('New team or group name\n\ne.g. "Vacancy Team", "Fire Safety"', '') || '').trim();
+  if (!raw) return;
+  if (!_noticeKeyOk(raw)) return toast('Name cannot contain . # $ [ ] / and must be under 60 characters', 'error');
+  if (_noticeGroups().includes(raw)) return noticeAdd(raw);
+  const db = _noticeDb();
+  if (!db) return toast('Not connected', 'error');
+  try {
+    await db.ref('/notices/' + raw + '/_meta').set({ created: Date.now(), by: _docMeName() });
+    renderAreaNotices();
+    noticeAdd(raw);
+  } catch (e) {
+    console.error('[NOTICE] add group failed:', e);
+    toast(_noticeReason(e), 'error');
+  }
+}
+
+// Only an empty custom group can go. Built-ins stay, and a group holding live
+// notices has to be emptied first — otherwise the notices vanish with no trace.
+async function noticeDropGroup(g) {
+  if (!_noticeIsCustom(g)) return;
+  if (noticesFor(g).length) return toast('Delete its notices first', 'error');
+  if (!confirm('Remove the group "' + g + '"?')) return;
+  try {
+    await _noticeDb().ref('/notices/' + g).remove();
+    renderAreaNotices();
+  } catch (e) {
+    console.error('[NOTICE] drop group failed:', e);
+    toast(_noticeReason(e), 'error');
+  }
+}
+
 // One flat chronological list read as a feed — CA1 sat above CA2 sat above CA1
 // again, and nobody could answer "what applies to the job I am standing at".
 // A notice is a property of an area, so the area is the organising unit.
@@ -4776,9 +4874,7 @@ function renderAreaNotices() {
   watchNotices(renderAreaNotices);
 
   const readOnly = !!window._SUBBIE_VIEW;
-  const extra = Object.keys(_notices || {})
-    .filter(a => !NOTICE_AREAS.includes(a) && noticesFor(a).length).sort();
-  const areas = NOTICE_AREAS.concat(extra);
+  const areas = _noticeGroups();
   const live  = areas.filter(a => noticesFor(a).length);
   const empty = areas.filter(a => !noticesFor(a).length);
   const total = live.reduce((n, a) => n + noticesFor(a).length, 0);
@@ -4805,9 +4901,12 @@ function renderAreaNotices() {
     </div>`;
   };
 
-  const chip = (a) => `<button onclick="noticeAdd('${escAttr(a)}')" title="Add a notice for ${escAttr(a)}"
-    style="border:1px dashed #C7D2FE;background:none;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:700;
-           color:#818CF8;cursor:pointer;font-family:inherit">${esc(a)} +</button>`;
+  const chip = (a) => `<span style="display:inline-flex;align-items:center;border:1px dashed #C7D2FE;border-radius:20px;overflow:hidden">
+    <button onclick="noticeAdd('${escAttr(a)}')" title="Add a notice for ${escAttr(a)}"
+      style="border:none;background:none;padding:1px 9px;font-size:11px;font-weight:700;color:#818CF8;cursor:pointer;font-family:inherit">${esc(a)} +</button>
+    ${_noticeIsCustom(a) ? `<button onclick="noticeDropGroup('${escAttr(a)}')" title="Remove this group"
+      style="border:none;background:none;padding:1px 6px 1px 0;font-size:11px;color:#C7D2FE;cursor:pointer;font-family:inherit">&times;</button>` : ''}
+  </span>`;
 
   host.innerHTML = `<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:11px;padding:9px 12px;margin-bottom:14px">
     <div style="display:flex;align-items:center;gap:8px;${live.length ? 'margin-bottom:8px' : ''}">
@@ -4817,9 +4916,15 @@ function renderAreaNotices() {
       <button class="icon-btn" title="Why is this not working?" style="font-size:12px" onclick="noticeDiagnose()">&#128295;</button>`}
     </div>
     ${live.length ? `<div style="display:flex;flex-wrap:wrap;gap:7px;align-items:flex-start">${live.map(card).join('')}</div>` : ''}
+    ${(!readOnly && !empty.length) ? `<div style="margin-top:7px">
+      <button onclick="noticeAddGroup()" title="Add a new team or group"
+        style="border:1px solid #C7D2FE;background:#fff;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:800;color:#4338CA;cursor:pointer;font-family:inherit">+ Team</button>
+    </div>` : ''}
     ${(!readOnly && empty.length) ? `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;${live.length ? 'margin-top:7px' : ''}">
       <span style="font-size:10.5px;color:#818CF8;font-weight:700;letter-spacing:.3px">NO NOTICES</span>
       ${empty.map(chip).join('')}
+      <button onclick="noticeAddGroup()" title="Add a new team or group"
+        style="border:1px solid #C7D2FE;background:#fff;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:800;color:#4338CA;cursor:pointer;font-family:inherit">+ Team</button>
     </div>` : ''}
   </div>`;
 }
@@ -4833,12 +4938,13 @@ function renderAreaNotices() {
 // typing an area code that then fails validation), and somewhere to put an
 // error message when the write is refused.
 function _noticeAreas() {
+  // Areas seen in live orders are folded in, so a new CA does not need a code
+  // change either. Order stays fixed: CA areas, then teams, then anything else.
   const live = (typeof DB !== 'undefined' && DB.orders)
     ? DB.orders.map(o => o && o.area).filter(Boolean) : [];
-  return [...new Set(NOTICE_AREAS.concat(live))].sort((a, b) => {
-    const na = parseInt(String(a).replace(/\D/g, ''), 10), nb = parseInt(String(b).replace(/\D/g, ''), 10);
-    return (isNaN(na) || isNaN(nb)) ? String(a).localeCompare(String(b)) : na - nb;
-  });
+  const known = _noticeGroups();
+  return known.concat(live.filter(a => !known.includes(a)).sort())
+    .filter((v, i, arr) => arr.indexOf(v) === i);
 }
 
 function noticeClose() {
@@ -5063,14 +5169,13 @@ function renderFilesPage() {
           title="Drag to your desktop, or click the arrow to download"
           style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border2);font-size:12.5px;cursor:grab">
           <span style="font-size:15px">${kind.icon}</span>
-          <a href="${esc(f.url)}" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(f.name)}">${esc(f.name)}</a>
+          <span onclick="docGrab('${o.id}','${escAttr(k)}')" style="color:var(--text);cursor:pointer;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(f.name)}">${esc(f.name)}</span>
           <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${docSize(f.size)}</span>
           <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${esc(f.by || '')}</span>
           <span style="color:var(--text3);font-size:11.5px;white-space:nowrap">${f.at ? new Date(f.at).toLocaleDateString('en-AU',{day:'2-digit',month:'short'}) : ''}</span>
           ${docReadLabel(f)}
-          <a href="${esc(f.url)}" download="${escAttr(f.name)}" target="_blank" rel="noopener"
-             onclick="docMarkRead('${o.id}','${escAttr(k)}')"
-             class="btn btn-sm btn-secondary" style="font-size:11px;text-decoration:none">&#8595;</a>
+          <button onclick="docGrab('${o.id}','${escAttr(k)}')"
+             class="btn btn-sm btn-secondary" style="font-size:11px">&#8595;</button>
           <button class="icon-btn" title="Delete" onclick="docDelete('${o.id}','${escAttr(k)}')">&#128465;</button>
         </div>`;
       }).join('')}
@@ -5405,7 +5510,21 @@ async function docUpload(orderId, files) {
     const row = _docProgressRow(orderId, f.name, f.size);
     let _docStage = 'upload';
     try {
-      const task = st.ref(path).put(f);
+      // Content-Disposition is the whole ball game here.
+      //
+      // The <a download> attribute is IGNORED for cross-origin URLs, and these
+      // files live on firebasestorage.googleapis.com while the app runs on
+      // github.io. So the browser was never using the name we asked for — it
+      // followed the link and let Firebase decide, which for a PDF means "open
+      // it inline" and for a spreadsheet means "download". Two files that
+      // differ only by extension then behave completely differently.
+      //
+      // Setting it at upload time makes every file a real download with its
+      // real name, with no CORS configuration needed.
+      const task = st.ref(path).put(f, {
+        contentType: f.type || _docMime(f.name),
+        contentDisposition: _docDisposition(f.name)
+      });
       await new Promise((resolve, reject) => {
         task.on('state_changed',
           snap => _docProgressSet(row, snap.bytesTransferred / (snap.totalBytes || 1)),
@@ -5426,7 +5545,8 @@ async function docUpload(orderId, files) {
         name: f.name || safe, size: f.size || 0, url, path, by: who, at: Date.now(),
         orderNumber: src.orderNumber || '', address: src.address || '',
         area: src.area || '', prn: src.prn || '', subbies: src.subbies || '',
-        orderDate: src.orderDate || ''
+        orderDate: src.orderDate || '',
+        disp: true      // Content-Disposition already set — see docGrab
       });
       _docProgressDone(row, true);
     } catch (e) {
