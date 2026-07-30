@@ -448,7 +448,7 @@ const _FCM_VAPID = "BMpVz5P3YQ70Avdzmr2lONhMA2s1cWK7yK55ndylrTLo2qFQTslW561MHeHj
 
 // Subbie names (must match exactly what's in DB.subbies on desktop)
 // Shown on the login screen so a stale cached copy is identifiable at a glance.
-const APP_BUILD = '2026-08-02-g';
+const APP_BUILD = '2026-08-02-i';
 
 // Identity comes from the Google session now, not a name list. The old
 // hardcoded roster is gone so it cannot drift from the office's list.
@@ -841,7 +841,7 @@ function sbNoticesPage() {
         '<b style="font-size:13px;color:#3730A3">' + esc(_noticeTab) + '</b></div>' +
       noticesFor(_noticeTab).map(function (n) {
         return '<div style="padding:11px 13px;border-top:1px solid var(--border)">' +
-          '<div style="font-size:14px;line-height:1.6;white-space:pre-wrap">' + noticeHighlight(esc(n.text)) + '</div>' +
+          '<div>' + noticeFormat(n.text) + '</div>' +
           '<div style="font-size:11px;color:var(--text3);margin-top:4px">' + esc(n.by || '') +
             (n.at ? ' · ' + new Date(n.at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) : '') +
           '</div></div>';
@@ -1134,6 +1134,91 @@ function noticeHighlight(escaped) {
     '<b style="color:#4338CA">$1</b>');
 
   return t;
+}
+
+// A notice is a reference sheet, not a paragraph. Rendered as one pre-wrap
+// block it was a wall of identical lines — the section numbers, the list items
+// and the code table all looked the same, so nothing could be found by eye.
+//
+// This reads the structure people already type rather than asking them to
+// learn a syntax:
+//
+//   first line            → title
+//   "1. Something"        → numbered section, with a rule above it
+//   "Something:"          → sub-heading
+//   "- x" / "• x"         → bullet
+//   plain line inside a
+//   numbered section      → bullet (that is what those lines are)
+//   "left    right"       → two-column row, which is how code tables are typed
+//   blank line            → real spacing
+//
+// Every line is escaped first and then passed through noticeHighlight, so the
+// only markup that can appear is the markup written here.
+function noticeFormat(raw) {
+  const lines = String(raw == null ? '' : raw).replace(/\r/g, '').split('\n');
+  const H = t => noticeHighlight(esc(t));
+  const out = [];
+  let inSection = false, started = false;
+
+  const P = 'margin:0;font-size:13.5px;line-height:1.65;color:var(--text,#1C1C1E)';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const t = line.trim();
+
+    // Blank lines before the title are just stray newlines from a paste, and a
+    // spacer for them would open the notice with a gap.
+    if (!t) { if (started) { inSection = false; out.push('<div style="height:9px"></div>'); } continue; }
+
+    // Title — the first line of the notice.
+    if (!started) {
+      started = true;
+      out.push('<div style="font-size:15px;font-weight:800;letter-spacing:-.2px;margin:0 0 8px;color:var(--text,#1C1C1E)">' + H(t) + '</div>');
+      continue;
+    }
+
+    // Numbered section.
+    const sec = /^(\d+)[.)]\s+(.*)$/.exec(t);
+    if (sec) {
+      inSection = true;
+      out.push('<div style="display:flex;gap:8px;align-items:baseline;margin:13px 0 6px;padding-top:9px;border-top:1px solid #E0E7FF">' +
+        '<span style="flex-shrink:0;min-width:20px;height:20px;border-radius:6px;background:#4338CA;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">' + esc(sec[1]) + '</span>' +
+        '<span style="font-size:14px;font-weight:800;color:#3730A3">' + H(sec[2]) + '</span></div>');
+      continue;
+    }
+
+    // Explicit bullet.
+    const bul = /^[-•*·]\s+(.*)$/.exec(t);
+    if (bul) { out.push(_noticeBullet(H(bul[1]), P)); continue; }
+
+    // Two-column row: "No painting required     CCF-PAT-REP-132".
+    // Requires a real gap (tab or 2+ spaces) so ordinary sentences are untouched.
+    const col = /^(.*?\S)(?:\t+|\s{2,})(\S.*)$/.exec(line.replace(/\s+$/, ''));
+    if (col && col[1].length <= 42) {
+      out.push('<div style="display:flex;gap:10px;padding:3px 0;font-size:13px;line-height:1.55">' +
+        '<span style="flex:0 0 46%;color:var(--text2,#3C3C43)">' + H(col[1]) + '</span>' +
+        '<span style="flex:1;min-width:0">' + H(col[2]) + '</span></div>');
+      continue;
+    }
+
+    // Sub-heading — a short line ending in a colon.
+    if (/:$/.test(t) && t.length <= 60) {
+      out.push('<div style="font-size:13px;font-weight:800;color:var(--text,#1C1C1E);margin:10px 0 4px">' + H(t) + '</div>');
+      continue;
+    }
+
+    // Inside a numbered section, plain lines are the list.
+    if (inSection) { out.push(_noticeBullet(H(t), P)); continue; }
+
+    out.push('<p style="' + P + ';margin:3px 0">' + H(t) + '</p>');
+  }
+  return started ? out.join('') : '';
+}
+
+function _noticeBullet(html, P) {
+  return '<div style="display:flex;gap:8px;padding:2px 0 2px 2px">' +
+    '<span style="flex-shrink:0;color:#818CF8;font-size:13px;line-height:1.65">&bull;</span>' +
+    '<span style="' + P + '">' + html + '</span></div>';
 }
 
 function noticesFor(area) {

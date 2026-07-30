@@ -2053,7 +2053,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-02-g';
+const APP_BUILD = '2026-08-02-i';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4885,6 +4885,91 @@ function noticeHighlight(escaped) {
   return t;
 }
 
+// A notice is a reference sheet, not a paragraph. Rendered as one pre-wrap
+// block it was a wall of identical lines — the section numbers, the list items
+// and the code table all looked the same, so nothing could be found by eye.
+//
+// This reads the structure people already type rather than asking them to
+// learn a syntax:
+//
+//   first line            → title
+//   "1. Something"        → numbered section, with a rule above it
+//   "Something:"          → sub-heading
+//   "- x" / "• x"         → bullet
+//   plain line inside a
+//   numbered section      → bullet (that is what those lines are)
+//   "left    right"       → two-column row, which is how code tables are typed
+//   blank line            → real spacing
+//
+// Every line is escaped first and then passed through noticeHighlight, so the
+// only markup that can appear is the markup written here.
+function noticeFormat(raw) {
+  const lines = String(raw == null ? '' : raw).replace(/\r/g, '').split('\n');
+  const H = t => noticeHighlight(esc(t));
+  const out = [];
+  let inSection = false, started = false;
+
+  const P = 'margin:0;font-size:13.5px;line-height:1.65;color:var(--text,#1C1C1E)';
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const t = line.trim();
+
+    // Blank lines before the title are just stray newlines from a paste, and a
+    // spacer for them would open the notice with a gap.
+    if (!t) { if (started) { inSection = false; out.push('<div style="height:9px"></div>'); } continue; }
+
+    // Title — the first line of the notice.
+    if (!started) {
+      started = true;
+      out.push('<div style="font-size:15px;font-weight:800;letter-spacing:-.2px;margin:0 0 8px;color:var(--text,#1C1C1E)">' + H(t) + '</div>');
+      continue;
+    }
+
+    // Numbered section.
+    const sec = /^(\d+)[.)]\s+(.*)$/.exec(t);
+    if (sec) {
+      inSection = true;
+      out.push('<div style="display:flex;gap:8px;align-items:baseline;margin:13px 0 6px;padding-top:9px;border-top:1px solid #E0E7FF">' +
+        '<span style="flex-shrink:0;min-width:20px;height:20px;border-radius:6px;background:#4338CA;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center">' + esc(sec[1]) + '</span>' +
+        '<span style="font-size:14px;font-weight:800;color:#3730A3">' + H(sec[2]) + '</span></div>');
+      continue;
+    }
+
+    // Explicit bullet.
+    const bul = /^[-•*·]\s+(.*)$/.exec(t);
+    if (bul) { out.push(_noticeBullet(H(bul[1]), P)); continue; }
+
+    // Two-column row: "No painting required     CCF-PAT-REP-132".
+    // Requires a real gap (tab or 2+ spaces) so ordinary sentences are untouched.
+    const col = /^(.*?\S)(?:\t+|\s{2,})(\S.*)$/.exec(line.replace(/\s+$/, ''));
+    if (col && col[1].length <= 42) {
+      out.push('<div style="display:flex;gap:10px;padding:3px 0;font-size:13px;line-height:1.55">' +
+        '<span style="flex:0 0 46%;color:var(--text2,#3C3C43)">' + H(col[1]) + '</span>' +
+        '<span style="flex:1;min-width:0">' + H(col[2]) + '</span></div>');
+      continue;
+    }
+
+    // Sub-heading — a short line ending in a colon.
+    if (/:$/.test(t) && t.length <= 60) {
+      out.push('<div style="font-size:13px;font-weight:800;color:var(--text,#1C1C1E);margin:10px 0 4px">' + H(t) + '</div>');
+      continue;
+    }
+
+    // Inside a numbered section, plain lines are the list.
+    if (inSection) { out.push(_noticeBullet(H(t), P)); continue; }
+
+    out.push('<p style="' + P + ';margin:3px 0">' + H(t) + '</p>');
+  }
+  return started ? out.join('') : '';
+}
+
+function _noticeBullet(html, P) {
+  return '<div style="display:flex;gap:8px;padding:2px 0 2px 2px">' +
+    '<span style="flex-shrink:0;color:#818CF8;font-size:13px;line-height:1.65">&bull;</span>' +
+    '<span style="' + P + '">' + html + '</span></div>';
+}
+
 function noticesFor(area) {
   const a = (area || '').trim();
   if (!a) return [];
@@ -5034,7 +5119,7 @@ function renderAreaNotices() {
   </span>`;
 
   const body = sel ? noticesFor(sel).map(n => `<div style="padding:9px 13px;border-top:1px solid #EEF2FF">
-      <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;color:var(--text)">${noticeHighlight(esc(n.text))}</div>
+      <div>${noticeFormat(n.text)}</div>
       <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
         <span style="font-size:11px;color:var(--text3)">${esc(n.by || '')}${n.at ? ' · ' + new Date(n.at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) : ''}${
           n.editedAt ? ` · edited ${esc(n.editedBy || '')}` : ''}</span>
@@ -8161,36 +8246,38 @@ function buildTrendChart(base) {
 
   const now = new Date();
   const pts = [];
-  const push = (label, start, end) => {
+  // `val` is what the period dropdown expects for this bar, so a click can just
+  // set the dropdown and re-render instead of duplicating the date maths.
+  const push = (label, start, end, val) => {
     const rows = base.filter(o => o.orderDate && o.orderDate >= start && o.orderDate <= end);
-    pts.push({ label, n: rows.length, rev: rows.reduce((s, o) => s + _amt(o), 0) });
+    pts.push({ label, val, n: rows.length, rev: rows.reduce((s, o) => s + _amt(o), 0) });
   };
 
   if (dashPeriod === 'day') {
     for (let i = 29; i >= 0; i--) {
       const d = new Date(now); d.setDate(now.getDate() - i);
       const ds = localDateStr(d);
-      push(ds.slice(8) + '/' + ds.slice(5, 7), ds, ds);
+      push(ds.slice(8) + '/' + ds.slice(5, 7), ds, ds, ds);
     }
   } else if (dashPeriod === 'week') {
     const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
     for (let i = 11; i >= 0; i--) {
       const a = new Date(mon); a.setDate(mon.getDate() - i * 7);
       const b = new Date(a);   b.setDate(a.getDate() + 6);
-      push(localDateStr(a).slice(5).replace('-', '/'), localDateStr(a), localDateStr(b));
+      push(localDateStr(a).slice(5).replace('-', '/'), localDateStr(a), localDateStr(b), localDateStr(a));
     }
   } else if (dashPeriod === 'month') {
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const m = localMonthStr(d);
       const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      push(m, m + '-01', m + '-' + String(last).padStart(2, '0'));
+      push(m, m + '-01', m + '-' + String(last).padStart(2, '0'), m);
     }
   } else {
     const fyNow = getFY(localDateStr(now));
     for (let i = 4; i >= 0; i--) {
       const r = fyRange(fyNow - i);
-      push(fyLabel(fyNow - i), r.start, r.end);
+      push(fyLabel(fyNow - i), r.start, r.end, String(fyNow - i));
     }
   }
 
@@ -8207,9 +8294,20 @@ function buildTrendChart(base) {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      // Clicking a bar is how people already try to drill in — the mobile board
+      // does it, and the desktop chart looked identical but did nothing.
+      onClick: (ev, els) => {
+        if (!els || !els.length) return;
+        const p = pts[els[0].index];
+        if (p) dashJumpTo(p.val);
+      },
+      onHover: (ev, els) => { ev.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => money ? _dashMoney(c.parsed.y) : _dashInt(c.parsed.y) + ' orders' } }
+        tooltip: { callbacks: {
+          label: c => (money ? _dashMoney(c.parsed.y) : _dashInt(c.parsed.y) + ' orders'),
+          footer: () => 'Click to open this period'
+        } }
       },
       scales: {
         y: { beginAtZero: true,
@@ -8221,6 +8319,23 @@ function buildTrendChart(base) {
       }
     }
   });
+}
+
+// Move the whole board to the clicked period. The dropdown is the single
+// source of truth for "which window", so this sets it rather than keeping a
+// second piece of state that could drift out of step with it.
+function dashJumpTo(val) {
+  if (!val) return;
+  const sel = document.getElementById('dash-window');
+  if (!sel) return;
+  // The dropdown only lists periods that have orders; a bar can be an empty one.
+  if (![...sel.options].some(o => o.value === val)) {
+    const opt = document.createElement('option');
+    opt.value = val; opt.textContent = val;
+    sel.appendChild(opt);
+  }
+  sel.value = val;
+  renderDashboard();
 }
 
 function dashTrendToggle() {
