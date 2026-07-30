@@ -374,9 +374,28 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
 
    The background is a very dark gradient, not #000 — glass has nothing to
    refract against a flat black, and the rim reads as a plain border. */
+/* The top bar stayed cream above a black page, so the two met in a hard white
+   seam right under the title. Matching it removes the join. */
+/* The dashboard is one dark panel, edge to edge — header included — and the
+   only thing separating it from the rest of the app is a gold line. Leaving
+   cream showing anywhere around it made the black look like a mistake. */
+body.dash-dark #main {
+  background: radial-gradient(120% 90% at 12% 0%, #241E13 0%, #14110C 55%, #0D0B07 100%) !important;
+  border-left: 1px solid rgba(255,215,114,.38);
+}
+body.dash-dark #header {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255,215,114,.30) !important;
+  box-shadow: 0 1px 0 rgba(255,215,114,.10);
+}
+body.dash-dark #header #page-title { color: #FFF8E8; }
+body.dash-dark #header .btn,
+body.dash-dark #header button,
+body.dash-dark #header select { color: #E6D6AE; border-color: rgba(255,215,114,.26); }
+
 #page-dashboard.page.active {
-  background: radial-gradient(120% 90% at 12% 0%, #241E13 0%, #14110C 55%, #0D0B07 100%);
-  padding: 16px; border-radius: 14px;
+  background: transparent;
+  padding: 16px 16px 24px;
   --text:  #FFF8E8;
   --text2: #E6D6AE;
   --text3: #B8A47A;
@@ -396,12 +415,18 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   box-shadow: 0 6px 24px rgba(0,0,0,.5);
 }
 #page-dashboard .dash-widget > * { background: rgba(20,17,12,.86); }
+/* The header band was a solid mustard bar across every card — it read as a
+   highlighter stripe, not a title. Barely-there tint, gold text carries it. */
 #page-dashboard .dash-widget > *:first-child {
   border-radius: 12px 12px 0 0;
-  background: linear-gradient(90deg, rgba(217,159,28,.34), rgba(217,159,28,.05)) !important;
-  border-bottom: 1px solid rgba(255,215,114,.22) !important;
-  box-shadow: inset 0 1px 0 rgba(255,215,114,.28);
+  background: linear-gradient(90deg, rgba(217,159,28,.10), rgba(217,159,28,.02)) !important;
+  border-bottom: 1px solid rgba(255,215,114,.16) !important;
+  box-shadow: inset 0 1px 0 rgba(255,215,114,.14);
   color: #FFD772;
+}
+/* Thinner rim, less like a picture frame. */
+#page-dashboard .dash-widget {
+  background: linear-gradient(150deg, rgba(255,215,114,.34), rgba(217,159,28,.08) 48%, rgba(255,215,114,.24)) !important;
 }
 #page-dashboard .dash-widget > *:last-child {
   border-radius: 0 0 12px 12px;
@@ -2117,7 +2142,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-03-c';
+const APP_BUILD = '2026-08-03-e';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -3327,6 +3352,8 @@ function showPage(page) {
   pageEl.classList.add('active');
   if (navEl) navEl.classList.add('active');
   currentPage = page;
+  // The dark header only applies on the dashboard; every other page is cream.
+  document.body.classList.toggle('dash-dark', page === 'dashboard');
   document.getElementById('page-title').textContent = PAGE_TITLES[page] || page;
 
   // Only the primary action for the current page lives in the header now.
