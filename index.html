@@ -2053,7 +2053,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-02-d';
+const APP_BUILD = '2026-08-02-g';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4854,6 +4854,37 @@ function watchNotices(onChange) {
   });
 }
 
+// Highlighting is mechanical, not clever: it marks the things people actually
+// scan a notice for. Anything it cannot recognise is left exactly as typed —
+// a guess that highlights the wrong clause is worse than no highlight.
+//
+// Runs on the ALREADY-ESCAPED string, so it can never introduce markup from
+// user input; the only tags added are the ones written here.
+function noticeHighlight(escaped) {
+  let t = String(escaped == null ? '' : escaped);
+
+  // SoR codes — CCF-PAT-REP-132, LBX-MML-RPL-153, KKC-DWU-RPL-169.
+  // These are the reason people open the notice at all.
+  t = t.replace(/\b([A-Z]{2,4}-[A-Z]{2,4}-[A-Z]{2,4}-\d{2,4})\b/g,
+    '<span style="font-family:ui-monospace,Menlo,monospace;font-size:.94em;font-weight:800;color:#7C4A03;' +
+    'background:#FEF3C7;border:1px solid #FDE68A;border-radius:5px;padding:0 4px">$1</span>');
+
+  // Words that change whether a job is compliant.
+  t = t.replace(/\b(Mandatory|MANDATORY|Prohibited|PROHIBITED|mandatory|prohibited|do not|Do not|DO NOT|must not|Must not|never|Never)\b/g,
+    '<b style="color:#B91C1C">$1</b>');
+
+  // Measurements and thresholds — 100mm, 2m, &gt;70%. Note the entity: esc()
+  // has already turned > into &gt; by the time this runs.
+  t = t.replace(/(&gt;\s*\d+\s*%|\b\d+(?:\/\d+)*\s?mm\b|\b\d+\s?m\b(?!m)|\b\d+\s?%)/g,
+    '<b style="color:#1D4ED8">$1</b>');
+
+  // Area codes so an exception for one patch is visible at a glance.
+  t = t.replace(/\b(CA\d{1,2})\b/g,
+    '<b style="color:#4338CA">$1</b>');
+
+  return t;
+}
+
 function noticesFor(area) {
   const a = (area || '').trim();
   if (!a) return [];
@@ -4896,7 +4927,7 @@ const NOTICE_AREAS = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
 // streams with their own standing instructions. Names match the ones already
 // used for supervisors and the CC email map, so the same team is not spelled
 // two ways across the app.
-const NOTICE_TEAMS = ['High Cost Team & MPW', 'Relocation Team'];
+const NOTICE_TEAMS = ['General (All sites)', 'High Cost Team & MPW', 'Relocation Team'];
 
 // More teams will appear. Rather than needing a code change each time, a group
 // exists as soon as it has a node under /notices — created either by posting a
@@ -4951,73 +4982,90 @@ async function noticeDropGroup(g) {
   }
 }
 
-// One flat chronological list read as a feed — CA1 sat above CA2 sat above CA1
-// again, and nobody could answer "what applies to the job I am standing at".
-// A notice is a property of an area, so the area is the organising unit.
-//
-// Seven equal columns was the obvious next move and the wrong one: most areas
-// are empty most of the time, so it produced a row of boxes containing a dash.
-// Only areas that actually carry a notice get a card, and they share the full
-// width between them; the empty ones collapse into one line of add-chips at the
-// bottom, which is all they need to be — a way in.
+// A notice grew from one line to a full reference sheet, and stacked cards
+// turned the page into a scroll. Tabs put every group one tap away and keep the
+// page a fixed height no matter how long a single notice gets.
+let _noticeTab = '';
+
+function noticeTab(g) { _noticeTab = g; renderAreaNotices(); }
+
+// General first — it applies everywhere — then CA areas in their fixed order,
+// then teams, then anything added later.
+function _noticeTabOrder(list) {
+  const rank = (g) => {
+    if (/^general/i.test(g)) return -1;
+    const i = NOTICE_AREAS.indexOf(g); if (i >= 0) return i;
+    const j = NOTICE_TEAMS.indexOf(g); if (j >= 0) return 100 + j;
+    return 500;
+  };
+  return list.slice().sort((x, y) => rank(x) - rank(y) || String(x).localeCompare(String(y)));
+}
+
 function renderAreaNotices() {
   const host = document.getElementById('area-notices');
   if (!host) return;
   watchNotices(renderAreaNotices);
 
   const readOnly = !!window._SUBBIE_VIEW;
-  const areas = _noticeGroups();
-  const live  = areas.filter(a => noticesFor(a).length);
-  const empty = areas.filter(a => !noticesFor(a).length);
+  const all   = _noticeGroups();
+  const live  = _noticeTabOrder(all.filter(a => noticesFor(a).length));
+  const empty = _noticeTabOrder(all.filter(a => !noticesFor(a).length));
   const total = live.reduce((n, a) => n + noticesFor(a).length, 0);
 
-  const card = (a) => {
-    const list = noticesFor(a);
-    return `<div style="flex:1 1 210px;min-width:0;background:var(--surface);border:1px solid #DDE3FF;border-radius:9px;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:6px;padding:5px 9px;background:#E0E7FF;border-bottom:1px solid #C7D2FE">
-        <b style="font-size:11.5px;color:#3730A3;letter-spacing:.3px">${esc(a)}</b>
-        ${list.length > 1 ? `<span style="font-size:10px;font-weight:800;color:#4338CA;background:#fff;border-radius:20px;padding:0 6px">${list.length}</span>` : ''}
-        ${readOnly ? '' : `<button title="Add another notice for ${escAttr(a)}" onclick="noticeAdd('${escAttr(a)}')"
-          style="margin-left:auto;border:none;background:none;cursor:pointer;color:#4338CA;font-size:14px;font-weight:800;line-height:1;padding:0 2px;font-family:inherit">+</button>`}
-      </div>
-      <div style="padding:2px 9px 5px">
-        ${list.map((n, i) => `<div style="padding:4px 0${i ? ';border-top:1px solid #EEF2FF' : ''}">
-          <div style="font-size:12.5px;line-height:1.45;white-space:pre-wrap;color:var(--text)">${esc(n.text)}</div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10.5px;color:var(--text3)">${esc(n.by || '')}${n.at ? ' · ' + new Date(n.at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) : ''}</span>
-            ${readOnly ? '' : `<button title="Delete" onclick="noticeDelete('${escAttr(a)}','${escAttr(n._key)}')"
-              style="margin-left:auto;border:none;background:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0;font-family:inherit">&#128465;</button>`}
-          </div>
-        </div>`).join('')}
-      </div>
-    </div>`;
+  // A tab can disappear when its last notice is deleted, so never trust the
+  // remembered one without checking it still exists.
+  if (!live.includes(_noticeTab)) _noticeTab = live[0] || '';
+  const sel = _noticeTab;
+
+  const tab = (g) => {
+    const on = g === sel, n = noticesFor(g).length;
+    return `<button onclick="noticeTab('${escAttr(g)}')"
+      style="border:1px solid ${on ? '#4338CA' : '#C7D2FE'};background:${on ? '#4338CA' : '#fff'};
+             color:${on ? '#fff' : '#4338CA'};border-radius:20px;padding:3px 11px;font-size:11.5px;
+             font-weight:${on ? '800' : '700'};cursor:pointer;font-family:inherit;white-space:nowrap">
+      ${esc(g)}${n > 1 ? ` <span style="opacity:.75">${n}</span>` : ''}</button>`;
   };
 
-  const chip = (a) => `<span style="display:inline-flex;align-items:center;border:1px dashed #C7D2FE;border-radius:20px;overflow:hidden">
-    <button onclick="noticeAdd('${escAttr(a)}')" title="Add a notice for ${escAttr(a)}"
-      style="border:none;background:none;padding:1px 9px;font-size:11px;font-weight:700;color:#818CF8;cursor:pointer;font-family:inherit">${esc(a)} +</button>
-    ${_noticeIsCustom(a) ? `<button onclick="noticeDropGroup('${escAttr(a)}')" title="Remove this group"
+  const chip = (g) => `<span style="display:inline-flex;align-items:center;border:1px dashed #C7D2FE;border-radius:20px;overflow:hidden">
+    <button onclick="noticeAdd('${escAttr(g)}')" title="Add a notice for ${escAttr(g)}"
+      style="border:none;background:none;padding:1px 9px;font-size:11px;font-weight:700;color:#818CF8;cursor:pointer;font-family:inherit">${esc(g)} +</button>
+    ${_noticeIsCustom(g) ? `<button onclick="noticeDropGroup('${escAttr(g)}')" title="Remove this group"
       style="border:none;background:none;padding:1px 6px 1px 0;font-size:11px;color:#C7D2FE;cursor:pointer;font-family:inherit">&times;</button>` : ''}
   </span>`;
 
+  const body = sel ? noticesFor(sel).map(n => `<div style="padding:9px 13px;border-top:1px solid #EEF2FF">
+      <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;color:var(--text)">${noticeHighlight(esc(n.text))}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+        <span style="font-size:11px;color:var(--text3)">${esc(n.by || '')}${n.at ? ' · ' + new Date(n.at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) : ''}${
+          n.editedAt ? ` · edited ${esc(n.editedBy || '')}` : ''}</span>
+        ${readOnly ? '' : `<button onclick="noticeEdit('${escAttr(sel)}','${escAttr(n._key)}')" title="Edit"
+          style="margin-left:auto;border:none;background:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit">&#9998;</button>
+        <button onclick="noticeDelete('${escAttr(sel)}','${escAttr(n._key)}')" title="Delete"
+          style="border:none;background:none;cursor:pointer;color:var(--text3);font-size:11px;font-family:inherit">&#128465;</button>`}
+      </div></div>`).join('')
+    : `<div style="padding:16px;text-align:center;font-size:12.5px;color:#A5B4FC">No notices yet</div>`;
+
   host.innerHTML = `<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:11px;padding:9px 12px;margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:8px;${live.length ? 'margin-bottom:8px' : ''}">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:11.5px;font-weight:800;color:#4338CA;letter-spacing:.4px;white-space:nowrap">&#128227; AREA NOTICES</span>
       <span style="font-size:11px;color:#6366F1;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Everyone sees these — office, mobile and subcontractors${total ? ` · ${total} active` : ''}</span>
-      ${readOnly ? '' : `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="noticeAdd()">+ Add</button>
+      ${readOnly ? '' : `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="noticeAdd('${escAttr(sel)}')">+ Add</button>
       <button class="icon-btn" title="Why is this not working?" style="font-size:12px" onclick="noticeDiagnose()">&#128295;</button>`}
     </div>
-    ${live.length ? `<div style="display:flex;flex-wrap:wrap;gap:7px;align-items:flex-start">${live.map(card).join('')}</div>` : ''}
-    ${(!readOnly && !empty.length) ? `<div style="margin-top:7px">
-      <button onclick="noticeAddGroup()" title="Add a new team or group"
-        style="border:1px solid #C7D2FE;background:#fff;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:800;color:#4338CA;cursor:pointer;font-family:inherit">+ Team</button>
+    ${live.length ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">${live.map(tab).join('')}</div>
+    <div style="background:var(--surface);border:1px solid #DDE3FF;border-radius:9px;overflow:hidden;max-height:340px;overflow-y:auto">
+      <div style="padding:6px 13px;background:#E0E7FF;border-bottom:1px solid #C7D2FE;position:sticky;top:0">
+        <b style="font-size:12px;color:#3730A3">${esc(sel)}</b>
+      </div>${body}
     </div>` : ''}
-    ${(!readOnly && empty.length) ? `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;${live.length ? 'margin-top:7px' : ''}">
+    ${(!readOnly && empty.length) ? `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;${live.length ? 'margin-top:8px' : ''}">
       <span style="font-size:10.5px;color:#818CF8;font-weight:700;letter-spacing:.3px">NO NOTICES</span>
       ${empty.map(chip).join('')}
       <button onclick="noticeAddGroup()" title="Add a new team or group"
         style="border:1px solid #C7D2FE;background:#fff;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:800;color:#4338CA;cursor:pointer;font-family:inherit">+ Team</button>
     </div>` : ''}
+    ${(!readOnly && !empty.length) ? `<div style="margin-top:8px"><button onclick="noticeAddGroup()"
+      style="border:1px solid #C7D2FE;background:#fff;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:800;color:#4338CA;cursor:pointer;font-family:inherit">+ Team</button></div>` : ''}
   </div>`;
 }
 
@@ -5039,15 +5087,28 @@ function _noticeAreas() {
     .filter((v, i, arr) => arr.indexOf(v) === i);
 }
 
+// When set, noticeSubmit updates this record instead of pushing a new one.
+let _noticeEditing = null;   // { group, key }
+
+function noticeEdit(group, key) {
+  const n = noticesFor(group).find(x => x._key === key);
+  if (!n) return;
+  _noticeEditing = { group, key };
+  noticeAdd(group, n.text);
+}
+
 function noticeClose() {
+  _noticeEditing = null;
   const el = document.getElementById('notice-modal');
   if (el) el.remove();
   document.removeEventListener('keydown', _noticeKey, true);
 }
 function _noticeKey(e) { if (e.key === 'Escape') noticeClose(); }
 
-function noticeAdd(presetArea) {
+function noticeAdd(presetArea, presetText) {
+  const editing = _noticeEditing;
   noticeClose();
+  _noticeEditing = editing;
   const wrap = document.createElement('div');
   wrap.id = 'notice-modal';
   wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:20px';
@@ -5055,22 +5116,24 @@ function noticeAdd(presetArea) {
   wrap.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;
       box-shadow:0 18px 50px rgba(0,0,0,.25);width:100%;max-width:440px;overflow:hidden">
     <div style="padding:13px 16px;background:#EEF2FF;border-bottom:1px solid #C7D2FE">
-      <b style="font-size:13.5px;color:#3730A3">&#128227; New area notice</b>
+      <b style="font-size:13.5px;color:#3730A3">&#128227; ${_noticeEditing ? 'Edit notice' : 'New area notice'}</b>
       <div style="font-size:11.5px;color:#6366F1;margin-top:2px">Everyone sees this — office, mobile and subcontractors</div>
     </div>
     <div style="padding:15px 16px">
       <label style="display:block;font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Area</label>
-      <select id="notice-area" class="form-control" style="width:100%;margin-bottom:13px">
+      <select id="notice-area" class="form-control" style="width:100%;margin-bottom:13px"${_noticeEditing ? ' disabled' : ''}>
         ${_noticeAreas().map(a => `<option value="${escAttr(a)}"${a === presetArea ? ' selected' : ''}>${esc(a)}</option>`).join('')}
       </select>
       <label style="display:block;font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Notice</label>
-      <textarea id="notice-text" class="form-control" rows="4" style="width:100%;resize:vertical"
-        placeholder="e.g. Rear lane access only — front gate locked"></textarea>
+      <textarea id="notice-text" class="form-control" rows="8" style="width:100%;resize:vertical;font-size:13px;line-height:1.6"
+        placeholder="e.g. Rear lane access only — front gate locked">${esc(presetText || '')}</textarea>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6">
+        SoR codes, CA numbers, measurements and words like <b>mandatory</b> are highlighted automatically.</div>
       <div id="notice-err" style="display:none;margin-top:10px;font-size:12px;line-height:1.5;color:#B91C1C;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:9px 11px"></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border);background:var(--cream2)">
       <button class="btn btn-sm btn-secondary" onclick="noticeClose()">Cancel</button>
-      <button id="notice-post" class="btn btn-sm btn-primary" onclick="noticeSubmit()">Post notice</button>
+      <button id="notice-post" class="btn btn-sm btn-primary" onclick="noticeSubmit()">${_noticeEditing ? 'Save changes' : 'Post notice'}</button>
     </div>
   </div>`;
   document.body.appendChild(wrap);
@@ -5109,19 +5172,26 @@ async function noticeSubmit() {
   const db = _noticeDb();
   if (!db) return _noticeError('Not connected to Firebase — reload the page and try again.');
 
+  const ed = _noticeEditing;
   const btn = document.getElementById('notice-post');
-  if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+  if (btn) { btn.disabled = true; btn.textContent = ed ? 'Saving…' : 'Posting…'; }
   try {
-    await db.ref('/notices/' + area).push({
-      text, by: _docMeName(), at: Date.now()
-    });
+    if (ed) {
+      // Keep the original `at` so editing a typo does not reorder the list or
+      // reset the "posted on" date people navigate by. editedAt records the change.
+      await db.ref('/notices/' + ed.group + '/' + ed.key).update({
+        text, editedBy: _docMeName(), editedAt: Date.now()
+      });
+    } else {
+      await db.ref('/notices/' + area).push({ text, by: _docMeName(), at: Date.now() });
+    }
     noticeClose();
-    toast('Notice posted for ' + area, 'success');
+    toast(ed ? 'Notice updated' : 'Notice posted for ' + area, 'success');
     renderAreaNotices();
   } catch (e) {
     console.error('[NOTICE] post failed:', e);
     _noticeError(_noticeReason(e));
-    if (btn) { btn.disabled = false; btn.textContent = 'Post notice'; }
+    if (btn) { btn.disabled = false; btn.textContent = ed ? 'Save changes' : 'Post notice'; }
   }
 }
 
