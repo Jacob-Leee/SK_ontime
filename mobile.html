@@ -2293,7 +2293,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-02-y';
+const APP_BUILD     = '2026-08-02-z';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7438,11 +7438,14 @@ let _mobDashBack = 0;
 
 function _mobShiftRef(mode, back) {
   const d = new Date();
-  if (mode === 'day') d.setDate(d.getDate() - back);
-  else if (mode === 'week') d.setDate(d.getDate() - back * 7);
-  else if (mode === 'year') d.setFullYear(d.getFullYear() - back);
-  else d.setMonth(d.getMonth() - back);
-  return d;
+  if (mode === 'day') { d.setDate(d.getDate() - back); return d; }
+  if (mode === 'week') { d.setDate(d.getDate() - back * 7); return d; }
+  if (mode === 'year') { d.setFullYear(d.getFullYear() - back); return d; }
+  // setMonth() keeps the day-of-month, and there is no 31 February — so on the
+  // 31st it rolls forward into the next month. Stepping back from 31 July
+  // produced two "Mar" columns and skipped one entirely. Build the date from
+  // the 1st instead, which no month is missing.
+  return new Date(d.getFullYear(), d.getMonth() - back, 1);
 }
 
 // The run of periods, newest last so it reads left-to-right like a timeline.
@@ -7491,8 +7494,8 @@ function _mobTrendCard() {
           align-items:center;justify-content:flex-end;height:100%;cursor:pointer">
           <span style="font-size:9px;font-weight:700;color:${on?'var(--accent)':'var(--text3)'};margin-bottom:2px;white-space:nowrap">${val(p)?fmt(val(p)):''}</span>
           <span style="width:100%;height:${h}px;border-radius:3px 3px 0 0;background:${on
-            ? 'linear-gradient(180deg,#F5D682 0%,#E0AC28 55%,#C79318 100%)'
-            : 'var(--border2)'};box-shadow:${on?'0 1px 3px rgba(224,172,40,.45)':'none'}"></span>
+            ? 'linear-gradient(180deg,#FBCB58 0%,#E0AC28 55%,#C8900F 100%)'
+            : 'linear-gradient(180deg,#F3E3B8,#E8D9AE)'};box-shadow:${on?'0 1px 3px rgba(224,172,40,.45)':'none'}"></span>
           <span style="font-size:8.5px;color:${on?'var(--accent)':'var(--text3)'};font-weight:${on?'800':'600'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${esc(p.label)}</span>
         </div>`;
       }).join('')}
@@ -7511,10 +7514,11 @@ function _mobCompareCard() {
     const f = v => isMoney ? fmt(v) : String(v);
     const dY = _mobDelta(nowV, lyV, isMoney);
     const tone = !lyV ? 'var(--text)' : (nowV > lyV ? '#16A34A' : nowV < lyV ? '#DC2626' : 'var(--text)');
-    return `<div style="flex:1;min-width:0;background:var(--bg2);border-radius:11px;padding:11px 12px">
-      <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.4px">${title}</div>
-      <div style="font-size:26px;font-weight:800;color:${tone};margin:2px 0 7px;letter-spacing:-.6px">${f(nowV)}</div>
-      <div style="font-size:10.5px;color:var(--text3);line-height:1.7;border-top:1px dashed var(--border);padding-top:6px">
+    return `<div style="flex:1;min-width:0;background:linear-gradient(155deg,#FDF0C4,#FFFCF2);
+      border:1px solid #EFD79A;border-radius:12px;padding:11px 12px">
+      <div style="font-size:10px;font-weight:800;color:#A67908;text-transform:uppercase;letter-spacing:.5px">${title}</div>
+      <div style="font-size:26px;font-weight:800;color:#241C13;margin:2px 0 7px;letter-spacing:-.6px">${f(nowV)}</div>
+      <div style="font-size:10.5px;color:#8A7C5E;line-height:1.7;border-top:1px dashed #EFD79A;padding-top:6px">
         ${b.lyLabel} ${lyV ? f(lyV) : '—'}
         ${dY.txt ? `<span style="color:${dY.colour};font-weight:700"> ${dY.txt}</span>` : ''}
       </div>
