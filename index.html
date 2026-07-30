@@ -266,7 +266,7 @@ textarea.form-control { resize: vertical; min-height: 72px; }
 /* ── Period tabs ── */
 .period-tabs { display: flex; background: var(--cream2); border-radius: 7px; padding: 3px; border: 1px solid var(--border); }
 .period-tab { padding: 5px 14px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text3); transition: all 0.15s; }
-.period-tab.active { background: linear-gradient(180deg,#F0C44E,#D99F1C); color: #3D2E00; box-shadow: 0 1px 4px rgba(224,172,40,0.42); }
+.period-tab.active { background: linear-gradient(180deg,#F0C44E,#D99F1C); color: #3D2E00; box-shadow: 0 1px 4px rgba(224,172,40,0.32); }
 
 /* ── Empty state ── */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
@@ -315,7 +315,17 @@ tr.srow-completed.sui-checked { opacity: 0.38 !important; }
 tr.srow-completed.sui-checked td { color: #9CA3AF !important; background: rgba(0,0,0,0.04) !important; }
 tr.srow-completed.sui-checked .area-tag { filter: grayscale(1) opacity(0.5) !important; }
 tr.srow-completed.sui-checked .amount-cell { color: #9CA3AF !important; }
-tr[data-sub] td { background: inherit !important; }
+/* Text on a tinted row.
+   The muted greys were chosen against the cream page background. On a pink or
+   green row tint they lose most of their contrast — the PRN, SOR code and
+   supervisor name were the first to go. Redefining the variables on the row
+   darkens every cell that uses them without touching a single call site. */
+tr[data-sub] {
+  --text:  #241C13;
+  --text2: #3B2F22;
+  --text3: #6A5744;
+}
+tr[data-sub] td { background: inherit !important; color: var(--text); }
 tr[data-sub]:nth-child(even) td { background: inherit !important; }
 tr.srow-orders:nth-child(even) td, tr.srow-completed:nth-child(even) td, tr.srow-claim:nth-child(even) td, tr.srow-closed:nth-child(even) td, tr.srow-issue:nth-child(even) td { background: var(--cream2); }
 tr.srow-cancelled td { background: var(--surface); color: var(--text3); }
@@ -1954,7 +1964,7 @@ tr.srow-issue td .issue-addr { color: #DC2626; font-weight: 700; }
   <div style="text-align:center;margin-bottom:34px">
     <img src="icon-192.png" alt="" width="72" height="72" style="border-radius:18px;margin-bottom:16px">
     <div style="font-size:26px;font-weight:900;letter-spacing:1.5px;color:#fff">SK <span style="color:#E0AC28">ON</span>TIME</div>
-    <div id="auth-gate-sub" style="font-size:11.5px;color:rgba(255,255,255,0.42);letter-spacing:1.4px;text-transform:uppercase;margin-top:5px">Holmes Order Manager</div>
+    <div id="auth-gate-sub" style="font-size:11.5px;color:rgba(255,255,255,0.32);letter-spacing:1.4px;text-transform:uppercase;margin-top:5px">Holmes Order Manager</div>
   </div>
 
   <div id="auth-signin-box" style="text-align:center;width:100%;max-width:320px">
@@ -2056,7 +2066,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-02-w';
+const APP_BUILD = '2026-08-02-y';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2514,29 +2524,29 @@ function _nowSafe() { return Date.now() + Math.max(0, CLOUD._skewMs || 0) + 1; }
 
 // Pastel row-tint per subbie — fixed map for known names, hash fallback for unknowns
 const _SUBBIE_FIXED = {
-  'SK_Mo':     { bg: 'rgba(191,219,254,0.42)', border: 'rgba(59,130,246,0.28)' },   // blue
-  'SK_Jacob':  { bg: 'rgba(187,247,208,0.42)', border: 'rgba(22,163,74,0.28)' },    // green
-  'SK_June':   { bg: 'rgba(254,215,170,0.42)', border: 'rgba(234,88,12,0.28)' },    // orange
-  'SK_Jay':    { bg: 'rgba(233,213,255,0.42)', border: 'rgba(147,51,234,0.28)' },   // purple
-  'Jake Lee':  { bg: 'rgba(153,246,228,0.42)', border: 'rgba(13,148,136,0.28)' },   // teal
-  'Sean Park': { bg: 'rgba(251,207,232,0.42)', border: 'rgba(219,39,119,0.28)' },   // pink
-  'Chris Choi':{ bg: 'rgba(254,240,138,0.42)', border: 'rgba(202,138,4,0.28)' },    // yellow
+  'SK_Mo':     { bg: 'rgba(191,219,254,0.32)', border: 'rgba(59,130,246,0.28)' },   // blue
+  'SK_Jacob':  { bg: 'rgba(187,247,208,0.32)', border: 'rgba(22,163,74,0.28)' },    // green
+  'SK_June':   { bg: 'rgba(254,215,170,0.32)', border: 'rgba(234,88,12,0.28)' },    // orange
+  'SK_Jay':    { bg: 'rgba(233,213,255,0.32)', border: 'rgba(147,51,234,0.28)' },   // purple
+  'Jake Lee':  { bg: 'rgba(153,246,228,0.32)', border: 'rgba(13,148,136,0.28)' },   // teal
+  'Sean Park': { bg: 'rgba(251,207,232,0.32)', border: 'rgba(219,39,119,0.28)' },   // pink
+  'Chris Choi':{ bg: 'rgba(254,240,138,0.32)', border: 'rgba(202,138,4,0.28)' },    // yellow
 };
 const _SUBBIE_PALETTES = [
-  { bg: 'rgba(191,219,254,0.42)', border: 'rgba(59,130,246,0.28)' },
-  { bg: 'rgba(187,247,208,0.42)', border: 'rgba(22,163,74,0.28)' },
-  { bg: 'rgba(254,215,170,0.42)', border: 'rgba(234,88,12,0.28)' },
-  { bg: 'rgba(233,213,255,0.42)', border: 'rgba(147,51,234,0.28)' },
-  { bg: 'rgba(254,240,138,0.42)', border: 'rgba(202,138,4,0.28)' },
-  { bg: 'rgba(251,207,232,0.42)', border: 'rgba(219,39,119,0.28)' },
-  { bg: 'rgba(153,246,228,0.42)', border: 'rgba(13,148,136,0.28)' },
-  { bg: 'rgba(254,202,202,0.42)', border: 'rgba(220,38,38,0.28)' },
-  { bg: 'rgba(199,210,254,0.42)', border: 'rgba(79,70,229,0.28)' },
-  { bg: 'rgba(204,251,241,0.42)', border: 'rgba(20,184,166,0.28)' },
-  { bg: 'rgba(255,228,230,0.42)', border: 'rgba(225,29,72,0.28)' },
-  { bg: 'rgba(217,249,157,0.42)', border: 'rgba(101,163,13,0.28)' },
-  { bg: 'rgba(224,231,255,0.42)', border: 'rgba(99,102,241,0.28)' },
-  { bg: 'rgba(250,232,255,0.42)', border: 'rgba(192,38,211,0.28)' },
+  { bg: 'rgba(191,219,254,0.32)', border: 'rgba(59,130,246,0.28)' },
+  { bg: 'rgba(187,247,208,0.32)', border: 'rgba(22,163,74,0.28)' },
+  { bg: 'rgba(254,215,170,0.32)', border: 'rgba(234,88,12,0.28)' },
+  { bg: 'rgba(233,213,255,0.32)', border: 'rgba(147,51,234,0.28)' },
+  { bg: 'rgba(254,240,138,0.32)', border: 'rgba(202,138,4,0.28)' },
+  { bg: 'rgba(251,207,232,0.32)', border: 'rgba(219,39,119,0.28)' },
+  { bg: 'rgba(153,246,228,0.32)', border: 'rgba(13,148,136,0.28)' },
+  { bg: 'rgba(254,202,202,0.32)', border: 'rgba(220,38,38,0.28)' },
+  { bg: 'rgba(199,210,254,0.32)', border: 'rgba(79,70,229,0.28)' },
+  { bg: 'rgba(204,251,241,0.32)', border: 'rgba(20,184,166,0.28)' },
+  { bg: 'rgba(255,228,230,0.32)', border: 'rgba(225,29,72,0.28)' },
+  { bg: 'rgba(217,249,157,0.32)', border: 'rgba(101,163,13,0.28)' },
+  { bg: 'rgba(224,231,255,0.32)', border: 'rgba(99,102,241,0.28)' },
+  { bg: 'rgba(250,232,255,0.32)', border: 'rgba(192,38,211,0.28)' },
 ];
 let _subbieColorCache = {};
 
@@ -2779,6 +2789,18 @@ async function cloudPull(initial) {
   if (!CLOUD.enabled || !CLOUD.url) { console.log('[PULL DEBUG] aborted — not enabled or no url'); return; }
   if (!initial && document.hidden) { renderCloudStatus('Paused (background)'); return; }
   if (CLOUD.pulling) { console.log('[PULL DEBUG] skipped — already pulling'); return; }
+  // Floor on how often a pull may START, whoever asks.
+  //
+  // The in-flight guard alone was not enough: anything calling cloudPollNow()
+  // repeatedly fires a pull each time, and the network log showed ~15 Apps
+  // Script round trips in five seconds — 265 kB each. That is the "page keeps
+  // refreshing" feeling, and it burns the Apps Script quota.
+  const _now = Date.now();
+  if (!initial && CLOUD._lastPullAt && (_now - CLOUD._lastPullAt) < 2500) {
+    console.log('[PULL DEBUG] skipped — throttled');
+    return;
+  }
+  CLOUD._lastPullAt = _now;
   CLOUD.pulling = true;
   console.log('[PULL DEBUG] cloudPull() start. initial=', initial);
   try {
@@ -4827,16 +4849,20 @@ async function docGrabAll(orderId) {
     const fl = (_docs[orderId] || {})[k] || files[k];
     if (!fl || !fl.url) { failed++; continue; }
     docMarkRead(orderId, k);
-    const a = document.createElement('a');
-    a.href = _docFreshUrl(fl.url);
-    a.download = fl.name || 'download';
-    a.rel = 'noopener';
-    // Never a new tab here: a blocked popup is silent, and in a batch the user
-    // has no way to tell which file went missing.
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    await new Promise(r => setTimeout(r, 700));
+    // A hidden iframe per file, not an anchor.
+    //
+    // Anchor clicks in sequence behave as navigations, and starting the second
+    // cancels the first while it is still in flight — the network log showed
+    // the 19.9 MB PDF as "(canceled)" the moment the spreadsheet started.
+    // Iframes have independent loads and do not cancel each other.
+    const fr = document.createElement('iframe');
+    fr.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
+    fr.src = _docFreshUrl(fl.url);
+    document.body.appendChild(fr);
+    // Kept long enough for a large file to commit; a download continues after
+    // the frame goes.
+    setTimeout(() => { try { fr.remove(); } catch (e) {} }, 120000);
+    await new Promise(r => setTimeout(r, 1200));
   }
   if (failed) toast(failed + '개 파일을 받지 못했습니다', 'error');
   _docRepaint();
