@@ -2058,7 +2058,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-01-m';
+const APP_BUILD = '2026-08-01-n';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4748,29 +4748,66 @@ function noticeBlock(areas) {
 // standing instruction.
 const NOTICE_AREAS = ['CA1','CA2','CA3','CA4','CA9','CA10','CA11'];
 
+// One flat chronological list read as a feed — CA1 sat above CA2 sat above CA1
+// again, and nobody could answer "what applies to the job I am standing at".
+// A notice is a property of an area, so the area is the organising unit.
+//
+// Seven equal columns was the obvious next move and the wrong one: most areas
+// are empty most of the time, so it produced a row of boxes containing a dash.
+// Only areas that actually carry a notice get a card, and they share the full
+// width between them; the empty ones collapse into one line of add-chips at the
+// bottom, which is all they need to be — a way in.
 function renderAreaNotices() {
   const host = document.getElementById('area-notices');
   if (!host) return;
   watchNotices(renderAreaNotices);
 
-  const all = [];
-  NOTICE_AREAS.forEach(a => noticesFor(a).forEach(n => all.push(Object.assign({ area: a }, n))));
-  all.sort((x, y) => (y.at || 0) - (x.at || 0));
   const readOnly = !!window._SUBBIE_VIEW;
+  const extra = Object.keys(_notices || {})
+    .filter(a => !NOTICE_AREAS.includes(a) && noticesFor(a).length).sort();
+  const areas = NOTICE_AREAS.concat(extra);
+  const live  = areas.filter(a => noticesFor(a).length);
+  const empty = areas.filter(a => !noticesFor(a).length);
+  const total = live.reduce((n, a) => n + noticesFor(a).length, 0);
 
-  host.innerHTML = `<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:11px;padding:11px 13px;margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:${all.length?'8px':'0'}">
-      <span style="font-size:11.5px;font-weight:800;color:#4338CA;letter-spacing:.4px">&#128227; AREA NOTICES</span>
-      <span style="font-size:11px;color:#6366F1;flex:1">Everyone sees these — office and subcontractors</span>
+  const card = (a) => {
+    const list = noticesFor(a);
+    return `<div style="flex:1 1 210px;min-width:0;background:var(--surface);border:1px solid #DDE3FF;border-radius:9px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 9px;background:#E0E7FF;border-bottom:1px solid #C7D2FE">
+        <b style="font-size:11.5px;color:#3730A3;letter-spacing:.3px">${esc(a)}</b>
+        ${list.length > 1 ? `<span style="font-size:10px;font-weight:800;color:#4338CA;background:#fff;border-radius:20px;padding:0 6px">${list.length}</span>` : ''}
+        ${readOnly ? '' : `<button title="Add another notice for ${escAttr(a)}" onclick="noticeAdd('${escAttr(a)}')"
+          style="margin-left:auto;border:none;background:none;cursor:pointer;color:#4338CA;font-size:14px;font-weight:800;line-height:1;padding:0 2px;font-family:inherit">+</button>`}
+      </div>
+      <div style="padding:2px 9px 5px">
+        ${list.map((n, i) => `<div style="padding:4px 0${i ? ';border-top:1px solid #EEF2FF' : ''}">
+          <div style="font-size:12.5px;line-height:1.45;white-space:pre-wrap;color:var(--text)">${esc(n.text)}</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10.5px;color:var(--text3)">${esc(n.by || '')}${n.at ? ' · ' + new Date(n.at).toLocaleDateString('en-AU', { day: '2-digit', month: 'short' }) : ''}</span>
+            ${readOnly ? '' : `<button title="Delete" onclick="noticeDelete('${escAttr(a)}','${escAttr(n._key)}')"
+              style="margin-left:auto;border:none;background:none;cursor:pointer;color:var(--text3);font-size:11px;padding:0;font-family:inherit">&#128465;</button>`}
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  };
+
+  const chip = (a) => `<button onclick="noticeAdd('${escAttr(a)}')" title="Add a notice for ${escAttr(a)}"
+    style="border:1px dashed #C7D2FE;background:none;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:700;
+           color:#818CF8;cursor:pointer;font-family:inherit">${esc(a)} +</button>`;
+
+  host.innerHTML = `<div style="background:#EEF2FF;border:1px solid #C7D2FE;border-radius:11px;padding:9px 12px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px;${live.length ? 'margin-bottom:8px' : ''}">
+      <span style="font-size:11.5px;font-weight:800;color:#4338CA;letter-spacing:.4px;white-space:nowrap">&#128227; AREA NOTICES</span>
+      <span style="font-size:11px;color:#6366F1;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Everyone sees these — office, mobile and subcontractors${total ? ` · ${total} active` : ''}</span>
       ${readOnly ? '' : `<button class="btn btn-sm btn-secondary" style="font-size:11px" onclick="noticeAdd()">+ Add</button>
       <button class="icon-btn" title="Why is this not working?" style="font-size:12px" onclick="noticeDiagnose()">&#128295;</button>`}
     </div>
-    ${all.map(n => `<div style="display:flex;gap:9px;align-items:flex-start;padding:6px 0;border-top:1px solid #DDE3FF">
-      <span style="flex-shrink:0;font-weight:800;color:#4338CA;font-size:12px;min-width:38px">${esc(n.area)}</span>
-      <span style="flex:1;min-width:0;font-size:12.5px;line-height:1.55;white-space:pre-wrap">${esc(n.text)}</span>
-      <span style="flex-shrink:0;font-size:11px;color:var(--text3)">${esc(n.by || '')}${n.at ? ' · ' + new Date(n.at).toLocaleDateString('en-AU',{day:'2-digit',month:'short'}) : ''}</span>
-      ${readOnly ? '' : `<button class="icon-btn" title="Delete" onclick="noticeDelete('${escAttr(n.area)}','${escAttr(n._key)}')">&#128465;</button>`}
-    </div>`).join('')}
+    ${live.length ? `<div style="display:flex;flex-wrap:wrap;gap:7px;align-items:flex-start">${live.map(card).join('')}</div>` : ''}
+    ${(!readOnly && empty.length) ? `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;${live.length ? 'margin-top:7px' : ''}">
+      <span style="font-size:10.5px;color:#818CF8;font-weight:700;letter-spacing:.3px">NO NOTICES</span>
+      ${empty.map(chip).join('')}
+    </div>` : ''}
   </div>`;
 }
 
