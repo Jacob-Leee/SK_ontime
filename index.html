@@ -2162,7 +2162,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-03-f';
+const APP_BUILD = '2026-08-03-g';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -6668,7 +6668,69 @@ function checkCalReminders() {
     }
   });
 }
+// ── Daily digests ─────────────────────────────────────────────
+//
+// The per-event "N minutes before" reminder is for the moment you need to move.
+// It does not help with "what have I got on tomorrow", which is the question
+// people actually ask the evening before. Two digests answer that:
+//
+//   19:00 the night before — so tomorrow can be planned after work
+//   07:00 on the day       — so it is in mind before leaving
+//
+// Both are one notification listing everything, not one per event.
+const CAL_DIGESTS = [
+  { slot: 'eve',  hour: 19, offsetDays: 1, label: '내일' },
+  { slot: 'morn', hour: 7,  offsetDays: 0, label: '오늘' },
+];
+
+// How late a missed digest may still fire. Opening the laptop at 9am should
+// still surface the 7am summary; opening it at 3pm should not — by then it is
+// history, and a stale alert teaches people to ignore the next one.
+const CAL_DIGEST_GRACE_MS = 4 * 3600 * 1000;
+
+function checkCalDigests() {
+  const now = new Date();
+  const todayStr = calYMD(now);
+
+  CAL_DIGESTS.forEach(d => {
+    const fireAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), d.hour, 0, 0);
+    if (now < fireAt) return;
+    if (now - fireAt > CAL_DIGEST_GRACE_MS) return;
+
+    // Keyed by date, and in localStorage rather than sessionStorage — a reload
+    // must not send the same digest twice.
+    const key = 'caldigest_' + d.slot + '_' + todayStr;
+    if (lsGet(key)) return;
+    lsSet(key, '1');
+
+    const target = calAddDays(now, d.offsetDays);
+    const tStr = calYMD(target);
+    let evs = [];
+    try { evs = getExpandedEvents(target, target) || []; } catch (e) { return; }
+
+    // An event with reminders turned off stays off. A digest that quietly
+    // re-enables it is not a digest, it is a setting being overridden.
+    evs = evs.filter(e => e && e.startDate === tStr && e.reminder && e.reminder !== 'none');
+    if (!evs.length) return;
+
+    evs.sort((a, b) => String(a.startTime || '00:00').localeCompare(String(b.startTime || '00:00')));
+    const lines = evs.map(e => {
+      const t = (e.allDay === 'Y' || !e.startTime) ? '종일' : e.startTime;
+      return t + '  ' + (e.title || '');
+    });
+    const title = '📅 ' + d.label + ' 일정 ' + evs.length + '건';
+    const body = lines.join('\n');
+
+    toast(title + ' — ' + lines[0] + (lines.length > 1 ? ' 외 ' + (lines.length - 1) + '건' : ''), 'success');
+    _fireOsNotification(title, body, null);
+    _pushCalReminder(title, body);
+  });
+}
+
 setInterval(checkCalReminders, 30000);
+setInterval(checkCalDigests, 60000);
+// Also on load, so a desk opened at 08:30 still gets the 07:00 summary.
+setTimeout(() => { try { checkCalDigests(); } catch (e) {} }, 4000);
 
 
 // ============================================================
