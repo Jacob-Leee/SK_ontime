@@ -2289,7 +2289,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-05-h';
+const APP_BUILD     = '2026-08-05-i';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -10022,7 +10022,31 @@ async function authSignIn() {
   // A Home Screen app on iOS goes straight to Google Identity Services —
   // popup and redirect both fail there, and trying them first just costs the
   // user two failures before anything works.
+  // MEASURED, not assumed.
+  //
+  // In the Home Screen app the GIS button navigates to accounts.google.com and
+  // Google answers 400 "the server cannot process the request because it is
+  // malformed". GIS has no registered redirect target for jacob-leee.github.io
+  // — only Authorized JavaScript ORIGINS were added, and a navigation flow
+  // needs a redirect URI. GitHub Pages cannot host an OAuth callback, so that
+  // gap cannot be closed on this domain.
+  //
+  // Firebase's own redirect flow does not have that problem: it returns to
+  // homes-nsw.firebaseapp.com/__/auth/handler, which is already registered.
+  // That flow previously failed only because the client ID and the authorised
+  // domain were missing — both are in place now, so it is worth the attempt
+  // before falling back to GIS.
   if (_needsGis()) {
+    try {
+      const p0 = new firebase.auth.GoogleAuthProvider();
+      p0.setCustomParameters({ prompt: 'select_account' });
+      _authShow('busy', 'Opening Google sign-in…');
+      await AUTH.auth.signInWithRedirect(p0);
+      return;                      // page navigates away; result handled on return
+    } catch (re) {
+      console.warn('[AUTH] standalone redirect failed:', re.code, re.message);
+      _authRecordError({ stage: 'standalone-redirect', code: re.code || '', message: re.message || '' });
+    }
     try { if (await _gisSignIn()) return; }
     finally { if (btn) { btn.disabled = false; btn.style.opacity = '1'; } }
     return;
