@@ -700,6 +700,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
     <div id="gis-btn" style="display:none;justify-content:center;margin-top:4px"></div>
     <div style="font-size:11.5px;color:rgba(255,255,255,0.35);margin-top:14px;line-height:1.6">Approved accounts only.</div>
     <div id="auth-error" style="display:none;margin-top:16px;padding:12px 14px;border-radius:10px;background:rgba(220,38,38,0.14);border:1px solid rgba(220,38,38,0.35);color:#fca5a5;font-size:12px;line-height:1.6;text-align:left;white-space:pre-line"></div>
+    <button onclick="authProbe()" style="margin-top:10px;background:none;border:none;color:#F0C44E;font-size:12.5px;font-weight:700;text-decoration:underline;cursor:pointer;font-family:inherit">Why can't I sign in?</button>
     <button onclick="authDiagnose()" style="margin-top:14px;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11.5px;text-decoration:underline;cursor:pointer">Sign-in check</button>
     <button id="auth-gate-close" onclick="_authHide()" style="display:none;margin-top:10px;background:none;border:none;color:rgba(255,255,255,0.3);font-size:11.5px;text-decoration:underline;cursor:pointer">Close (test mode)</button>
     <div id="auth-diag-result" style="text-align:left"></div>
@@ -2288,7 +2289,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-05-f';
+const APP_BUILD     = '2026-08-05-g';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -10208,6 +10209,90 @@ function authInit() {
 
 // Sign-in failures survive a reload so the diagnostic can still name the cause
 // after someone closes the app and reopens it, which is what always happens.
+// Measure, do not guess.
+//
+// Four settings changes have not moved this error, so the next step is to find
+// out WHICH request fails. Three independent probes, each isolating one layer:
+//
+//   1. plain HTTPS reachability          — is the network usable at all
+//   2. identitytoolkit REST, direct      — can this device talk to Firebase Auth
+//   3. the authDomain iframe host        — the SDK loads homes-nsw.firebaseapp.com
+//                                          in a hidden iframe, and iOS standalone
+//                                          partitions storage for cross-origin
+//                                          frames. This is the prime suspect.
+//
+// If 1 and 2 pass and 3 fails, the network is fine and the SDK's cross-origin
+// helper is what iOS is blocking — which is a different fix entirely.
+async function authProbe() {
+  const out = [];
+  const t0 = Date.now();
+  const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                     window.navigator.standalone === true;
+  out.push('Launched as: ' + (standalone ? 'Home Screen app' : 'Safari tab'));
+  out.push('Host: ' + location.hostname);
+
+  // 1 — is anything reachable
+  try {
+    const r = await fetch('https://www.gstatic.com/generate_204', { cache: 'no-store' });
+    out.push('1. Internet reachable: OK (' + r.status + ')');
+  } catch (e) { out.push('1. Internet reachable: FAILED — ' + e.message); }
+
+  // 2 — Firebase Auth REST, no SDK, no iframe.
+  //     A deliberately bad token: a 400 back means the endpoint is reachable,
+  //     which is exactly what we want to know. Only a thrown error is a failure.
+  try {
+    const key = (firebase.apps[0] && firebase.apps[0].options.apiKey) || '';
+    const r = await fetch(
+      'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + key,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postBody: 'id_token=probe&providerId=google.com',
+                               requestUri: location.origin, returnIdpCredential: true }) });
+    out.push('2. Firebase Auth endpoint: REACHABLE (' + r.status + ')');
+    out.push('   → network is not the problem');
+  } catch (e) {
+    out.push('2. Firebase Auth endpoint: BLOCKED — ' + e.message);
+    out.push('   → the device cannot reach identitytoolkit at all');
+  }
+
+  // 3 — the SDK's hidden helper frame
+  const ad = (firebase.apps[0] && firebase.apps[0].options.authDomain) || '';
+  out.push('3. authDomain: ' + ad);
+  const frameOk = await new Promise(res => {
+    const fr = document.createElement('iframe');
+    fr.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
+    let settled = false;
+    const finish = v => { if (settled) return; settled = true; try { fr.remove(); } catch (e) {} res(v); };
+    fr.onload = () => finish(true);
+    fr.onerror = () => finish(false);
+    setTimeout(() => finish(null), 6000);
+    fr.src = 'https://' + ad + '/__/auth/iframe?apiKey=' +
+             ((firebase.apps[0] && firebase.apps[0].options.apiKey) || '');
+    document.body.appendChild(fr);
+  });
+  out.push('   helper frame: ' + (frameOk === true ? 'LOADED'
+                                : frameOk === false ? 'FAILED' : 'TIMED OUT'));
+
+  out.push('');
+  const netOk = out.some(l => l.startsWith('2. Firebase Auth endpoint: REACHABLE'));
+  if (netOk && frameOk !== true) {
+    out.push('VERDICT: network fine, the auth helper frame on ' + ad + ' is blocked.');
+    out.push('iOS partitions storage for cross-origin frames in a Home Screen app.');
+    out.push('Fix direction: serve the auth handler from this same domain, or');
+    out.push('keep using the device bypass for this phone.');
+  } else if (!netOk) {
+    out.push('VERDICT: this device cannot reach Firebase Auth at all.');
+    out.push('Check Lockdown Mode, a VPN/content blocker, or the mobile carrier.');
+  } else {
+    out.push('VERDICT: both probes passed — the failure is intermittent.');
+    out.push('Try signing in again; the retry may now succeed.');
+  }
+  out.push('(' + (Date.now() - t0) + ' ms)');
+
+  const txt = out.join('\n');
+  console.log('[AUTH PROBE]\n' + txt);
+  alert(txt);
+}
+
 function _authRecordError(err) {
   AUTH.lastError = Object.assign({ at: Date.now() }, err);
   try { localStorage.setItem('hom_auth_last_error', JSON.stringify(AUTH.lastError)); } catch (e) {}
