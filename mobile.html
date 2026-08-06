@@ -2289,7 +2289,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-05-g';
+const APP_BUILD     = '2026-08-05-h';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -9955,6 +9955,27 @@ async function _gisSignIn() {
               } catch (e2) {
                 console.warn('[AUTH] retry also failed:', e2.code);
                 _authRecordError({ stage: 'gis-exchange-retry', code: e2.code || '', message: e2.message || '' });
+
+                // The SDK reports network-request-failed and swallows the
+                // server's answer. Send the SAME credential to the REST
+                // endpoint ourselves and keep whatever comes back — that is the
+                // only way to see why Google is refusing it.
+                try {
+                  const key = (firebase.apps[0] && firebase.apps[0].options.apiKey) || '';
+                  const rr = await fetch(
+                    'https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=' + key,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        postBody: 'id_token=' + resp.credential + '&providerId=google.com',
+                        requestUri: location.origin,
+                        returnSecureToken: true, returnIdpCredential: true }) });
+                  const body = await rr.text();
+                  const short = body.replace(/\s+/g, ' ').slice(0, 300);
+                  console.warn('[AUTH] REST exchange said:', rr.status, short);
+                  _authRecordError({ stage: 'rest-exchange', code: 'HTTP ' + rr.status, message: short });
+                } catch (e3) {
+                  _authRecordError({ stage: 'rest-exchange', code: 'throw', message: e3.message || '' });
+                }
               }
             }
 
@@ -10232,8 +10253,14 @@ async function authProbe() {
   out.push('Host: ' + location.hostname);
 
   // 1 — is anything reachable
+  //
+  // generate_204 was the wrong probe: it sends no CORS header, so the browser
+  // blocks it on every device and it always read FAILED. Use an endpoint that
+  // actually allows cross-origin reads.
   try {
-    const r = await fetch('https://www.gstatic.com/generate_204', { cache: 'no-store' });
+    const r = await fetch('https://firebasestorage.googleapis.com/v0/b/' +
+      ((firebase.apps[0] && firebase.apps[0].options.storageBucket) || '') + '/o?maxResults=1',
+      { cache: 'no-store' });
     out.push('1. Internet reachable: OK (' + r.status + ')');
   } catch (e) { out.push('1. Internet reachable: FAILED — ' + e.message); }
 
