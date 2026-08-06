@@ -2289,7 +2289,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-05-j';
+const APP_BUILD     = '2026-08-06-b';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -7072,6 +7072,7 @@ function initApp() {
     startCalendarWatch();
     try { _rtdbWatchIssueReports(); } catch (e) { console.error('[BOOT] issue watcher failed:', e); }
     try { _rtdbWatchFieldReports(); } catch (e) { console.error('[BOOT] field reports failed:', e); }
+    try { watchSyncNudge(); } catch (e) { console.error('[BOOT] sync nudge failed:', e); }
     try {
       watchNotices(function () {
         try { mobCountNotices(); } catch (e) {}
@@ -8046,6 +8047,45 @@ function _noticeDb() { return _sharedDb(); }
 // chips had nothing to show — the feature looked implemented and was not.
 // Started at boot now, with a retry because RTDB may not be up on first call.
 let _noticeWatchTries = 0;
+// Live nudge instead of waiting out the poll.
+//
+// The desk mirrors every save to RTDB /orders, and the subbie app already reads
+// that path in real time — which is why it feels instant while this app waited
+// up to 8 s for the next Apps Script poll. We do not need to change where the
+// data comes from: we just need to stop waiting. Listen to the mirror purely as
+// a signal, and pull the moment it moves.
+//
+// No new database path and no rules change: /orders is already readable here.
+let _nudgeWatch = false, _nudgeT = null, _nudgeTries = 0, _nudgeFirst = true;
+
+function watchSyncNudge() {
+  if (_nudgeWatch) return;
+  const db = _sharedDb();
+  if (!db) {
+    if (_nudgeTries++ < 20) setTimeout(watchSyncNudge, 500);
+    return;
+  }
+  _nudgeWatch = true;
+  // Value on the whole node would ship every order on every change. We only
+  // need to know THAT something changed, so listen for child events and read
+  // nothing.
+  const ref = db.ref('/orders');
+  const ping = () => {
+    // The first callbacks are the existing rows replaying, not news.
+    if (_nudgeFirst) return;
+    clearTimeout(_nudgeT);
+    _nudgeT = setTimeout(() => {
+      try { if (typeof cloudPollNow === 'function') cloudPollNow(); } catch (e) {}
+    }, 400);   // a desk save fires several child events; coalesce them
+  };
+  ref.on('child_changed', ping);
+  ref.on('child_added', ping);
+  ref.on('child_removed', ping);
+  // Existing children arrive first; anything after this tick is a real change.
+  setTimeout(() => { _nudgeFirst = false; }, 3000);
+  console.log('[SYNC] live nudge attached');
+}
+
 function watchNotices(onChange) {
   if (_noticeWatch) return;
   const db = _noticeDb();
@@ -9667,7 +9707,32 @@ function _authSetup() {
     // Pin persistence to LOCAL explicitly. On the default the session can be
     // dropped under storage pressure, and every drop means another Google
     // popup — the thing this flow is meant to avoid after day one.
-    try { AUTH.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (e) {}
+    // Persistence, awaited and verified.
+    //
+    // This used to be fire-and-forget inside a try/catch: setPersistence returns
+    // a Promise, so a rejection never reached the catch and sign-in could run
+    // before persistence was applied. On iOS standalone IndexedDB can be
+    // unavailable, LOCAL then fails, and the session lives only as long as the
+    // page — which is exactly "sign in, come back, asked to sign in again".
+    //
+    // Try LOCAL, fall back to SESSION, and record which one actually took so
+    // the diagnostic can say it instead of us guessing.
+    AUTH.persistence = 'pending';
+    AUTH.persistenceReady = (async () => {
+      const P = firebase.auth.Auth.Persistence;
+      for (const [name, mode] of [['LOCAL', P.LOCAL], ['SESSION', P.SESSION], ['NONE', P.NONE]]) {
+        try {
+          await AUTH.auth.setPersistence(mode);
+          AUTH.persistence = name;
+          if (name !== 'LOCAL') console.warn('[AUTH] persistence fell back to', name);
+          return name;
+        } catch (e) {
+          console.warn('[AUTH] persistence ' + name + ' failed:', e.code || e.message);
+        }
+      }
+      AUTH.persistence = 'FAILED';
+      return 'FAILED';
+    })();
     AUTH.db   = firebase.database(app);
     _authAttachListener();
     // Pick up the result when we came back from the redirect fallback. Without
@@ -10038,6 +10103,8 @@ async function authSignIn() {
   // before falling back to GIS.
   if (_needsGis()) {
     try {
+      // Do not start the redirect until we know where the session will live.
+      try { await AUTH.persistenceReady; } catch (e) {}
       const p0 = new firebase.auth.GoogleAuthProvider();
       p0.setCustomParameters({ prompt: 'select_account' });
       _authShow('busy', 'Opening Google sign-in…');
@@ -10286,6 +10353,7 @@ async function authProbe() {
                      window.navigator.standalone === true;
   out.push('Launched as: ' + (standalone ? 'Home Screen app' : 'Safari tab'));
   out.push('Host: ' + location.hostname);
+  out.push('Session storage mode: ' + (AUTH.persistence || 'unknown'));
 
   // 1 — is anything reachable
   //
