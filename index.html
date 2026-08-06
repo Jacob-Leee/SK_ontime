@@ -2162,7 +2162,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-03-g';
+const APP_BUILD = '2026-08-05-c';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -2768,7 +2768,7 @@ async function cloudForcePush() {
 // The interval stretches while the data is quiet and snaps back to 3s the
 // moment anything changes or the user touches the app, so a fresh assignment
 // still lands promptly.
-const _POLL_MIN = 3000, _POLL_MAX = 30000;
+const _POLL_MIN = 3000, _POLL_MAX = 12000;
 
 function _pollBump(changed) {
   const prev = CLOUD.pollMs || _POLL_MIN;
@@ -2816,7 +2816,9 @@ function cloudPushDebounced() {
   }
   if (CLOUD.pushTimer) clearTimeout(CLOUD.pushTimer);
   console.log('[CLOUD DEBUG] push scheduled, firing in 1.2s...');
-  CLOUD.pushTimer = setTimeout(cloudPush, 1200);
+  // 1.2 s of typing-settle time on top of the phone's poll interval was most of
+  // the lag people noticed. 600 ms still coalesces a burst of edits.
+  CLOUD.pushTimer = setTimeout(cloudPush, 600);
 }
 
 async function cloudPush() {
@@ -12842,7 +12844,12 @@ function renderFieldReports() {
       }</div>` : ''}
       <div style="font-size:12px;color:var(--text3)">By: ${esc(r.by || '—')}</div>
       ${r.note ? `<div style="font-size:12.5px;margin-top:6px;padding:7px 9px;background:var(--cream);border-radius:7px;white-space:pre-wrap">${esc(r.note)}</div>` : ''}
-      ${r.photos.length ? `<div style="display:flex;gap:5px;margin-top:7px;flex-wrap:wrap">${r.photos.slice(0,4).map((u,pi)=>
+      ${r.photos.length ? `<div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <button class="btn btn-sm btn-secondary" style="font-size:11px" title="Download all photos on this report"
+          onclick="frDownloadPhotos('${r.key}')">&#8595; Photos (${r.photos.length})</button>
+        <span style="font-size:10.5px;color:var(--text3)">click a photo to open it full size</span>
+      </div>` : ''}
+      ${r.photos.length ? `<div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">${r.photos.slice(0,4).map((u,pi)=>
         `<div style="position:relative;width:54px;height:54px">
            <img src="${u}" onclick="window.open('${u}')" style="width:54px;height:54px;object-fit:cover;border-radius:6px;cursor:zoom-in;display:block">
            <button title="Remove this photo" onclick="frDeletePhoto('${r.key}',${pi})"
@@ -12874,6 +12881,33 @@ function renderFieldReports() {
 // Removing a photo that should not have been sent — a mis-shot, the wrong
 // property, someone's face. Deletes it from the report and from Storage, so it
 // is gone rather than merely unlinked.
+// One click for every photo on a report.
+//
+// Site photos are the evidence for an issue, and pulling them one at a time
+// through "open in new tab, then save" is the slowest part of reviewing one.
+// Same iframe approach as the Documents page: consecutive anchor clicks cancel
+// each other, iframes do not.
+function frDownloadPhotos(key) {
+  const r = (_FR.list || []).find(x => x.key === key);
+  const urls = (r && r.photos) || [];
+  if (!urls.length) return toast('사진이 없습니다', 'error');
+
+  const stamp = (r.orderNumber || r.sco || key).toString().replace(/[^\w.-]+/g, '_');
+  toast(urls.length + '장 다운로드 중', 'success');
+
+  urls.forEach((u, i) => {
+    setTimeout(() => {
+      const fr = document.createElement('iframe');
+      fr.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
+      // Cache-buster for the same reason as documents: Storage replays the
+      // cached response, headers and all.
+      fr.src = u + (u.indexOf('?') >= 0 ? '&' : '?') + '_cb=' + Date.now() + '_' + i;
+      document.body.appendChild(fr);
+      setTimeout(() => { try { fr.remove(); } catch (e) {} }, 90000);
+    }, i * 900);
+  });
+}
+
 async function frDeletePhoto(key, idx) {
   const r = (_FR.list || []).find(x => x.key === key);
   if (!r || !r.photos[idx]) return;

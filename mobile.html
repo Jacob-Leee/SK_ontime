@@ -2288,7 +2288,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-03-g';
+const APP_BUILD     = '2026-08-05-c';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -2784,7 +2784,11 @@ async function cloudForcePush() {
 // The interval stretches while the data is quiet and snaps back to 3s the
 // moment anything changes or the user touches the screen, so a fresh
 // assignment still lands promptly.
-const _POLL_MIN = 3000, _POLL_MAX = 30000;
+// 30 s was too slow for the direction that matters. The desk edits, the phone
+// waits — and an idle phone had backed off all the way to half a minute, so a
+// change made at the desk could sit unseen for 30 s. 8 s is still gentle on the
+// Apps Script quota while keeping the phone close to live.
+const _POLL_MIN = 3000, _POLL_MAX = 8000;
 
 function _pollBump(changed) {
   const prev = CLOUD.pollMs || _POLL_MIN;
@@ -9461,8 +9465,15 @@ function _fireOsNotification(title, body, orderId) {
   try {
     const n = new Notification(title, {
       body,
-      tag: orderId ? ('sk-order-' + orderId) : 'sk-order-batch',
-      silent: true,
+      // A batch tag meant the second batch alert replaced the first, so two
+      // separate assignments looked like one. Unique per fire.
+      tag: orderId ? ('sk-order-' + orderId) : ('sk-batch-' + Date.now()),
+      // silent:true was wrong for a phone in a pocket. When the app is closed
+      // _playNotifSound() cannot run, so the OS sound is the only sound there
+      // is. Honour the in-app mute switch instead of forcing silence.
+      silent: !(typeof NOTIF !== 'undefined' && NOTIF.sound),
+      vibrate: [180, 90, 180],
+      requireInteraction: false,
     });
     n.onclick = () => { window.focus(); if (orderId) _openOrderFromNotification(orderId); n.close(); };
   } catch (e) {}
@@ -10294,11 +10305,25 @@ async function fcmInit(userGroup) {
         : '알림 등록 Failed: ' + err.message);
       return;
     }
-    const ALL_GROUPS = ['admin','SK_Jacob','SK_Mo','SK_June','SK_Jay','Jake_Lee','Chris_Choi','Sean_Park'];
-    await Promise.all(
-      ALL_GROUPS.filter(g => g !== group)
-                .map(g => _fcmDB.ref('/fcmTokens/' + g + '/' + deviceId).remove().catch(() => {}))
-    );
+    // Clean this device out of every OTHER bucket — read the real list, do not
+    // guess it.
+    //
+    // This used to be a hardcoded array of eight names. SK_TK and SK_Junoh were
+    // never in it, and neither is any subbie added since. So a phone that had
+    // been used as SK_TK and was then switched to someone else stayed
+    // registered under SK_TK as well: orders assigned to TK pushed to the wrong
+    // person's phone, and nothing looked broken at either end.
+    try {
+      const snap = await _fcmDB.ref('/fcmTokens').once('value');
+      const groups = Object.keys(snap.val() || {});
+      await Promise.all(
+        groups.filter(g => g !== group)
+              .map(g => _fcmDB.ref('/fcmTokens/' + g + '/' + deviceId).remove().catch(() => {}))
+      );
+      console.log('[FCM] cleaned', groups.length - 1, 'other group(s) for this device');
+    } catch (e) {
+      console.warn('[FCM] could not clean other groups:', e.message);
+    }
 
     localStorage.setItem('fcm_prev_group',    group);
     localStorage.setItem('fcm_last_reg_' + group, Date.now().toString());
@@ -11780,6 +11805,14 @@ document.addEventListener('visibilitychange', () => {
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) lsSet('mob_hidden_at', String(Date.now()));
+});
+
+// Coming back to the app is exactly when you want to see what changed while it
+// was in your pocket. Polling stops while hidden, so without this the first
+// fresh data arrived a full interval after you looked at the screen.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  try { if (typeof cloudPollNow === 'function') cloudPollNow(); } catch (e) {}
 });
 
 // ══════════════════════════════════════════════════════════
