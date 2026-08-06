@@ -2289,7 +2289,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-05-i';
+const APP_BUILD     = '2026-08-05-j';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -10047,8 +10047,9 @@ async function authSignIn() {
       console.warn('[AUTH] standalone redirect failed:', re.code, re.message);
       _authRecordError({ stage: 'standalone-redirect', code: re.code || '', message: re.message || '' });
     }
-    try { if (await _gisSignIn()) return; }
-    finally { if (btn) { btn.disabled = false; btn.style.opacity = '1'; } }
+    // No GIS fallback. It is not a second chance here, it is a second failure:
+    // the redirect URI it needs does not exist for this domain.
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
     return;
   }
 
@@ -10123,7 +10124,17 @@ async function _authOnStateChanged(user) {
       // The moment the client ID is saved, this path stops being taken.
       _gisBypassCheck();
       _authShow('signin');
-      if (_needsGis()) setTimeout(() => { _gisSignIn().catch(() => {}); }, 300);
+      // GIS used to be auto-rendered here for Home Screen apps. Its own
+      // "Sign in as ..." card then sat above our button and swallowed the tap,
+      // so the redirect path added for exactly this case never ran — the
+      // diagnostic recorded gis-exchange every time and never standalone-redirect.
+      //
+      // Measured: in a Home Screen app GIS navigates to accounts.google.com and
+      // Google answers 400 malformed, because a navigation flow needs an
+      // authorised REDIRECT URI and only JavaScript ORIGINS exist for
+      // jacob-leee.github.io. GitHub Pages cannot host an OAuth callback, so
+      // that cannot be fixed on this domain. Stop offering the path that cannot
+      // work and leave the one that can.
     }
     return;
   }
