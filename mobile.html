@@ -2288,7 +2288,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-05-d';
+const APP_BUILD     = '2026-08-05-f';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -2301,6 +2301,21 @@ if (!AUTH_REQUIRED) {
   const _g = document.getElementById('auth-gate');
   if (_g) _g.style.display = 'none';
 }
+
+// A device that opted out of the gate stays opted out.
+//
+// Without this the flag was written and never read, so the one phone that
+// cannot sign in would have had to press "use without signing in" on every
+// single launch — which is not a workaround, it is a daily tax.
+try {
+  if (AUTH_REQUIRED && localStorage.getItem('hom_auth_bypass') === '1') {
+    window._AUTH_BYPASS = true;
+    const _g2 = document.getElementById('auth-gate');
+    if (_g2) _g2.style.display = 'none';
+    // The warning bar is drawn once the rest of the script has defined it.
+    setTimeout(() => { try { _authBypassBanner(); } catch (e) {} }, 800);
+  }
+} catch (e) {}
 
 const DEFAULT_UI_LABELS = {
   navAll: 'All Orders', navOrders: 'Orders', navCompleted: 'Completed', navClaims: 'Claim',
@@ -9826,6 +9841,49 @@ async function _gisBypassCheck() {
 
 // Says out loud that this device is not signed in, so nobody assumes the gate
 // is working when it is not.
+// Apple's own limitation, not ours.
+//
+// Google returns a valid credential, and Firebase then cannot complete the
+// exchange from inside an iOS Home Screen app — the same account signs in fine
+// in Safari on the same phone. We have chased the client ID, the JavaScript
+// origins and the authorised domains, and the error has not moved.
+//
+// Push notifications only arrive in the Home Screen app, so "just use Safari"
+// costs this person every alert. Offer the device-level bypass instead, and be
+// loud that the gate is off — the standing warning bar stays on screen.
+function _authOfferStandaloneBypass(err) {
+  const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+                     window.navigator.standalone === true;
+  if (!standalone) return;
+  if (document.getElementById('auth-bypass-offer')) return;
+
+  const box = document.getElementById('auth-error');
+  const host = (box && box.parentElement) || document.body;
+  const el = document.createElement('div');
+  el.id = 'auth-bypass-offer';
+  el.style.cssText = 'margin:14px auto 0;max-width:340px;padding:14px 16px;border-radius:12px;' +
+    'border:1px solid rgba(255,215,114,.28);background:rgba(255,248,232,.06);color:rgba(255,255,255,.85);' +
+    'font-size:12.5px;text-align:left;line-height:1.6';
+  el.innerHTML =
+    '<div style="font-weight:800;font-size:13px;margin-bottom:7px;color:#F0C44E">Sign-in blocked by iOS</div>' +
+    '<div>Google accepted the account, but iPhone will not let a Home Screen app finish signing in. ' +
+    'Safari works, but push alerts only arrive in this app.</div>' +
+    '<button onclick="_authUseBypass()" style="width:100%;margin-top:12px;padding:11px;border:none;border-radius:10px;' +
+    'background:#F0C44E;color:#1C1811;font-size:13.5px;font-weight:800;font-family:inherit;cursor:pointer">' +
+    'Use this device without signing in</button>' +
+    '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:8px">' +
+    'A warning bar stays on screen while the sign-in gate is off.</div>';
+  host.appendChild(el);
+}
+
+function _authUseBypass() {
+  try { lsSet('hom_auth_bypass', '1'); } catch (e) {}
+  window._AUTH_BYPASS = true;
+  _authHide();
+  try { mobShowPane('mob-role-select'); } catch (e) {}
+  _authBypassBanner();
+}
+
 function _authBypassBanner() {
   if (document.getElementById('auth-bypass-bar')) return;
   const bar = document.createElement('div');
@@ -9836,6 +9894,18 @@ function _authBypassBanner() {
   bar.innerHTML = '<span style="flex:1;line-height:1.45">Not signed in — this iPhone app is waiting on setup. ' +
     'Alerts still work.</span><span style="text-decoration:underline;flex-shrink:0">Hide</span>';
   bar.onclick = () => bar.remove();
+  // Long-press clears the opt-out, so a device can be put back behind the gate
+  // once Apple or Firebase stops refusing the exchange.
+  let _hold = null;
+  bar.addEventListener('touchstart', () => {
+    _hold = setTimeout(() => {
+      try { lsSet('hom_auth_bypass', ''); } catch (e) {}
+      alert('Sign-in gate re-enabled on this device. Reopening…');
+      location.reload();
+    }, 1500);
+  });
+  ['touchend','touchmove','touchcancel'].forEach(ev =>
+    bar.addEventListener(ev, () => { if (_hold) { clearTimeout(_hold); _hold = null; } }));
   document.body.appendChild(bar);
 }
 
@@ -9869,7 +9939,26 @@ async function _gisSignIn() {
           } catch (e) {
             console.warn('[AUTH] GIS credential exchange failed:', e.code, e.message);
             _authRecordError({ stage: 'gis-exchange', code: e.code || '', message: e.message || '' });
+
+            // One retry. Firebase's own transport occasionally reports
+            // network-request-failed for a request that succeeds on a second
+            // attempt, and a retry is cheaper than a person walking back to the
+            // office.
+            if (String(e.code || '').includes('network-request-failed')) {
+              try {
+                await new Promise(r2 => setTimeout(r2, 1200));
+                await AUTH.auth.signInWithCredential(
+                  firebase.auth.GoogleAuthProvider.credential(resp.credential));
+                resolve(true);
+                return;
+              } catch (e2) {
+                console.warn('[AUTH] retry also failed:', e2.code);
+                _authRecordError({ stage: 'gis-exchange-retry', code: e2.code || '', message: e2.message || '' });
+              }
+            }
+
             _authFeedback(_authErrorMessage(e));
+            _authOfferStandaloneBypass(e);
             resolve(false);
           }
         }
