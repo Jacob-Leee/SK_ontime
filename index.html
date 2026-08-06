@@ -2162,7 +2162,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-05-c';
+const APP_BUILD = '2026-08-05-d';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -12887,25 +12887,103 @@ function renderFieldReports() {
 // through "open in new tab, then save" is the slowest part of reviewing one.
 // Same iframe approach as the Documents page: consecutive anchor clicks cancel
 // each other, iframes do not.
-function frDownloadPhotos(key) {
+// A Firebase download URL carries its own storage path, percent-encoded after
+// /o/ — so a photo can be repaired without storing the path alongside it.
+function _frPathFromUrl(u) {
+  const m = /\/o\/([^?]+)/.exec(String(u || ''));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+// Download every photo on a report, with visible progress.
+//
+// The first attempt used hidden iframes, which works for spreadsheets and PDFs
+// and does nothing at all for images: the browser simply renders them inside
+// the frame. Photos need the bytes pulled down, or a Content-Disposition that
+// says attachment — same two levers as the Documents page.
+async function frDownloadPhotos(key) {
   const r = (_FR.list || []).find(x => x.key === key);
   const urls = (r && r.photos) || [];
   if (!urls.length) return toast('사진이 없습니다', 'error');
 
-  const stamp = (r.orderNumber || r.sco || key).toString().replace(/[^\w.-]+/g, '_');
-  toast(urls.length + '장 다운로드 중', 'success');
+  const base = String(r.orderNumber || r.sco || key).replace(/[^\w.-]+/g, '_');
+  const bar = _frProgress(urls.length);
+  let done = 0, failed = 0;
 
-  urls.forEach((u, i) => {
-    setTimeout(() => {
-      const fr = document.createElement('iframe');
-      fr.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden';
-      // Cache-buster for the same reason as documents: Storage replays the
-      // cached response, headers and all.
-      fr.src = u + (u.indexOf('?') >= 0 ? '&' : '?') + '_cb=' + Date.now() + '_' + i;
-      document.body.appendChild(fr);
-      setTimeout(() => { try { fr.remove(); } catch (e) {} }, 90000);
-    }, i * 900);
-  });
+  for (let i = 0; i < urls.length; i++) {
+    const u = urls[i];
+    const name = base + '_' + String(i + 1).padStart(2, '0') + '.jpg';
+    let okDone = false;
+
+    // 1. Bytes straight down — correct filename, no navigation. Needs CORS.
+    try {
+      const res = await fetch(u);
+      if (res.ok) {
+        const blob = await res.blob();
+        const bu = URL.createObjectURL(blob);
+        _frSaveAs(bu, name);
+        setTimeout(() => URL.revokeObjectURL(bu), 60000);
+        okDone = true;
+      }
+    } catch (e) { /* CORS not configured — fall through */ }
+
+    // 2. Otherwise mark the object as an attachment and let the browser fetch it.
+    if (!okDone) {
+      const path = _frPathFromUrl(u);
+      if (path && firebase.storage) {
+        try {
+          await firebase.storage(firebase.apps[0]).ref(path).updateMetadata({
+            contentType: 'image/jpeg',
+            contentDisposition: _docDisposition(name)
+          });
+          _frSaveAs(_docFreshUrl(u), name);
+          okDone = true;
+        } catch (e) { console.warn('[FR] photo metadata failed:', e.code || e.message); }
+      }
+    }
+
+    if (okDone) done++; else { failed++; window.open(u, '_blank', 'noopener'); }
+    _frProgressSet(bar, done + failed, urls.length, failed);
+    await new Promise(r2 => setTimeout(r2, 350));
+  }
+
+  _frProgressDone(bar, done, failed);
+}
+
+function _frSaveAs(href, name) {
+  const a = document.createElement('a');
+  a.href = href; a.download = name; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+// Progress needs to be visible: a toast that says "downloading" and then never
+// changes is indistinguishable from one that failed.
+function _frProgress(total) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:10000;min-width:230px;background:var(--surface);' +
+    'border:1px solid var(--gold-border);border-radius:11px;box-shadow:0 8px 26px rgba(0,0,0,.18);padding:11px 13px;font-size:12.5px';
+  el.innerHTML = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">' +
+    '<b id="_frp-t" style="flex:1">사진 0 / ' + total + '</b>' +
+    '<span id="_frp-x" style="font-size:11px;color:var(--text3)"></span></div>' +
+    '<div style="height:6px;background:var(--cream2);border-radius:4px;overflow:hidden">' +
+    '<div id="_frp-b" style="height:100%;width:0%;background:linear-gradient(90deg,#F0C44E,#D99F1C);transition:width .25s"></div></div>';
+  document.body.appendChild(el);
+  return el;
+}
+function _frProgressSet(el, n, total, failed) {
+  if (!el) return;
+  const t = el.querySelector('#_frp-t'), b = el.querySelector('#_frp-b'), x = el.querySelector('#_frp-x');
+  if (t) t.textContent = '사진 ' + n + ' / ' + total;
+  if (b) b.style.width = Math.round(n / total * 100) + '%';
+  if (x) x.textContent = failed ? failed + '건 실패' : '';
+}
+function _frProgressDone(el, done, failed) {
+  if (!el) return;
+  const t = el.querySelector('#_frp-t');
+  if (t) t.textContent = failed ? (done + '장 저장 · ' + failed + '장 새 탭으로 열림')
+                                : (done + '장 저장 완료');
+  const b = el.querySelector('#_frp-b');
+  if (b && failed) b.style.background = '#DC2626';
+  setTimeout(() => { try { el.remove(); } catch (e) {} }, failed ? 7000 : 2500);
 }
 
 async function frDeletePhoto(key, idx) {
