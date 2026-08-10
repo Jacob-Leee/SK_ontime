@@ -2289,7 +2289,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-06-c';
+const APP_BUILD     = '2026-08-06-d';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -11610,6 +11610,11 @@ function _rtdbWatchFieldReports() {
     address: r.address || '',
     reviewedAt: r.reviewedAt || 0,
     reviewedBy: r.reviewedBy || '',
+    // Missing here is why "Issue resolved" appeared to do nothing: the write
+    // reached RTDB, but this shaper dropped the field on the way back in, so
+    // _frBuildLatest never saw a resolved report and the chip stayed put.
+    resolvedAt: r.resolvedAt || 0,
+    resolvedBy: r.resolvedBy || '',
   });
 
   const publish = () => {
@@ -11776,6 +11781,14 @@ async function frClearOutcome(orderId) {
     await db.ref('/issues/' + last.key).update({
       resolvedAt: Date.now(), resolvedBy: who
     });
+    // Patch the local copy too. _FR.list is filled by the RTDB listener, which
+    // has not delivered this change yet — rebuilding the index straight after
+    // the write would just re-read the stale record and nothing would move.
+    try {
+      const local = (_FR.list || []).find(r => r.key === last.key);
+      if (local) { local.resolvedAt = Date.now(); local.resolvedBy = who; }
+    } catch (e) {}
+
     toast('이슈 해결 처리됨', 'success');
     try { _frBuildLatest(); _frBuildIndex(); } catch (e) {}
     try { mobRefresh(); } catch (e) {}
