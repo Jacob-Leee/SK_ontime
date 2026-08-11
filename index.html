@@ -2162,7 +2162,7 @@ const AUTH_REQUIRED = true;
 // Shown at the bottom of Settings. A stale cached build looks identical to a
 // broken one from the outside — this makes "did my upload actually land?"
 // answerable in two seconds.
-const APP_BUILD = '2026-08-06-d';
+const APP_BUILD = '2026-08-06-e';
 
 // The gate markup ships visible so it covers the app from the very first paint.
 // Bringing it up at the end of this 600 KB script instead meant the order table —
@@ -4157,6 +4157,8 @@ function _frBuildIndex() {
   _frIndex = new Map();
   (_FR.list || []).forEach(r => {
     if (r.reviewedAt) return;
+    // Withdrawn from the phone — the site took it back, so it is not pending.
+    if (r.withdrawnAt) return;
     if (!_frIndex.has(r.orderId)) _frIndex.set(r.orderId, []);
     _frIndex.get(r.orderId).push(r);
   });
@@ -12659,6 +12661,10 @@ function _rtdbWatchFieldReports() {
     address: r.address || '',
     reviewedAt: r.reviewedAt || 0,
     reviewedBy: r.reviewedBy || '',
+    resolvedAt: r.resolvedAt || 0,
+    resolvedBy: r.resolvedBy || '',
+    withdrawnAt: r.withdrawnAt || 0,
+    withdrawnBy: r.withdrawnBy || '',
   });
 
   const publish = () => {
@@ -12777,7 +12783,9 @@ async function frDiagnose() {
   alert('Field Reports diagnostic\n──────────────────────────\n' + L.join('\n'));
 }
 
-function frUnreviewed() { return _FR.list.filter(r => !r.reviewedAt); }
+// Withdrawn reports are not waiting on anyone — keep them out of the badge and
+// the pending list, or the office chases something the field already took back.
+function frUnreviewed() { return _FR.list.filter(r => !r.reviewedAt && !r.withdrawnAt); }
 
 function renderFieldReportBadge() {
   const n = frUnreviewed().length;

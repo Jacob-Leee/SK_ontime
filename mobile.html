@@ -2289,7 +2289,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-06-d';
+const APP_BUILD     = '2026-08-06-e';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -8274,10 +8274,19 @@ function mobCardActions(o) {
   if (pending.length) {
     const isIssue = pending.some(r => r.type === 'issue');
     const who = pending[0].by || '';
-    return `<div style="margin-top:8px;display:inline-flex;align-items:center;gap:5px;
-      background:${isIssue ? '#FEF3C7' : '#DCFCE7'};color:${isIssue ? '#B45309' : '#15803D'};
-      border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700">
-      ${isIssue ? '&#9888; Issue sent' : '&#10003; Done sent'}${who ? ' &middot; ' + esc(who) : ''}</div>`;
+    // Undo, while the office has not looked at it yet.
+    //
+    // Tapping Complete on the wrong card is easy — the list is dense and the
+    // buttons are small. Until now that was permanent from the phone: no way
+    // back, and the office sees a job reported finished that nobody touched.
+    return `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;gap:5px;
+        background:${isIssue ? '#FEF3C7' : '#DCFCE7'};color:${isIssue ? '#B45309' : '#15803D'};
+        border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700">
+        ${isIssue ? '&#9888; Issue sent' : '&#10003; Done sent'}${who ? ' &middot; ' + esc(who) : ''}</span>
+      <button onclick="event.stopPropagation();frWithdraw('${o.id}')"
+        style="background:none;border:none;padding:0;font-size:11px;color:var(--text3);text-decoration:underline;cursor:pointer;font-family:inherit">잘못 눌렀어요 · 취소</button>
+    </div>`;
   }
 
   // Reviewed by the office. The report is closed off, so this is the outcome —
@@ -8290,9 +8299,11 @@ function mobCardActions(o) {
       <span style="display:inline-flex;align-items:center;gap:5px;background:#E7EEFB;color:#1D4ED8;
         border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700">
         &#10003; Office confirmed${isIssue ? ' &middot; issue' : ''}${last.reviewedBy ? ' &middot; ' + esc(last.reviewedBy) : ''}</span>
-      ${isIssue ? `<button onclick="event.stopPropagation();frClearOutcome('${o.id}')"
-        style="padding:4px 11px;border:1px solid #86EFAC;border-radius:20px;background:#DCFCE7;
-        color:#15803D;font-size:11px;font-weight:700;font-family:inherit;cursor:pointer">&#10003; Issue resolved</button>` : ''}
+      <button onclick="event.stopPropagation();frClearOutcome('${o.id}')"
+        style="padding:4px 11px;border:1px solid ${isIssue ? '#86EFAC' : '#CBD5E1'};border-radius:20px;
+        background:${isIssue ? '#DCFCE7' : '#F1F5F9'};color:${isIssue ? '#15803D' : '#475569'};
+        font-size:11px;font-weight:700;font-family:inherit;cursor:pointer">${
+        isIssue ? '&#10003; Issue resolved' : '&#8617; Undo'}</button>
       <button onclick="event.stopPropagation();srOpen('${o.id}')"
         style="background:none;border:none;padding:0;font-size:11px;color:var(--text3);text-decoration:underline;cursor:pointer;font-family:inherit">report again</button>
     </div>`;
@@ -11615,6 +11626,8 @@ function _rtdbWatchFieldReports() {
     // _frBuildLatest never saw a resolved report and the chip stayed put.
     resolvedAt: r.resolvedAt || 0,
     resolvedBy: r.resolvedBy || '',
+    withdrawnAt: r.withdrawnAt || 0,
+    withdrawnBy: r.withdrawnBy || '',
   });
 
   const publish = () => {
@@ -11739,6 +11752,8 @@ function _frBuildIndex() {
   _frIndex = new Map();
   (_FR.list || []).forEach(r => {
     if (r.reviewedAt) return;
+    // A report sent by mistake is not pending anything — it is withdrawn.
+    if (r.withdrawnAt) return;
     if (!_frIndex.has(r.orderId)) _frIndex.set(r.orderId, []);
     _frIndex.get(r.orderId).push(r);
   });
@@ -11756,7 +11771,7 @@ function _frBuildLatest() {
     // A resolved issue is history, not the card's current state. Leaving it in
     // here kept the "Office confirmed - issue" chip on screen forever and the
     // Complete button permanently out of reach.
-    if (r.resolvedAt) return;
+    if (r.resolvedAt || r.withdrawnAt) return;
     const cur = _frLatestIndex.get(r.orderId);
     if (!cur || (r.ts || 0) > (cur.ts || 0)) _frLatestIndex.set(r.orderId, r);
   });
@@ -11769,6 +11784,37 @@ function _frBuildLatest() {
 //
 // The report itself is not deleted: it is stamped resolved, so the office keeps
 // the history and the desk can still see what happened.
+// Withdraw a report the office has not reviewed yet.
+//
+// Marked, not deleted: the desk keeps the trail of what was sent and taken
+// back. Both apps filter withdrawn reports out of the pending lists, so nobody
+// acts on it.
+async function frWithdraw(orderId) {
+  const list = frPendingFor(orderId);
+  if (!list.length) return;
+  if (!confirm('이 보고를 취소할까요?\n\n사무실 목록에서 빠지고 카드가 원래대로 돌아갑니다.')) return;
+
+  const db = _sharedDb();
+  if (!db) { toast('연결되지 않았습니다', 'error'); return; }
+  const who = (typeof NOTIF !== 'undefined' && NOTIF.me) || window._SK_USER || 'SK';
+  const now = Date.now();
+  try {
+    // Withdraw every pending report on this order — two taps on the same card
+    // make two records, and leaving one behind puts the chip straight back.
+    await Promise.all(list.map(r =>
+      db.ref('/issues/' + r.key).update({ withdrawnAt: now, withdrawnBy: who })));
+    (_FR.list || []).forEach(r => {
+      if (list.some(x => x.key === r.key)) { r.withdrawnAt = now; r.withdrawnBy = who; }
+    });
+    toast('보고가 취소되었습니다', 'success');
+    try { _frBuildLatest(); _frBuildIndex(); } catch (e) {}
+    try { mobRefresh(); } catch (e) {}
+  } catch (e) {
+    console.warn('[FR] withdraw failed:', e.code || e.message);
+    toast('취소 실패: ' + (e.code || e.message), 'error');
+  }
+}
+
 async function frClearOutcome(orderId) {
   const last = frLatestFor(orderId);
   if (!last || !last.key) return;
