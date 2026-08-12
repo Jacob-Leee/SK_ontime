@@ -967,7 +967,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
       <span class="dl-i" style="background:#F1F5F9"><i class="ti ti-lock" style="color:#64748B"></i></span>Closed
     </div>
     <div class="mob-dl" onclick="openNotifSheet();mobDrawerClose()">
-      <span class="dl-i" style="background:#FEF3C7"><i class="ti ti-bell" style="color:#E0AC28"></i></span>내 알림
+      <span class="dl-i" style="background:#FEF3C7"><i class="ti ti-bell" style="color:#E0AC28"></i></span>My alerts
       <span id="mob-notif-badge" style="display:none;margin-left:auto;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#DC2626;color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;line-height:1">0</span>
     </div>
     <div class="mob-dl" onclick="mobDrawerClose();openFieldReports()">
@@ -2289,7 +2289,7 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
 // the account resolved to its allow-list name before this was switched on).
 // To disable: set back to false and re-upload. Data is untouched either way.
 const AUTH_REQUIRED = true;
-const APP_BUILD     = '2026-08-06-e';
+const APP_BUILD     = '2026-08-06-f';
 
 // The gate's HTML default MUST match AUTH_REQUIRED. Shipping it visible while
 // the flag is false meant any error earlier in this script left a full-screen
@@ -3822,10 +3822,10 @@ function saveClaimAndClose() {
   saveClaim();
   if (!orderNumber) return;
   const o = DB.orders.find(x => x.orderNumber === orderNumber);
-  if (!o) { toast('연결된 오더를 찾을 수 없습니다: ' + orderNumber, 'error'); return; }
+  if (!o) { toast('Order not found: ' + orderNumber, 'error'); return; }
   if (o.status === 'closed') { toast('Already closed', 'info'); return; }
   setOrderStatus(o.id, 'closed');
-  toast(`🔒 ${orderNumber} — Closed 처리됨`, 'success');
+  toast(`🔒 ${orderNumber} — moved to Closed`, 'success');
 }
 
 // ============================================================
@@ -6957,9 +6957,9 @@ function removeTrackedSubbie(idx) {
   if (!name) return;
   const count = DB.orders.filter(o => o.subbies === name).length;
   const msg = (count > 0
-    ? name + ' 님을 명단에서 삭제할까요?\n\n배정된 오더가 ' + count + '건 있습니다. 오더는 삭제되지 않고 그대로 남지만,\n앞으로 이 이름으로 새 오더를 배정할 수 없습니다.'
-    : name + ' 님을 명단에서 삭제할까요?')
-    + '\n\n모든 기기에서 사라집니다. 다시 추가하면 되돌릴 수 있습니다.';
+    ? name + '  from the list?\n\nThey have ' + count + ' orders assigned. The orders stay, but no new order can be assigned to this name.'
+    : name + '  from the list?')
+    + '\n\nRemoved on every device. Add the name again to undo.';
   if (!confirm(msg)) return;
 
   list.splice(idx, 1);
@@ -8285,7 +8285,7 @@ function mobCardActions(o) {
         border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700">
         ${isIssue ? '&#9888; Issue sent' : '&#10003; Done sent'}${who ? ' &middot; ' + esc(who) : ''}</span>
       <button onclick="event.stopPropagation();frWithdraw('${o.id}')"
-        style="background:none;border:none;padding:0;font-size:11px;color:var(--text3);text-decoration:underline;cursor:pointer;font-family:inherit">잘못 눌렀어요 · 취소</button>
+        style="background:none;border:none;padding:0;font-size:11px;color:var(--text3);text-decoration:underline;cursor:pointer;font-family:inherit">Sent by mistake &middot; undo</button>
     </div>`;
   }
 
@@ -9448,10 +9448,10 @@ function notifyOwnAssignment(o) {
   if (NOTIF.inbox.length > NOTIF.MAX_INBOX) NOTIF.inbox.length = NOTIF.MAX_INBOX;
   _notifSave();
 
-  _fireOsNotification('내 오더로 저장됨 — ' + (o.orderNumber || ''),
+  _fireOsNotification('Saved to my orders — ' + (o.orderNumber || ''),
     `${o.address || ''}\n${o.area || ''} · $${Number(o.amount || 0).toFixed(2)}`, o.id);
   _showInAppBanner(
-    `&#9989; <b>${esc(o.orderNumber || '')}</b> 내 오더로 저장됨<br><span style="opacity:.8;font-size:12px">${esc(o.address || '')}</span>`,
+    `&#9989; <b>${esc(o.orderNumber || '')}</b> Saved to my orders<br><span style="opacity:.8;font-size:12px">${esc(o.address || '')}</span>`,
     o.id);
   _playNotifSound();
   renderNotifBell();
@@ -9513,13 +9513,13 @@ function detectNewAssignments(prevOrders) {
   if (!fresh.length) { renderNotifBell(); return; }
 
   if (fresh.length > NOTIF.BURST_CAP) {
-    _fireOsNotification(`새 Orders ${fresh.length}건 배정됨`,
-      `${NOTIF.me} 앞으로 ${fresh.length}건이 배정되었습니다.`, null);
-    _showInAppBanner(`📋 새 Orders ${fresh.length}건이 배정되었습니다`, null);
+    _fireOsNotification(`${fresh.length} new orders assigned`,
+      `${fresh.length} orders are now assigned to ${NOTIF.me}.`, null);
+    _showInAppBanner(`📋 ${fresh.length} new orders assigned`, null);
   } else {
     fresh.forEach(f => {
       const o = f.order;
-      _fireOsNotification('새 오더 배정 — ' + (o.orderNumber || ''),
+      _fireOsNotification('New order assigned — ' + (o.orderNumber || ''),
         `${o.address || ''}\n${o.area || ''} · $${Number(o.amount || 0).toFixed(2)}`, o.id);
       _showInAppBanner(
         `📋 <b>${esc(o.orderNumber || '')}</b> 배정됨<br><span style="opacity:.8;font-size:12px">${esc(o.address || '')}</span>`,
@@ -9663,7 +9663,7 @@ function renderNotifSheet() {
   const list = document.getElementById('mob-notif-list');
   if (!list) return;
   if (!NOTIF.inbox.length) {
-    list.innerHTML = '<div style="padding:34px 16px;text-align:center;color:#999;font-size:13px">새 알림이 없습니다</div>';
+    list.innerHTML = '<div style="padding:34px 16px;text-align:center;color:#999;font-size:13px">No new notifications</div>';
     return;
   }
   list.innerHTML = NOTIF.inbox.map(n => {
@@ -10732,7 +10732,7 @@ async function showPushRegistry() {
       '이 화면은 관리자만 볼 수 있습니다.\n' +
       '──────────────────────────\n' +
       '알림 등록에는 영향이 없습니다.\n\n' +
-      '내 알림 상태는 "백그라운드 알림 진단" 에서 확인하세요.'
+      'My alerts 상태는 "백그라운드 알림 진단" 에서 확인하세요.'
     );
     return;
   }
@@ -11081,13 +11081,13 @@ function checkTodayEvents() {
   const first = fresh[0];
   const when  = first.startTime || 'All day';
   if (fresh.length === 1) {
-    _fireOsNotification('오늘 일정 — ' + (first.title || ''), when, null);
+    _fireOsNotification('Today — ' + (first.title || ''), when, null);
     _pushCalReminder('📅 오늘 일정 — ' + (first.title || ''), when);
     _showInAppBanner(`\u{1F4C5} <b>Today events</b><br><span style="opacity:.85;font-size:12px">${esc(first.title || '')} &middot; ${esc(when)}</span>`, null);
   } else {
-    _fireOsNotification(`오늘 일정 ${fresh.length}건`,
+    _fireOsNotification(`${fresh.length} events today`,
       fresh.map(e => (e.startTime ? e.startTime + ' ' : '') + (e.title || '')).join('\n'), null);
-    _pushCalReminder(`📅 오늘 일정 ${fresh.length}건`,
+    _pushCalReminder(`📅 ${fresh.length} events today`,
       fresh.map(e => (e.startTime ? e.startTime + ' ' : '') + (e.title || '')).join('\n'));
     _showInAppBanner(`\u{1F4C5} <b>오늘 일정 ${fresh.length}건</b><br><span style="opacity:.85;font-size:12px">${esc(fresh.map(e => e.title).join(', '))}</span>`, null);
   }
@@ -11136,7 +11136,7 @@ async function testPushServer() {
       createdAt: Date.now(),
     });
     await ref;
-  } catch (e) { alert('큐에 쓰지 못했습니다: ' + e.message); return; }
+  } catch (e) { alert('Could not queue: ' + e.message); return; }
 
   alert('테스트 발송했습니다.\n\n확인 버튼을 누르고 12초 기다립니다…');
   await new Promise(r => setTimeout(r, 12000));
@@ -11792,10 +11792,10 @@ function _frBuildLatest() {
 async function frWithdraw(orderId) {
   const list = frPendingFor(orderId);
   if (!list.length) return;
-  if (!confirm('이 보고를 취소할까요?\n\n사무실 목록에서 빠지고 카드가 원래대로 돌아갑니다.')) return;
+  if (!confirm('Withdraw this report?\n\nIt will be removed from the office list and the card goes back to normal.')) return;
 
   const db = _sharedDb();
-  if (!db) { toast('연결되지 않았습니다', 'error'); return; }
+  if (!db) { toast('Not connected', 'error'); return; }
   const who = (typeof NOTIF !== 'undefined' && NOTIF.me) || window._SK_USER || 'SK';
   const now = Date.now();
   try {
@@ -11806,22 +11806,22 @@ async function frWithdraw(orderId) {
     (_FR.list || []).forEach(r => {
       if (list.some(x => x.key === r.key)) { r.withdrawnAt = now; r.withdrawnBy = who; }
     });
-    toast('보고가 취소되었습니다', 'success');
+    toast('Report withdrawn', 'success');
     try { _frBuildLatest(); _frBuildIndex(); } catch (e) {}
     try { mobRefresh(); } catch (e) {}
   } catch (e) {
     console.warn('[FR] withdraw failed:', e.code || e.message);
-    toast('취소 실패: ' + (e.code || e.message), 'error');
+    toast('Could not withdraw: ' + (e.code || e.message), 'error');
   }
 }
 
 async function frClearOutcome(orderId) {
   const last = frLatestFor(orderId);
   if (!last || !last.key) return;
-  if (!confirm('이 이슈가 해결되었습니까?\n\n카드가 다시 Complete / Issue 상태로 돌아갑니다.')) return;
+  if (!confirm('Has this issue been resolved?\n\nThe card goes back to Complete / Issue.')) return;
 
   const db = _sharedDb();
-  if (!db) { toast('연결되지 않았습니다', 'error'); return; }
+  if (!db) { toast('Not connected', 'error'); return; }
   const who = (typeof NOTIF !== 'undefined' && NOTIF.me) || window._SK_USER || 'SK';
   try {
     await db.ref('/issues/' + last.key).update({
@@ -11835,12 +11835,12 @@ async function frClearOutcome(orderId) {
       if (local) { local.resolvedAt = Date.now(); local.resolvedBy = who; }
     } catch (e) {}
 
-    toast('이슈 해결 처리됨', 'success');
+    toast('Issue marked resolved', 'success');
     try { _frBuildLatest(); _frBuildIndex(); } catch (e) {}
     try { mobRefresh(); } catch (e) {}
   } catch (e) {
     console.warn('[FR] resolve failed:', e.code || e.message);
-    toast('처리 실패: ' + (e.code || e.message), 'error');
+    toast('Could not update: ' + (e.code || e.message), 'error');
   }
 }
 
